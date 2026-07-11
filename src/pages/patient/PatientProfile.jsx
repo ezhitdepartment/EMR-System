@@ -103,13 +103,45 @@ export function loadMedicalCertificate(patientId) {
   }
 }
 
-function loadConsultation(patientId) {
+// Every save appends a new entry instead of overwriting — that's what lets
+// Patient Files show a real history (ER Consultation / OPD Consultation /
+// Medical Record) instead of just the single latest save. Entries are
+// tagged with who authored them (`authorRole`) so each folder can filter
+// to just its own kind of consultation.
+function loadConsultationHistory(patientId) {
   try {
     const all = JSON.parse(localStorage.getItem("patientConsultation") || "{}");
-    return all[patientId] || null;
+    const raw = all[patientId];
+    if (!raw) return [];
+    // Backward-compat: earlier versions stored one overwritten object per
+    // patient instead of an array — treat that as a one-entry history.
+    const list = Array.isArray(raw) ? raw : [raw];
+    return [...list].sort(
+      (a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0)
+    );
   } catch {
-    return null;
+    return [];
   }
+}
+
+function saveConsultationEntry(patientId, formData, authorRole) {
+  let all = {};
+  try {
+    all = JSON.parse(localStorage.getItem("patientConsultation") || "{}");
+  } catch {
+    all = {};
+  }
+  const raw = all[patientId];
+  const existingList = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const entry = {
+    ...formData,
+    id: `CONS-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    createdAt: new Date().toISOString(),
+    authorRole,
+  };
+  all[patientId] = [...existingList, entry];
+  localStorage.setItem("patientConsultation", JSON.stringify(all));
+  return entry;
 }
 
 // "DIMAS, ROBETH O." — used to name downloaded files after the patient.
@@ -325,6 +357,165 @@ function ComingSoonPanel({ label, icon }) {
 // Lab Order tab — this patient's own lab order history, same look as the
 // main Lab Orders table but scoped to just their orders, plus a "Create
 // Lab Order" button that opens the create modal with the patient locked in.
+const CONSULTATION_ROLE_LABELS = {
+  er_nurse: "ER Nurse",
+  opd_nurse: "OPD Nurse",
+  doctor: "Doctor",
+  admin: "Admin",
+  med_tech: "Med Tech",
+  xray_tech: "X-ray Tech",
+};
+
+function SummaryRow({ label, value }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-[11px] text-slate-400 uppercase tracking-wide">{label}</p>
+      <p className="text-sm text-slate-800 whitespace-pre-wrap">{value}</p>
+    </div>
+  );
+}
+
+function SummaryList({ label, items }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-1">{label}</p>
+      <ul className="list-disc list-inside text-sm text-slate-800 space-y-0.5">
+        {items.map((item, i) => (
+          <li key={item.id || i}>{item.text || item.condition || String(item)}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Read-only summary of one historical consultation entry — used by the
+// three Patient Files consultation folders. Deliberately not the full
+// ConsultationForm: that component only shows the sections *the current
+// viewer's role* can edit, which would hide most of a nurse-authored entry
+// from a doctor (and vice versa). This just shows everything that entry
+// actually recorded.
+function ConsultationSummaryModal({ entry, onClose }) {
+  if (!entry) return null;
+  const isDoctorEntry = entry.authorRole === "doctor";
+  const roleLabel = CONSULTATION_ROLE_LABELS[entry.authorRole] || entry.authorRole || "Unknown";
+  const when = entry.createdAt
+    ? new Date(entry.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    : "Undated";
+
+  const smokingSummary =
+    entry.isSmoker === "YES" || entry.isSmoker === "USED TO SMOKE"
+      ? `${entry.isSmoker} — ${entry.cigaretteType || "type not noted"}, ${
+          entry.cigarettesPerDay || "?"
+        }/day for ${entry.yearsSmoking || "?"} yrs`
+      : entry.isSmoker || null;
+  const drinkingSummary =
+    entry.isDrinker === "YES" || entry.isDrinker === "USED TO DRINK"
+      ? `${entry.isDrinker} — ${entry.alcoholType || "type not noted"}, ${entry.numberOfBottles || "?"} bottle(s)`
+      : entry.isDrinker || null;
+  const drugSummary = entry.isDrugUser
+    ? `${entry.isDrugUser}${entry.drugRemarks ? ` — ${entry.drugRemarks}` : ""}`
+    : null;
+  const sexActiveSummary = entry.isSexuallyActive
+    ? `${entry.isSexuallyActive}${entry.sexualActivityRemarks ? ` — ${entry.sexualActivityRemarks}` : ""}`
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+      <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white">
+          <div>
+            <span className="inline-flex items-center rounded-full bg-teal-50 text-teal-700 px-2.5 py-0.5 text-xs font-semibold uppercase mb-1">
+              {roleLabel}
+            </span>
+            <p className="text-sm font-semibold text-slate-800">{when}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 flex flex-col gap-4">
+          {isDoctorEntry ? (
+            <>
+              <SummaryRow label="Chief Complaint" value={entry.chiefComplaint} />
+              <SummaryRow label="History of Present Illness" value={entry.historyOfPresentIllness} />
+              <SummaryRow label="Diagnosis" value={entry.diagnosis} />
+              <SummaryRow label="Medication Ordered" value={entry.medicationOrders} />
+              <SummaryRow
+                label="Disposition"
+                value={[entry.disposition, entry.dispositionNotes].filter(Boolean).join(" — ")}
+              />
+              <SummaryRow label="Diagnostics / Tests Ordered" value={entry.diagnosticsNotes} />
+              <SummaryRow label="Medicine Prescription" value={entry.prescriptionNotes} />
+              {!entry.chiefComplaint &&
+                !entry.diagnosis &&
+                !entry.medicationOrders &&
+                !entry.disposition && <p className="text-sm text-slate-400 italic">Nothing recorded.</p>}
+            </>
+          ) : (
+            <>
+              <SummaryRow label="Allergies" value={entry.allergies} />
+              <SummaryList label="Past Medical History" items={entry.pastMedicalHistory} />
+              <SummaryList label="Family Medical History" items={entry.familyMedicalHistory} />
+              <SummaryRow
+                label="Surgical History"
+                value={entry.surgicalHistoryEnabled ? entry.surgicalHistoryDetails : null}
+              />
+              <SummaryRow
+                label="Immunizations"
+                value={entry.immunizationsEnabled ? entry.immunizationsDetails : null}
+              />
+              {(smokingSummary || drinkingSummary || drugSummary || sexActiveSummary) && (
+                <div>
+                  <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-1">Social History</p>
+                  <div className="flex flex-col gap-1.5 text-sm text-slate-800">
+                    {smokingSummary && <p>Smoking — {smokingSummary}</p>}
+                    {drinkingSummary && <p>Alcohol — {drinkingSummary}</p>}
+                    {drugSummary && <p>Illegal Drug Use — {drugSummary}</p>}
+                    {sexActiveSummary && <p>Sexually Active — {sexActiveSummary}</p>}
+                  </div>
+                </div>
+              )}
+              <SummaryRow label="Blood Type" value={entry.bloodTypeEnabled ? entry.bloodType : null} />
+              {entry.gender === "Female" && (
+                <SummaryRow
+                  label="OB-GYNE History"
+                  value={
+                    entry.noOfPregnancies || entry.lastMenstrualPeriod
+                      ? `Pregnancies: ${entry.noOfPregnancies || "—"}, Deliveries: ${
+                          entry.noOfDeliveries || "—"
+                        }, LMP: ${entry.lastMenstrualPeriod || "—"}`
+                      : null
+                  }
+                />
+              )}
+              {!entry.allergies &&
+                !entry.pastMedicalHistory?.length &&
+                !entry.familyMedicalHistory?.length &&
+                !smokingSummary &&
+                !drinkingSummary &&
+                !drugSummary &&
+                !sexActiveSummary && <p className="text-sm text-slate-400 italic">Nothing recorded.</p>}
+            </>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-slate-200 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PatientLabOrdersPanel({ orders, onCreate, onOpenOrder, canCreate }) {
   return (
     <div className="h-full min-h-[240px] flex flex-col gap-3">
@@ -542,6 +733,7 @@ function PatientFilesPanel({
   discharge,
   konsultaReferral,
   medicalCertificate,
+  consultationHistory,
   downloadingPdf,
   downloadingDischargePdf,
   downloadingKonsultaPdf,
@@ -554,24 +746,54 @@ function PatientFilesPanel({
   onDownloadKonsultaReferral,
   onOpenMedicalCertificate,
   onDownloadMedicalCertificate,
+  onViewConsultationEntry,
 }) {
   const [viewMode, setViewMode] = useState("grid");
   const [checkedIds, setCheckedIds] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const year = new Date().getFullYear();
 
+  const erEntries = (consultationHistory || []).filter((e) => e.authorRole === "er_nurse");
+  const opdEntries = (consultationHistory || []).filter((e) => e.authorRole === "opd_nurse");
+  const doctorEntries = (consultationHistory || []).filter((e) => e.authorRole === "doctor");
+
+  function entryLabel(entry) {
+    const dt = entry.createdAt ? new Date(entry.createdAt) : null;
+    return dt
+      ? dt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+      : "Undated entry";
+  }
+
+  function toHistoryList(entryList, roleLabel) {
+    return entryList.map((entry, i) => ({
+      id: entry.id || i,
+      label: entryLabel(entry),
+      sublabel: i === 0 ? `Latest ${roleLabel}` : roleLabel,
+      onClick: () => onViewConsultationEntry(entry),
+    }));
+  }
+
   const folders = [
     {
-      id: "opd-record",
-      label: "OPD Record",
-      count: emr ? 1 : 0,
-      description: "The patient's Outpatient Department / Electronic Medical Record.",
-      actions: emr
-        ? [
-            { label: "View / Edit", onClick: onEditEmr },
-            { label: downloadingPdf ? "Preparing…" : "Download PDF", onClick: onDownloadEmr, disabled: downloadingPdf },
-          ]
-        : [{ label: "Add OPD Record", onClick: onEditEmr }],
+      id: "medical-record",
+      label: "Medical Record",
+      count: doctorEntries.length,
+      description: "The doctor's consultation records for this patient — diagnosis, medication, and disposition.",
+      historyList: toHistoryList(doctorEntries, "consultation"),
+    },
+    {
+      id: "er-consultation",
+      label: "ER Consultation",
+      count: erEntries.length,
+      description: "Every consultation an ER nurse recorded for this patient, newest first.",
+      historyList: toHistoryList(erEntries, "ER consultation"),
+    },
+    {
+      id: "opd-consultation",
+      label: "OPD Consultation",
+      count: opdEntries.length,
+      description: "Every consultation an OPD nurse recorded for this patient, newest first.",
+      historyList: toHistoryList(opdEntries, "OPD consultation"),
     },
     {
       id: "medical-certificate",
@@ -720,7 +942,29 @@ function PatientFilesPanel({
             <p className="text-xs text-slate-400 mt-1">{selectedFolder.description}</p>
             <p className="text-[11px] font-semibold text-slate-500 mt-2">{selectedFolder.count} file(s)</p>
 
-            {selectedFolder.comingSoon ? (
+            {selectedFolder.historyList ? (
+              <div className="mt-4 w-full text-left">
+                {selectedFolder.historyList.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic text-center">
+                    No consultations recorded yet.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+                    {selectedFolder.historyList.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={item.onClick}
+                        className="w-full text-left rounded-lg border border-slate-200 hover:bg-teal-50 hover:border-teal-200 px-3 py-2 transition-colors"
+                      >
+                        <p className="text-xs font-semibold text-slate-700">{item.label}</p>
+                        <p className="text-[11px] text-slate-400">{item.sublabel}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : selectedFolder.comingSoon ? (
               <p className="mt-4 text-xs text-slate-400 italic">Coming soon.</p>
             ) : (
               <div className="mt-4 w-full space-y-2">
@@ -773,6 +1017,7 @@ export default function PatientProfile() {
   const [consultationReturnTo, setConsultationReturnTo] = useState(null);
   const [consultationReadOnly, setConsultationReadOnly] = useState(false);
   const [consultationEncounter, setConsultationEncounter] = useState(null);
+  const [viewingConsultationEntry, setViewingConsultationEntry] = useState(null);
   const [sharedClinical, setSharedClinical] = useState({});
   const [showEmr, setShowEmr] = useState(false);
   const fileInputRef = useRef(null);
@@ -846,7 +1091,7 @@ export default function PatientProfile() {
     setDischarge(found ? loadDischarge(patientId) : null);
     setKonsultaReferral(found ? loadKonsultaReferral(patientId) : null);
     setMedicalCertificate(found ? loadMedicalCertificate(patientId) : null);
-    setConsultation(found ? loadConsultation(patientId) : null);
+    setConsultation(found ? loadConsultationHistory(patientId)[0] || null : null);
     setSharedClinical(found ? loadSharedClinical(patientId) : {});
     setLabOrders(found ? loadLabOrders().filter((o) => o.patientId === patientId) : []);
     setMedicinePrescriptions(found ? loadMedicinePrescriptions().filter((r) => r.patientId === patientId) : []);
@@ -925,15 +1170,7 @@ export default function PatientProfile() {
   }
 
   function handleSaveConsultation(formData) {
-    const updated = { ...formData, updatedAt: new Date().toISOString() };
-    let all = {};
-    try {
-      all = JSON.parse(localStorage.getItem("patientConsultation") || "{}");
-    } catch {
-      all = {};
-    }
-    all[patientId] = updated;
-    localStorage.setItem("patientConsultation", JSON.stringify(all));
+    const entry = saveConsultationEntry(patientId, formData, user?.role);
 
     // Personal Details / Health Coverage / Emergency Contact live here now
     // (moved from the EMR) — keep the patient master record's overlapping
@@ -971,7 +1208,7 @@ export default function PatientProfile() {
     }
 
     setPatient(updatedPatient);
-    setConsultation(updated);
+    setConsultation(entry);
     syncSharedClinical("consultation", formData);
 
     // Registration auto-completion: once both a nurse and a doctor have
@@ -1869,6 +2106,7 @@ export default function PatientProfile() {
                 discharge={discharge}
                 konsultaReferral={konsultaReferral}
                 medicalCertificate={medicalCertificate}
+                consultationHistory={loadConsultationHistory(patientId)}
                 downloadingPdf={downloadingPdf}
                 downloadingDischargePdf={downloadingDischargePdf}
                 downloadingKonsultaPdf={downloadingKonsultaPdf}
@@ -1881,6 +2119,7 @@ export default function PatientProfile() {
                 onDownloadKonsultaReferral={handleDownloadKonsultaReferral}
                 onOpenMedicalCertificate={() => setShowMedicalCertificate(true)}
                 onDownloadMedicalCertificate={handleDownloadMedicalCertificate}
+                onViewConsultationEntry={(entry) => setViewingConsultationEntry(entry)}
               />
             </div>
           ) : activeTab === "registration" ? (
@@ -1935,7 +2174,10 @@ export default function PatientProfile() {
       )}
 
       {/* Consultation Form (Encounter) — Patient Information through Consent,
-          plus history-taking and NCD risk assessment. Save overwrites. */}
+          plus history-taking and NCD risk assessment. Each save appends a
+          new history entry (see saveConsultationEntry) rather than
+          overwriting — that's what populates the Medical Record / ER
+          Consultation / OPD Consultation folders in Patient Files. */}
       {showConsultation && (
         <ConsultationForm
           initialValues={consultation || patientToConsultationSeed(patient, sharedClinical)}
@@ -1949,6 +2191,15 @@ export default function PatientProfile() {
           }}
           patient={patient}
           encounter={consultationEncounter}
+        />
+      )}
+
+      {/* Read-only summary of one past consultation entry, opened from the
+          Medical Record / ER Consultation / OPD Consultation folders. */}
+      {viewingConsultationEntry && (
+        <ConsultationSummaryModal
+          entry={viewingConsultationEntry}
+          onClose={() => setViewingConsultationEntry(null)}
         />
       )}
 
