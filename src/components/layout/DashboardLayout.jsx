@@ -15,6 +15,9 @@ export default function DashboardLayout() {
         <main className="dashboard-content">
           <Outlet />
         </main>
+        <footer className="dashboard-footer">
+          © {new Date().getFullYear()} E. Zarate Hospital. All rights reserved.
+        </footer>
       </div>
     </div>
   );

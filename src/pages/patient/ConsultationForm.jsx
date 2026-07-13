@@ -21,6 +21,7 @@ import {
 import { pdf } from "@react-pdf/renderer";
 import AddressFields from "../../components/common/AddressFields";
 import Icd10Autocomplete from "../../components/common/Icd10Autocomplete";
+import DiagnosticTestChecklist from "../../components/common/DiagnosticTestChecklist";
 import { useAuth } from "../../context/AuthContext";
 import { loadEncounters, formatDateCreated } from "../../utils/encounters";
 import { loadLabOrders } from "../../utils/labOrders";
@@ -270,7 +271,6 @@ const NURSE_SECTIONS = new Set([
 const DOCTOR_SECTIONS = new Set([
   "ncdAssessment",
   "diagnosis",
-  "medication",
   "disposition",
   "medicinePrescription",
   "diagnostics",
@@ -356,6 +356,11 @@ export const initialConsultationForm = {
   dispositionNotes: "",
 
   // Diagnostics ordered for this visit
+  // Diagnostics ordered for this visit — same selectable checklist as
+  // Lab Orders (utils/labOrders.js LAB_ORDER_CATALOG), plus free-text notes
+  // for anything not on that list.
+  diagnosticsSelected: [],
+  diagnosticsTestDetails: {},
   diagnosticsNotes: "",
 
   // Medicine Prescription issued during this visit — structured line items
@@ -780,6 +785,22 @@ export default function ConsultationForm({
     setForm((f) => ({ ...f, [name]: value }));
   }
 
+  function toggleDiagnosticTest(name) {
+    setForm((f) => ({
+      ...f,
+      diagnosticsSelected: f.diagnosticsSelected.includes(name)
+        ? f.diagnosticsSelected.filter((d) => d !== name)
+        : [...f.diagnosticsSelected, name],
+    }));
+  }
+
+  function setDiagnosticTestDetail(name, value) {
+    setForm((f) => ({
+      ...f,
+      diagnosticsTestDetails: { ...f.diagnosticsTestDetails, [name]: value },
+    }));
+  }
+
   function addPrescriptionItem() {
     uidCounter += 1;
     set("prescriptionItems", [
@@ -990,10 +1011,15 @@ export default function ConsultationForm({
               <input name="hmo" value={form.hmo} onChange={handle} className={inputClass} />
             </Field>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <Field label="Type of HMO Coverage">
-              <input name="hmoType" value={form.hmoType} onChange={handle} className={inputClass} />
-            </Field>
+          <div className={`grid grid-cols-1 ${isNurse ? "" : "md:grid-cols-2"} gap-4 mt-4`}>
+            {/* Type of HMO Coverage is a doctor/admin-facing detail — not
+                part of the nurse intake workflow, so it's left out here
+                for the nurse role while staying available to admin. */}
+            {!isNurse && (
+              <Field label="Type of HMO Coverage">
+                <input name="hmoType" value={form.hmoType} onChange={handle} className={inputClass} />
+              </Field>
+            )}
             <Field label="Cert. No.">
               <input name="certNo" value={form.certNo} onChange={handle} className={inputClass} />
             </Field>
@@ -1052,20 +1078,11 @@ export default function ConsultationForm({
             </div>
             <MessageSquarePlus size={20} className="text-blue-600" />
           </div>
-          <div className="border border-t-0 border-slate-200 rounded-b-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="border border-t-0 border-slate-200 rounded-b-lg p-4">
             <Field label="Chief Complaint" required>
               <textarea
                 name="chiefComplaint"
                 value={form.chiefComplaint}
-                onChange={handle}
-                rows={3}
-                className={textareaClass}
-              />
-            </Field>
-            <Field label="History of Present Illness" required>
-              <textarea
-                name="historyOfPresentIllness"
-                value={form.historyOfPresentIllness}
                 onChange={handle}
                 rows={3}
                 className={textareaClass}
@@ -1507,23 +1524,6 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── MEDICATION (doctor's orders for this visit) ── */}
-        {canEdit("medication") && (
-        <div>
-          <SectionHeader title="Medication" />
-          <Field label="Medication Ordered">
-            <textarea
-              name="medicationOrders"
-              value={form.medicationOrders}
-              onChange={handle}
-              rows={4}
-              placeholder="Medicine, dosage, frequency, duration"
-              className={textareaClass}
-            />
-          </Field>
-        </div>
-        )}
-
         {/* ── DISPOSITION (doctor) ── */}
         {canEdit("disposition") && (
         <div>
@@ -1551,16 +1551,34 @@ export default function ConsultationForm({
         {canEdit("diagnostics") && (
         <div>
           <SectionHeader title="Diagnostics" />
-          <Field label="Diagnostics / Tests Ordered">
-            <textarea
-              name="diagnosticsNotes"
-              value={form.diagnosticsNotes}
-              onChange={handle}
-              rows={3}
-              placeholder="e.g. CBC, Chest X-ray, ECG — use the Lab Orders module to place a formal order"
-              className={textareaClass}
-            />
-          </Field>
+          <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
+            <div>
+              <span className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                Diagnostics / Tests Ordered
+                {form.diagnosticsSelected.length > 0 && (
+                  <span className="ml-1 font-normal normal-case text-slate-400">
+                    ({form.diagnosticsSelected.length} selected)
+                  </span>
+                )}
+              </span>
+              <DiagnosticTestChecklist
+                selected={form.diagnosticsSelected}
+                onToggle={toggleDiagnosticTest}
+                testDetails={form.diagnosticsTestDetails}
+                onDetailChange={setDiagnosticTestDetail}
+              />
+            </div>
+            <Field label="Additional Notes">
+              <textarea
+                name="diagnosticsNotes"
+                value={form.diagnosticsNotes}
+                onChange={handle}
+                rows={2}
+                placeholder="Anything not covered by the checklist above"
+                className={textareaClass}
+              />
+            </Field>
+          </div>
         </div>
         )}
 

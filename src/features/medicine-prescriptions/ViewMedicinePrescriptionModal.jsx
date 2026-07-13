@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, Pill, Download } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import { formatAge } from "../../utils/age";
-import { STATUS_STYLES, formatDateCreated } from "../../utils/medicinePrescriptions";
+import { formatDateCreated } from "../../utils/medicinePrescriptions";
 import MedicinePrescriptionPDF from "./MedicinePrescriptionPDF";
 
 export default function ViewMedicinePrescriptionModal({ record, onClose }) {
@@ -52,22 +52,13 @@ export default function ViewMedicinePrescriptionModal({ record, onClose }) {
         </div>
 
         <div className="px-5 py-4 flex flex-col gap-4">
-          {/* Patient + status, like the header of the printed Rx pad */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">{fullName || "—"}</p>
-              <p className="text-xs text-slate-500">
-                {formatAge(p.dateOfBirth)} · {p.sex || "—"}
-              </p>
-              {p.address && <p className="text-xs text-slate-400 mt-0.5">{p.address}</p>}
-            </div>
-            <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase ${
-                STATUS_STYLES[record.status] || "bg-slate-100 text-slate-600"
-              }`}
-            >
-              {record.status}
-            </span>
+          {/* Patient, like the header of the printed Rx pad */}
+          <div>
+            <p className="text-sm font-semibold text-slate-800">{fullName || "—"}</p>
+            <p className="text-xs text-slate-500">
+              {formatAge(p.dateOfBirth)} · {p.sex || "—"}
+            </p>
+            {p.address && <p className="text-xs text-slate-400 mt-0.5">{p.address}</p>}
           </div>
 
           {/* Rx — medicine, quantity, and instructions only, no price */}

@@ -15,7 +15,6 @@ import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatDateCreated } from "../../utils/labOrders";
 import {
   MEDICINE_CATALOG,
-  STATUS_OPTIONS,
   generateMedicinePrescriptionId,
   loadMedicinePrescriptions,
   saveMedicinePrescriptions,
@@ -114,7 +113,6 @@ export default function AddMedicinePrescriptionPage() {
   const [selectedPatientId, setSelectedPatientId] = useState(presetPatientId);
   const [showCreatePatient, setShowCreatePatient] = useState(false);
 
-  const [status, setStatus] = useState(STATUS_OPTIONS[0]);
   const [prescribedBy, setPrescribedBy] = useState("");
   const [rows, setRows] = useState([newRow()]);
   const [error, setError] = useState("");
@@ -234,7 +232,6 @@ export default function AddMedicinePrescriptionPage() {
         dateOfBirth: selectedPatient.dateOfBirth || "",
         address: selectedPatient.address || "",
       },
-      status,
       prescribedBy: prescribedBy.trim(),
       items: items.map((r) => ({
         medicineName: r.medicineName,
@@ -480,20 +477,6 @@ export default function AddMedicinePrescriptionPage() {
                     placeholder="Dr. Juan Dela Cruz"
                     className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900 w-48 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                   />
-                </label>
-                <label className="flex items-center gap-2 text-sm text-slate-600">
-                  Status
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
-                  >
-                    {STATUS_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
                 </label>
               </div>
             </div>

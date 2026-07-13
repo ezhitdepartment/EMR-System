@@ -67,6 +67,7 @@ function Field({ label, children, full }) {
 export default function ErDischargeForm({ initialValues, onSave, onClose }) {
   const [form, setForm] = useState(() => ({
     ...emptyDischargeForm,
+    physicianDate: new Date().toISOString().slice(0, 10),
     ...(initialValues || {}),
     ancillaries: {
       ...emptyDischargeForm.ancillaries,

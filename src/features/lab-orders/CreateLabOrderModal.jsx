@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
-import { X, FlaskConical, Search } from "lucide-react";
+import { X, FlaskConical } from "lucide-react";
 import SearchableSelect from "../../components/common/SearchableSelect";
+import DiagnosticTestChecklist from "../../components/common/DiagnosticTestChecklist";
 import {
-  LAB_ORDER_CATALOG,
-  TESTS_WITH_DETAIL,
   generateLabOrderId,
   loadLabOrders,
   saveLabOrders,
@@ -29,24 +28,10 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
   const [patientId, setPatientId] = useState(presetPatientId || "");
   const [diagnostics, setDiagnostics] = useState([]);
   const [testDetails, setTestDetails] = useState({});
-  const [diagnosticQuery, setDiagnosticQuery] = useState("");
   const [error, setError] = useState("");
 
   const selectedPatient = patients.find((p) => p.patientId === patientId) || null;
   const patientLocked = Boolean(presetPatientId);
-
-  // Same grouping as the paper forms (form type -> category -> tests),
-  // with the search query narrowing which tests/categories/forms show.
-  const filteredCatalog = useMemo(() => {
-    const q = diagnosticQuery.trim().toLowerCase();
-    if (!q) return LAB_ORDER_CATALOG;
-    return LAB_ORDER_CATALOG.map((form) => ({
-      ...form,
-      categories: form.categories
-        .map((cat) => ({ ...cat, tests: cat.tests.filter((t) => t.toLowerCase().includes(q)) }))
-        .filter((cat) => cat.tests.length > 0),
-    })).filter((form) => form.categories.length > 0);
-  }, [diagnosticQuery]);
 
   function toggleDiagnostic(name) {
     setDiagnostics((prev) =>
@@ -145,68 +130,12 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
               )}
             </span>
 
-            <div className="relative mb-2">
-              <Search
-                size={14}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-              <input
-                type="text"
-                value={diagnosticQuery}
-                onChange={(e) => setDiagnosticQuery(e.target.value)}
-                placeholder="Search diagnostic tests…"
-                className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
-              />
-            </div>
-
-            <div className="rounded-lg border border-slate-200 p-3 max-h-72 overflow-y-auto space-y-4">
-              {filteredCatalog.length === 0 ? (
-                <p className="py-2 text-center text-xs text-slate-400">
-                  No diagnostic tests match "{diagnosticQuery}"
-                </p>
-              ) : (
-                filteredCatalog.map((form) => (
-                  <div key={form.formType}>
-                    <p className="text-xs font-bold uppercase tracking-wide text-teal-700 mb-2">
-                      {form.formType}
-                    </p>
-                    <div className="space-y-3">
-                      {form.categories.map((cat) => (
-                        <div key={cat.category}>
-                          {form.categories.length > 1 && (
-                            <p className="text-[11px] font-semibold text-slate-500 mb-1">{cat.category}</p>
-                          )}
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {cat.tests.map((name) => (
-                              <div key={name} className={TESTS_WITH_DETAIL.has(name) ? "col-span-2" : ""}>
-                                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={diagnostics.includes(name)}
-                                    onChange={() => toggleDiagnostic(name)}
-                                    className="rounded border-slate-300 text-teal-700 focus:ring-teal-600"
-                                  />
-                                  {name}
-                                </label>
-                                {TESTS_WITH_DETAIL.has(name) && diagnostics.includes(name) && (
-                                  <input
-                                    type="text"
-                                    value={testDetails[name] || ""}
-                                    onChange={(e) => setTestDetail(name, e.target.value)}
-                                    placeholder={name.startsWith("Others") ? "Please specify…" : "Indicate type/site…"}
-                                    className="mt-1 ml-6 w-[calc(100%-1.5rem)] rounded-md border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-600"
-                                  />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            <DiagnosticTestChecklist
+              selected={diagnostics}
+              onToggle={toggleDiagnostic}
+              testDetails={testDetails}
+              onDetailChange={setTestDetail}
+            />
           </div>
 
           {error && <p className="text-xs text-red-600">{error}</p>}

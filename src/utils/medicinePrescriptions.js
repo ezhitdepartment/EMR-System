@@ -100,13 +100,6 @@ export const MEDICINE_CATALOG = [
   "Insulin Glargine (Lantus)",
 ];
 
-export const STATUS_OPTIONS = ["Pending", "Completed"];
-
-export const STATUS_STYLES = {
-  Completed: "bg-emerald-100 text-emerald-700",
-  Pending: "bg-amber-100 text-amber-700",
-};
-
 export function loadMedicinePrescriptions() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");

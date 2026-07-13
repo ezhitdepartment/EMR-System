@@ -17,14 +17,11 @@ import ViewMedicinePrescriptionModal from "./ViewMedicinePrescriptionModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatAge } from "../../utils/age";
 import {
-  STATUS_OPTIONS,
-  STATUS_STYLES,
   formatDateCreated,
   loadMedicinePrescriptions,
 } from "../../utils/medicinePrescriptions";
 
 const PAGE_SIZE = 8;
-const TABS = ["All", ...STATUS_OPTIONS];
 
 function SortHeader({ label, field, sortField, sortDir, onSort }) {
   const active = sortField === field;
@@ -46,7 +43,6 @@ function SortHeader({ label, field, sortField, sortDir, onSort }) {
 export default function MedicinePrescriptions() {
   const navigate = useNavigate();
   const [records, setRecords] = useState([]);
-  const [tab, setTab] = useState("All");
   const [search, setSearch] = useState("");
   const [dateYear, setDateYear] = useState("");
   const [dateMonth, setDateMonth] = useState("");
@@ -72,21 +68,11 @@ export default function MedicinePrescriptions() {
 
   useEffect(() => {
     setPage(1);
-  }, [tab, search, dateYear, dateMonth]);
+  }, [search, dateYear, dateMonth]);
 
-  const tabCounts = useMemo(() => {
-    const counts = { All: records.length };
-    STATUS_OPTIONS.forEach((s) => {
-      counts[s] = records.filter((r) => r.status === s).length;
-    });
-    return counts;
-  }, [records]);
-
-  const hasActiveFilters =
-    search.trim() !== "" || dateYear !== "" || dateMonth !== "" || tab !== "All";
+  const hasActiveFilters = search.trim() !== "" || dateYear !== "" || dateMonth !== "";
 
   function clearFilters() {
-    setTab("All");
     setSearch("");
     setDateYear("");
     setDateMonth("");
@@ -113,7 +99,6 @@ export default function MedicinePrescriptions() {
     const q = search.trim().toLowerCase();
 
     const result = withDerived.filter((r) => {
-      if (tab !== "All" && r.status !== tab) return false;
       if (dateYear || dateMonth) {
         const created = r.dateCreated ? new Date(r.dateCreated) : null;
         if (!created) return false;
@@ -131,10 +116,6 @@ export default function MedicinePrescriptions() {
           av = a.id;
           bv = b.id;
           break;
-        case "status":
-          av = a.status;
-          bv = b.status;
-          break;
         case "medicineCount":
           av = a.items?.length || 0;
           bv = b.items?.length || 0;
@@ -149,7 +130,7 @@ export default function MedicinePrescriptions() {
     });
 
     return result;
-  }, [records, tab, search, dateYear, dateMonth, sortField, sortDir]);
+  }, [records, search, dateYear, dateMonth, sortField, sortDir]);
 
   const availableYears = useMemo(() => {
     const s = new Set();
@@ -169,11 +150,10 @@ export default function MedicinePrescriptions() {
   const rangeEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
 
   function exportCsv() {
-    const header = ["ID", "Patient", "Status", "Medicine Count", "Prescribed By", "Date Created"];
+    const header = ["ID", "Patient", "Medicine Count", "Prescribed By", "Date Created"];
     const rows = filtered.map((r) => [
       r.id,
       r._fullName,
-      r.status,
       r.items?.length || 0,
       r.prescribedBy || "",
       formatDateCreated(r.dateCreated),
@@ -223,28 +203,10 @@ export default function MedicinePrescriptions() {
         />
       </div>
 
-      {/* Status tabs + search/toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                tab === t
-                  ? "bg-teal-700 text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {t} <span className="opacity-70">({tabCounts[t] ?? 0})</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Search + toolbar */}
+      <div className="flex items-center justify-end gap-2 mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
@@ -300,7 +262,6 @@ export default function MedicinePrescriptions() {
             )}
           </div>
         </div>
-      </div>
 
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -330,15 +291,6 @@ export default function MedicinePrescriptions() {
                       />
                     </th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Patient</th>
-                    <th className="px-4 py-3">
-                      <SortHeader
-                        label="Status"
-                        field="status"
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      />
-                    </th>
                     <th className="px-4 py-3">
                       <SortHeader
                         label="Medicine Count"
@@ -376,15 +328,6 @@ export default function MedicinePrescriptions() {
                         <p className="font-semibold text-slate-800">{r._fullName || "—"}</p>
                         <p className="text-xs text-slate-500">{formatAge(r.patient?.dateOfBirth)}</p>
                         <p className="text-xs text-slate-500 uppercase">{r.patient?.sex || "—"}</p>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase whitespace-nowrap ${
-                            STATUS_STYLES[r.status] || "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {r.status}
-                        </span>
                       </td>
                       <td className="px-4 py-3 align-top text-center text-slate-700">
                         {r.items?.length || 0}

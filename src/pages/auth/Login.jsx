@@ -189,6 +189,9 @@ export default function Login() {
         <p className="mt-4 text-center text-xs text-white/70 drop-shadow-sm">
           For staff and administrator use only.
         </p>
+        <p className="mt-1 text-center text-[11px] text-white/50 drop-shadow-sm">
+          © {new Date().getFullYear()} E. Zarate Hospital. All rights reserved.
+        </p>
       </div>
     </div>
   );
