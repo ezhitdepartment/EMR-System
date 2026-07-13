@@ -50,6 +50,7 @@ import KonsultaReferralPDF from "./KonsultaReferralPDF";
 import MedicalCertificateForm from "./MedicalCertificateForm";
 import MedicalCertificatePDF from "./MedicalCertificatePDF";
 import ConsultationForm, { NURSE_ROLES } from "./ConsultationForm";
+import ConsultationRecordPDF from "./ConsultationRecordPDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
 import { findEncounterById, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
@@ -386,132 +387,6 @@ function SummaryList({ label, items }) {
           <li key={item.id || i}>{item.text || item.condition || String(item)}</li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-// Read-only summary of one historical consultation entry — used by the
-// three Patient Files consultation folders. Deliberately not the full
-// ConsultationForm: that component only shows the sections *the current
-// viewer's role* can edit, which would hide most of a nurse-authored entry
-// from a doctor (and vice versa). This just shows everything that entry
-// actually recorded.
-function ConsultationSummaryModal({ entry, onClose }) {
-  if (!entry) return null;
-  const isDoctorEntry = entry.authorRole === "doctor";
-  const roleLabel = CONSULTATION_ROLE_LABELS[entry.authorRole] || entry.authorRole || "Unknown";
-  const when = entry.createdAt
-    ? new Date(entry.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
-    : "Undated";
-
-  const smokingSummary =
-    entry.isSmoker === "YES" || entry.isSmoker === "USED TO SMOKE"
-      ? `${entry.isSmoker} — ${entry.cigaretteType || "type not noted"}, ${
-          entry.cigarettesPerDay || "?"
-        }/day for ${entry.yearsSmoking || "?"} yrs`
-      : entry.isSmoker || null;
-  const drinkingSummary =
-    entry.isDrinker === "YES" || entry.isDrinker === "USED TO DRINK"
-      ? `${entry.isDrinker} — ${entry.alcoholType || "type not noted"}, ${entry.numberOfBottles || "?"} bottle(s)`
-      : entry.isDrinker || null;
-  const drugSummary = entry.isDrugUser
-    ? `${entry.isDrugUser}${entry.drugRemarks ? ` — ${entry.drugRemarks}` : ""}`
-    : null;
-  const sexActiveSummary = entry.isSexuallyActive
-    ? `${entry.isSexuallyActive}${entry.sexualActivityRemarks ? ` — ${entry.sexualActivityRemarks}` : ""}`
-    : null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
-      <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white">
-          <div>
-            <span className="inline-flex items-center rounded-full bg-teal-50 text-teal-700 px-2.5 py-0.5 text-xs font-semibold uppercase mb-1">
-              {roleLabel}
-            </span>
-            <p className="text-sm font-semibold text-slate-800">{when}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="px-5 py-4 flex flex-col gap-4">
-          {isDoctorEntry ? (
-            <>
-              <SummaryRow label="Chief Complaint" value={entry.chiefComplaint} />
-              <SummaryRow label="History of Present Illness" value={entry.historyOfPresentIllness} />
-              <SummaryRow label="Diagnosis" value={entry.diagnosis} />
-              <SummaryRow label="Medication Ordered" value={entry.medicationOrders} />
-              <SummaryRow
-                label="Disposition"
-                value={[entry.disposition, entry.dispositionNotes].filter(Boolean).join(" — ")}
-              />
-              <SummaryRow label="Diagnostics / Tests Ordered" value={entry.diagnosticsNotes} />
-              <SummaryRow label="Medicine Prescription" value={entry.prescriptionNotes} />
-              {!entry.chiefComplaint &&
-                !entry.diagnosis &&
-                !entry.medicationOrders &&
-                !entry.disposition && <p className="text-sm text-slate-400 italic">Nothing recorded.</p>}
-            </>
-          ) : (
-            <>
-              <SummaryRow label="Allergies" value={entry.allergies} />
-              <SummaryList label="Past Medical History" items={entry.pastMedicalHistory} />
-              <SummaryList label="Family Medical History" items={entry.familyMedicalHistory} />
-              <SummaryRow
-                label="Surgical History"
-                value={entry.surgicalHistoryEnabled ? entry.surgicalHistoryDetails : null}
-              />
-              <SummaryRow
-                label="Immunizations"
-                value={entry.immunizationsEnabled ? entry.immunizationsDetails : null}
-              />
-              {(smokingSummary || drinkingSummary || drugSummary || sexActiveSummary) && (
-                <div>
-                  <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-1">Social History</p>
-                  <div className="flex flex-col gap-1.5 text-sm text-slate-800">
-                    {smokingSummary && <p>Smoking — {smokingSummary}</p>}
-                    {drinkingSummary && <p>Alcohol — {drinkingSummary}</p>}
-                    {drugSummary && <p>Illegal Drug Use — {drugSummary}</p>}
-                    {sexActiveSummary && <p>Sexually Active — {sexActiveSummary}</p>}
-                  </div>
-                </div>
-              )}
-              <SummaryRow label="Blood Type" value={entry.bloodTypeEnabled ? entry.bloodType : null} />
-              {entry.gender === "Female" && (
-                <SummaryRow
-                  label="OB-GYNE History"
-                  value={
-                    entry.noOfPregnancies || entry.lastMenstrualPeriod
-                      ? `Pregnancies: ${entry.noOfPregnancies || "—"}, Deliveries: ${
-                          entry.noOfDeliveries || "—"
-                        }, LMP: ${entry.lastMenstrualPeriod || "—"}`
-                      : null
-                  }
-                />
-              )}
-              {!entry.allergies &&
-                !entry.pastMedicalHistory?.length &&
-                !entry.familyMedicalHistory?.length &&
-                !smokingSummary &&
-                !drinkingSummary &&
-                !drugSummary &&
-                !sexActiveSummary && <p className="text-sm text-slate-400 italic">Nothing recorded.</p>}
-            </>
-          )}
-        </div>
-
-        <div className="px-5 py-4 border-t border-slate-200 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1017,7 +892,6 @@ export default function PatientProfile() {
   const [consultationReturnTo, setConsultationReturnTo] = useState(null);
   const [consultationReadOnly, setConsultationReadOnly] = useState(false);
   const [consultationEncounter, setConsultationEncounter] = useState(null);
-  const [viewingConsultationEntry, setViewingConsultationEntry] = useState(null);
   const [sharedClinical, setSharedClinical] = useState({});
   const [showEmr, setShowEmr] = useState(false);
   const fileInputRef = useRef(null);
@@ -1499,6 +1373,15 @@ export default function PatientProfile() {
     } finally {
       setDownloadingMedCertPdf(false);
     }
+  }
+
+  async function handleViewConsultationEntryPdf(entry) {
+    const blob = await pdf(
+      <ConsultationRecordPDF patient={patient} form={entry} generatedBy={user?.username} />
+    ).toBlob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
   function handleCopy(field, value) {
@@ -2119,7 +2002,7 @@ export default function PatientProfile() {
                 onDownloadKonsultaReferral={handleDownloadKonsultaReferral}
                 onOpenMedicalCertificate={() => setShowMedicalCertificate(true)}
                 onDownloadMedicalCertificate={handleDownloadMedicalCertificate}
-                onViewConsultationEntry={(entry) => setViewingConsultationEntry(entry)}
+                onViewConsultationEntry={handleViewConsultationEntryPdf}
               />
             </div>
           ) : activeTab === "registration" ? (
@@ -2191,15 +2074,6 @@ export default function PatientProfile() {
           }}
           patient={patient}
           encounter={consultationEncounter}
-        />
-      )}
-
-      {/* Read-only summary of one past consultation entry, opened from the
-          Medical Record / ER Consultation / OPD Consultation folders. */}
-      {viewingConsultationEntry && (
-        <ConsultationSummaryModal
-          entry={viewingConsultationEntry}
-          onClose={() => setViewingConsultationEntry(null)}
         />
       )}
 
