@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import {
+  LayoutDashboard,
   CalendarCheck,
   Stethoscope,
   Users,
@@ -9,8 +10,6 @@ import {
   ClipboardList,
   Send,
   Activity,
-  HeartPulse,
-  UserCog,
   ShieldCheck,
   Package2,
   History,
@@ -23,6 +22,7 @@ import { useAuth } from "../../context/AuthContext";
 import "./Sidebar.css";
 
 const iconMap = {
+  LayoutDashboard,
   CalendarCheck,
   Stethoscope,
   Users,
@@ -32,8 +32,6 @@ const iconMap = {
   ClipboardList,
   Send,
   Activity,
-  HeartPulse,
-  UserCog,
   ShieldCheck,
   Package2,
   History,

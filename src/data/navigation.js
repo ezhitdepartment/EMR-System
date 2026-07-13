@@ -6,6 +6,10 @@ export const navGroups = [
   {
     label: "Main",
     items: [
+      // Feature key isn't listed for any staff role above, so — same as
+      // everything else here — hasFeatureAccess() decides visibility:
+      // admin's "all" access picks it up automatically, no staff role does.
+      { label: "Dashboard", path: "/admin", icon: "LayoutDashboard", feature: "adminDashboard" },
       { label: "Registration", path: "/encounters", icon: "Stethoscope", feature: "registration" },
       { label: "Patients", path: "/patients", icon: "Users", feature: "patients" },
       { label: "Lab Orders", path: "/lab-orders", icon: "FlaskConical", feature: "labOrders" },
@@ -22,13 +26,11 @@ export const navGroups = [
     label: "PHC",
     items: [
       { label: "Masterlist", path: "/phc/masterlist", icon: "ClipboardList", feature: "masterlist" },
-      { label: "Yakap Tracker", path: "/phc/yakap-tracker", icon: "HeartPulse", feature: "yakapTracker" },
     ],
   },
   {
     label: "Admin",
     items: [
-      { label: "Users", path: "/admin/users", icon: "UserCog", feature: "adminTools" },
       { label: "Roles", path: "/admin/roles", icon: "ShieldCheck", feature: "adminTools" },
       { label: "Medicines", path: "/admin/medicines", icon: "Package2", feature: "adminTools" },
       { label: "Audit Logs", path: "/admin/audit-logs", icon: "History", feature: "adminTools" },

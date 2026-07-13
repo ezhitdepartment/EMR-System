@@ -24,14 +24,26 @@ export const STAFF_ROLES = ["doctor", "er_nurse", "opd_nurse", "med_tech", "xray
 // and AppRoutes.jsx both read from this so they can't drift apart.
 export const ROLE_FEATURE_ACCESS = {
   admin: "all",
-  er_nurse: ["registration", "patients", "labOrders", "reports", "masterlist", "yakapTracker"],
-  opd_nurse: ["registration", "patients", "labOrders", "reports", "masterlist", "yakapTracker"],
-  doctor: ["registration", "patients", "medicinePrescriptions", "reports", "masterlist", "yakapTracker"],
-  med_tech: ["patients", "labOrders", "reports", "masterlist", "yakapTracker"],
-  xray_tech: ["patients", "labOrders", "reports", "masterlist", "yakapTracker"],
+  er_nurse: ["registration", "patients", "labOrders", "reports", "masterlist"],
+  opd_nurse: ["registration", "patients", "labOrders", "reports", "masterlist"],
+  doctor: ["registration", "patients", "medicinePrescriptions", "reports", "masterlist"],
+  med_tech: ["patients", "labOrders", "reports", "masterlist"],
+  xray_tech: ["patients", "labOrders", "reports", "masterlist"],
+};
+
+// Explicit exceptions layered on top of ROLE_FEATURE_ACCESS above. Admin's
+// "all" access is intentionally broad — new features show up for admin
+// automatically without needing to be listed — so this is only for the rare
+// case where a role should NOT see a feature despite otherwise having
+// broad/full access to everything else. Yakap Tracker is retired for every
+// role (see ROLE_FEATURE_ACCESS above); admin needs the explicit denial
+// here too since "all" would otherwise still grant it.
+const ROLE_FEATURE_DENYLIST = {
+  admin: ["yakapTracker"],
 };
 
 export function hasFeatureAccess(role, feature) {
+  if (ROLE_FEATURE_DENYLIST[role]?.includes(feature)) return false;
   const allowed = ROLE_FEATURE_ACCESS[role];
   if (allowed === "all") return true;
   return Array.isArray(allowed) && allowed.includes(feature);

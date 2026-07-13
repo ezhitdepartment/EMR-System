@@ -2,9 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { STAFF_ROLES, hasFeatureAccess } from "../data/roles";
 import Login from "../pages/auth/Login";
-import AdminPage from "../pages/admin/AdminPage";
+import Dashboard from "../pages/admin/Dashboard";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import PatientRegistration from "../pages/patient/PatientRegistration";
 import PatientProfile from "../pages/patient/PatientProfile";
 import Encounters from "../features/encounters/Encounters";
 import CreateEncounterPage from "../features/encounters/CreateEncounterPage";
@@ -33,12 +32,6 @@ export default function AppRoutes() {
       {/* Login page - always accessible */}
       <Route path="/" element={<Login />} />
 
-      {/* Admin page - protected */}
-      <Route
-        path="/admin"
-        element={user?.role === "admin" ? <PatientRegistration/> : <AdminPage />}
-      />
-
       {/* Patient Profile - standalone, no dashboard chrome. The only way
           back is the "Back to Patients" button inside the page itself. */}
       <Route
@@ -52,15 +45,19 @@ export default function AppRoutes() {
         }
       />
 
-      {/* Staff Dashboard - protected. Admin gets it too (in addition to its
-          own /admin area above) so it sees everything, same as before
-          role-based filtering existed. */}
+      {/* Staff Dashboard - protected. Admin gets it too, plus its own
+          "/admin" landing page (Dashboard) inside this same layout below. */}
       {(STAFF_ROLES.includes(user?.role) || user?.role === "admin") && (
         <Route element={<DashboardLayout />}>
           {/* "/patients" is the one feature every role in ROLE_FEATURE_ACCESS
               has, so it's the safe fallback wherever a role hits a route
               its dashboard doesn't include. */}
           <Route index element={<Navigate to="/patients" replace />} />
+
+          <Route
+            path="/admin"
+            element={hasFeatureAccess(user?.role, "adminDashboard") ? <Dashboard /> : <Navigate to="/patients" replace />}
+          />
 
           <Route
             path="/encounters"
@@ -133,7 +130,10 @@ export default function AppRoutes() {
 
           <Route path="/reports" element={<Reports />} />
           <Route path="/phc/masterlist" element={<Masterlist />} />
-          <Route path="/phc/yakap-tracker" element={<YakapTracker />} />
+          <Route
+            path="/phc/yakap-tracker"
+            element={hasFeatureAccess(user?.role, "yakapTracker") ? <YakapTracker /> : <Navigate to="/patients" replace />}
+          />
 
           <Route
             path="/admin/users"
