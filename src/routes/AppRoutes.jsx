@@ -16,6 +16,7 @@ import LabQueuePage from "../features/lab-orders/LabQueuePage";
 import MedicinePrescriptions from "../features/medicine-prescriptions/MedicinePrescriptions";
 import AddMedicinePrescriptionPage from "../features/medicine-prescriptions/AddMedicinePrescriptionPage";
 import Reports from "../features/reports/Reports";
+import Archive from "../features/archive/Archive";
 import Masterlist from "../features/phc/Masterlist";
 import YakapTracker from "../features/phc/YakapTracker";
 import Users from "../features/admin/Users";
@@ -140,6 +141,7 @@ export default function AppRoutes() {
           />
 
           <Route path="/reports" element={<Reports />} />
+          <Route path="/archive" element={<Archive />} />
           <Route path="/phc/masterlist" element={<Masterlist />} />
           <Route
             path="/phc/yakap-tracker"

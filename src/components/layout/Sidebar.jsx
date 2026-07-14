@@ -14,6 +14,7 @@ import {
   Package2,
   History,
   Settings,
+  Archive,
   X,
 } from "lucide-react";
 import { navGroups } from "../../data/navigation";
@@ -36,6 +37,7 @@ const iconMap = {
   Package2,
   History,
   Settings,
+  Archive,
 };
 
 export default function Sidebar({ isOpen, onClose }) {

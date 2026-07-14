@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  BarChart3,
   Inbox,
   RefreshCw,
   Download,
@@ -9,7 +8,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Settings2,
-  TrendingUp,
   FileSpreadsheet,
   Users,
 } from "lucide-react";
@@ -19,8 +17,6 @@ import BarChart from "../../components/common/BarChart";
 import {
   REPORT_TYPES,
   getAvailableYears,
-  getMonthlyEncounterCounts,
-  getYearlyEncounterCounts,
   getMonthlyPatientCounts,
   getYearlyPatientCounts,
   getDiagnosisBreakdown,
@@ -117,8 +113,6 @@ export default function Reports() {
 
   const availableYears = useMemo(() => getAvailableYears(), []);
   const graphYear = tableYear !== "All" ? tableYear : availableYears[0];
-  const monthlyData = useMemo(() => getMonthlyEncounterCounts(graphYear), [graphYear, reports]);
-  const yearlyData = useMemo(() => getYearlyEncounterCounts(), [reports]);
   const monthlyPatientData = useMemo(() => getMonthlyPatientCounts(graphYear), [graphYear, reports]);
   const yearlyPatientData = useMemo(() => getYearlyPatientCounts(), [reports]);
 
@@ -246,20 +240,6 @@ export default function Reports() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
-            <TrendingUp size={15} className="text-teal-700" />
-            Monthly Encounters — {graphYear || "—"}
-          </p>
-          <BarChart data={monthlyData} />
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
-            <BarChart3 size={15} className="text-teal-700" />
-            Yearly Encounters
-          </p>
-          <BarChart data={yearlyData} color="#1d4ed8" />
-        </div>
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
           <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
             <Users size={15} className="text-teal-700" />

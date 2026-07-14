@@ -113,25 +113,6 @@ function getEncountersForYear(year) {
   return loadConsultations().filter((c) => yearOf(c.updatedAt) === Number(year));
 }
 
-export function getMonthlyEncounterCounts(year) {
-  const counts = Array(12).fill(0);
-  getEncountersForYear(year).forEach((c) => {
-    const m = monthOf(c.updatedAt);
-    if (m !== null) counts[m] += 1;
-  });
-  return MONTH_LABELS.map((label, i) => ({ label, value: counts[i] }));
-}
-
-export function getYearlyEncounterCounts() {
-  const counts = {};
-  loadConsultations().forEach((c) => {
-    const y = yearOf(c.updatedAt);
-    if (y) counts[y] = (counts[y] || 0) + 1;
-  });
-  const years = Object.keys(counts).map(Number).sort((a, b) => a - b);
-  return years.map((year) => ({ label: String(year), value: counts[year] }));
-}
-
 // Patients CREATED per month/year — distinct from encounters. A patient is
 // only created once (via CreatePatientModal), so unlike consultations this
 // reflects real, non-overwritten history — every patient ever registered

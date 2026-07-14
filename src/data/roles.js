@@ -24,11 +24,11 @@ export const STAFF_ROLES = ["doctor", "er_nurse", "opd_nurse", "med_tech", "xray
 // and AppRoutes.jsx both read from this so they can't drift apart.
 export const ROLE_FEATURE_ACCESS = {
   admin: "all",
-  er_nurse: ["registration", "patients", "labOrders", "reports", "masterlist"],
-  opd_nurse: ["registration", "patients", "labOrders", "reports", "masterlist"],
-  doctor: ["registration", "patients", "medicinePrescriptions", "reports", "masterlist"],
-  med_tech: ["patients", "labOrders", "reports", "masterlist"],
-  xray_tech: ["patients", "labOrders", "reports", "masterlist"],
+  er_nurse: ["registration", "patients", "labOrders", "reports", "masterlist", "archive"],
+  opd_nurse: ["registration", "patients", "labOrders", "reports", "masterlist", "archive"],
+  doctor: ["registration", "patients", "medicinePrescriptions", "reports", "masterlist", "archive"],
+  med_tech: ["patients", "labOrders", "reports", "masterlist", "archive"],
+  xray_tech: ["patients", "labOrders", "reports", "masterlist", "archive"],
 };
 
 // Explicit exceptions layered on top of ROLE_FEATURE_ACCESS above. Admin's

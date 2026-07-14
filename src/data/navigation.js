@@ -20,6 +20,7 @@ export const navGroups = [
         feature: "medicinePrescriptions",
       },
       { label: "Reports", path: "/reports", icon: "FileBarChart2", feature: "reports" },
+      { label: "Archive", path: "/archive", icon: "Archive", feature: "archive" },
     ],
   },
   {
