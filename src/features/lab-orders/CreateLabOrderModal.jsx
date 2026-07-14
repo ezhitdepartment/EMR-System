@@ -7,6 +7,7 @@ import {
   loadLabOrders,
   saveLabOrders,
 } from "../../utils/labOrders";
+import { emptyTestRecord, generateDiagnosticCode } from "../../utils/labOrderDiagnostics";
 
 function loadPatients() {
   try {
@@ -69,6 +70,16 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
       testDetails,
       dateCreated: new Date().toISOString(),
     };
+
+    // Create every diagnostic's test record right now instead of waiting
+    // for ViewLabOrderPage to lazily create it on first open — otherwise a
+    // brand-new pending order is invisible to the queue (and to anything
+    // else that reads order.tests) until someone happens to click into it.
+    const tests = {};
+    diagnostics.forEach((name) => {
+      tests[name] = emptyTestRecord(generateDiagnosticCode(existing, name));
+    });
+    order.tests = tests;
 
     saveLabOrders([order, ...existing]);
     onCreated(order);

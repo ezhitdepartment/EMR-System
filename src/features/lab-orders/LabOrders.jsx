@@ -17,8 +17,9 @@ import {
 import CreateLabOrderModal from "./CreateLabOrderModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatAge } from "../../utils/age";
-import { DIAGNOSTIC_OPTIONS, formatDateCreated, loadLabOrders } from "../../utils/labOrders";
+import { DIAGNOSTIC_OPTIONS, formatDateCreated, loadLabOrders, FORM_TYPE_BY_TEST } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
+import { ROLE_QUEUE_TYPES } from "../../utils/labQueue";
 
 const PAGE_SIZE = 8;
 
@@ -45,6 +46,11 @@ export default function LabOrders() {
   // Techs work results, not create orders — that's the requesting nurse's
   // job. Doctors/admins/nurses keep the ability to create.
   const canCreateOrder = !["med_tech", "xray_tech"].includes(user?.role);
+  // Med Tech / X-ray Tech only work one type of test each — don't clutter
+  // their list with orders that are 100% the other specialty. A mixed
+  // order (e.g. a CBC + a Chest X-Ray on the same slip) still shows up for
+  // both, since each tech has their own test to handle on it.
+  const allowedFormTypes = ROLE_QUEUE_TYPES[user?.role] || null; // null = unrestricted (nurse/doctor/admin)
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState("");
   const [diagnosticFilter, setDiagnosticFilter] = useState("All");
@@ -57,7 +63,11 @@ export default function LabOrders() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   function refresh() {
-    setOrders(loadLabOrders());
+    const all = loadLabOrders();
+    const scoped = allowedFormTypes
+      ? all.filter((o) => (o.diagnostics || []).some((d) => allowedFormTypes.includes(FORM_TYPE_BY_TEST[d])))
+      : all;
+    setOrders(scoped);
   }
 
   useEffect(() => {

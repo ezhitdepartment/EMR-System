@@ -14,6 +14,7 @@
 // it naturally drops out of the queue.
 
 import { loadLabOrders, updateLabOrder, FORM_TYPE_BY_TEST } from "./labOrders";
+import { emptyTestRecord, generateDiagnosticCode } from "./labOrderDiagnostics";
 
 // Which request-slip formTypes each role's queue pulls from.
 export const ROLE_QUEUE_TYPES = {
@@ -50,14 +51,22 @@ export function getQueueEntries(group) {
   orders.forEach((order) => {
     (order.diagnostics || []).forEach((diagnosticName) => {
       if (!formTypes.includes(FORM_TYPE_BY_TEST[diagnosticName])) return;
+
+      // CreateLabOrderModal now creates every test record up front, but
+      // orders saved before that fix (or any other edge case) may not have
+      // one yet — treat "no record" as "still pending, still waiting"
+      // instead of silently dropping it from the queue. ViewLabOrderPage
+      // will materialize the real record with the right code the first
+      // time anyone opens the order; the queue doesn't need to wait for
+      // that to happen first.
       const test = order.tests?.[diagnosticName];
-      if (!test || test.status !== "PENDING") return;
+      if (test && test.status !== "PENDING") return;
 
       entries.push({
         orderId: order.id,
         diagnosticName,
-        code: test.code,
-        queueStatus: test.queueStatus || "WAITING",
+        code: test?.code || null,
+        queueStatus: test?.queueStatus || "WAITING",
         patient: order.patient,
         patientId: order.patientId,
         dateCreated: order.dateCreated,
@@ -70,13 +79,17 @@ export function getQueueEntries(group) {
 }
 
 export function setQueueStatus(orderId, diagnosticName, queueStatus) {
-  return updateLabOrder(orderId, (o) => ({
-    ...o,
-    tests: {
-      ...o.tests,
-      [diagnosticName]: { ...o.tests[diagnosticName], queueStatus },
-    },
-  }));
+  return updateLabOrder(orderId, (o) => {
+    const existing = o.tests?.[diagnosticName];
+    const base = existing || emptyTestRecord(generateDiagnosticCode(loadLabOrders(), diagnosticName));
+    return {
+      ...o,
+      tests: {
+        ...o.tests,
+        [diagnosticName]: { ...base, queueStatus },
+      },
+    };
+  });
 }
 
 // Demotes whoever's currently being served back to waiting, then pulls the

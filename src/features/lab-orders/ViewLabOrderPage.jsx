@@ -150,10 +150,14 @@ export default function ViewLabOrderPage() {
     }
   }, [orderId]);
 
-  // Default to the first diagnostic once the order is loaded.
+  // Default to the first diagnostic once the order is loaded — for a tech,
+  // the first one *they're* actually responsible for, not just position 0
+  // (which might be the other specialty's test on a mixed order).
   useEffect(() => {
     if (order && !selectedDiagnostic && order.diagnostics?.length) {
-      setSelectedDiagnostic(order.diagnostics[0]);
+      const myTypes = TECH_ROLES.includes(user?.role) ? ROLE_QUEUE_TYPES[user.role] || [] : null;
+      const mine = myTypes ? order.diagnostics.filter((d) => myTypes.includes(FORM_TYPE_BY_TEST[d])) : null;
+      setSelectedDiagnostic((mine && mine[0]) || order.diagnostics[0]);
     }
   }, [order, selectedDiagnostic]);
 
