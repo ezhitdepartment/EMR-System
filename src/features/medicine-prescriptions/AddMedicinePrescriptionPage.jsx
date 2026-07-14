@@ -13,21 +13,13 @@ import {
 import CreatePatientModal from "../patients/CreatePatientModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatDateCreated } from "../../utils/labOrders";
+import { loadPatients } from "../../utils/patients";
 import {
   MEDICINE_CATALOG,
   generateMedicinePrescriptionId,
   loadMedicinePrescriptions,
   saveMedicinePrescriptions,
 } from "../../utils/medicinePrescriptions";
-
-function loadPatients() {
-  try {
-    const raw = JSON.parse(localStorage.getItem("patients") || "[]");
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
 
 function SortHeader({ label, field, sortField, sortDir, onSort }) {
   const active = sortField === field;
@@ -104,7 +96,7 @@ export default function AddMedicinePrescriptionPage() {
   const presetEncounterId = location.state?.presetEncounterId || "";
 
   const [step, setStep] = useState(1);
-  const [patients, setPatients] = useState(loadPatients);
+  const [patients, setPatients] = useState([]);
   const [search, setSearch] = useState("");
   const [dobYear, setDobYear] = useState("");
   const [dobMonth, setDobMonth] = useState("");
@@ -116,6 +108,10 @@ export default function AddMedicinePrescriptionPage() {
   const [prescribedBy, setPrescribedBy] = useState("");
   const [rows, setRows] = useState([newRow()]);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    loadPatients().then(setPatients);
+  }, []);
 
   // Arrived from a patient's profile page (e.g. their Medicine Prescriptions
   // tab) with a patient already chosen — skip straight to medicine
@@ -185,8 +181,7 @@ export default function AddMedicinePrescriptionPage() {
   }
 
   function handlePatientCreated(patient) {
-    const next = loadPatients();
-    setPatients(next);
+    setPatients((prev) => [patient, ...prev]);
     setSelectedPatientId(patient.patientId);
     setShowCreatePatient(false);
   }

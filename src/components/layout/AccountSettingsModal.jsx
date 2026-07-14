@@ -42,17 +42,21 @@ function PersonalInformationTab({ onClose }) {
     setSaved(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.firstName.trim() || !form.lastName.trim() || !form.licenseNumber.trim()) {
       setError("First name, last name, and license number are required.");
       return;
     }
-    updateProfile({
+    const result = await updateProfile({
       prefix: form.prefix.trim(),
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       licenseNumber: form.licenseNumber.trim(),
     });
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
     setError("");
     setSaved(true);
   }
@@ -177,7 +181,7 @@ function SecurityInformationTab() {
     setSaved(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!oldPassword || !newPassword || !confirmPassword) {
       setError("Please fill in all password fields.");
       return;
@@ -191,7 +195,7 @@ function SecurityInformationTab() {
       return;
     }
 
-    const result = changePassword(oldPassword, newPassword);
+    const result = await changePassword(oldPassword, newPassword);
     if (!result.success) {
       setError(result.error);
       return;

@@ -11,29 +11,17 @@ import {
 } from "lucide-react";
 import CreatePatientModal from "./CreatePatientModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
+import { loadPatients } from "../../utils/patients";
 
-// Patient master records saved by CreatePatientModal.jsx. Swap this read for
-// a Supabase query (e.g. supabase.from("patients").select("*")) once the
-// table is live — everything below (filter, search, sort, pagination) will
-// keep working the same way.
-const STORAGE_KEY = "patients";
 const PAGE_SIZE = 10;
 
 const SEX_OPTIONS = ["All", "Male", "Female"];
 const MORTALITY_OPTIONS = ["All", "Alive", "Deceased"];
 
-function loadPatients() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
-
 export default function Patients() {
   const navigate = useNavigate();
   const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sexFilter, setSexFilter] = useState("All");
   const [mortalityFilter, setMortalityFilter] = useState("All");
@@ -42,17 +30,20 @@ export default function Patients() {
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
 
-  function refresh() {
-    setRecords(loadPatients());
+  async function refresh() {
+    setLoading(true);
+    setRecords(await loadPatients());
+    setLoading(false);
   }
 
   useEffect(() => {
     refresh();
-    // Pick up new/edited patients saved from another tab/window.
-    window.addEventListener("storage", refresh);
+    // Refetch when the person comes back to this tab — worth keeping now
+    // that patients live in a shared database another teammate could have
+    // changed. The "storage" event no longer fires for this (that only
+    // covers localStorage), so it's dropped.
     window.addEventListener("focus", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener("focus", refresh);
     };
   }, []);
@@ -250,7 +241,12 @@ export default function Patients() {
 
       {/* Patient list */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        {filteredPatients.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
+            <RefreshCw size={24} className="animate-spin" />
+            <p className="text-sm font-medium">Loading patients…</p>
+          </div>
+        ) : filteredPatients.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
             <UsersIcon size={28} />
             <p className="text-sm font-medium">No patients found</p>

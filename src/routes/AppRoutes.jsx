@@ -25,7 +25,18 @@ import AuditLogs from "../features/admin/AuditLogs";
 import Settings from "../features/admin/Settings";
 
 export default function AppRoutes() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  // Still checking for an existing Supabase session (page refresh, first
+  // load) — don't make any redirect decisions yet, or a logged-in user
+  // briefly gets bounced to /login every time they refresh the page.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-400">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <Routes>

@@ -63,7 +63,7 @@ import {
   extractSharedFields,
   fillBlanksFromShared,
 } from "./sharedClinicalFields";
-import { loadPatients, savePatients, savePatientPhoto } from "../../utils/patients";
+import { findPatientById, updatePatient, savePatientPhoto } from "../../utils/patients";
 
 export function loadEmr(patientId) {
   try {
@@ -946,16 +946,25 @@ export default function PatientProfile() {
   }
 
   useEffect(() => {
-    const found = loadPatients().find((p) => p.patientId === patientId) || null;
-    setPatient(found);
-    setEmr(found ? loadEmr(patientId) : null);
-    setDischarge(found ? loadDischarge(patientId) : null);
-    setKonsultaReferral(found ? loadKonsultaReferral(patientId) : null);
-    setMedicalCertificate(found ? loadMedicalCertificate(patientId) : null);
-    setConsultation(found ? loadConsultationHistory(patientId)[0] || null : null);
-    setSharedClinical(found ? loadSharedClinical(patientId) : {});
-    setLabOrders(found ? loadLabOrders().filter((o) => o.patientId === patientId) : []);
-    setMedicinePrescriptions(found ? loadMedicinePrescriptions().filter((r) => r.patientId === patientId) : []);
+    let active = true;
+    setPatient(undefined); // "still loading" sentinel — see the render guard below
+    findPatientById(patientId).then((found) => {
+      if (!active) return;
+      setPatient(found);
+      setEmr(found ? loadEmr(patientId) : null);
+      setDischarge(found ? loadDischarge(patientId) : null);
+      setKonsultaReferral(found ? loadKonsultaReferral(patientId) : null);
+      setMedicalCertificate(found ? loadMedicalCertificate(patientId) : null);
+      setConsultation(found ? loadConsultationHistory(patientId)[0] || null : null);
+      setSharedClinical(found ? loadSharedClinical(patientId) : {});
+      setLabOrders(found ? loadLabOrders().filter((o) => o.patientId === patientId) : []);
+      setMedicinePrescriptions(
+        found ? loadMedicinePrescriptions().filter((r) => r.patientId === patientId) : []
+      );
+    });
+    return () => {
+      active = false;
+    };
   }, [patientId]);
 
   // "Add Prescription" navigates to the standalone add-prescription page
@@ -1030,24 +1039,21 @@ export default function PatientProfile() {
     syncSharedClinical("emr", formData);
   }
 
-  function handleSaveConsultation(formData) {
+  async function handleSaveConsultation(formData) {
     const entry = saveConsultationEntry(patientId, formData, user?.role);
 
     // Personal Details / Health Coverage / Emergency Contact live here now
     // (moved from the EMR) — keep the patient master record's overlapping
     // fields in sync so the rest of the profile updates immediately too.
-    const allPatients = loadPatients();
-    const idx = allPatients.findIndex((p) => p.patientId === patientId);
     let updatedPatient = patient;
-    if (idx !== -1) {
-      updatedPatient = {
-        ...allPatients[idx],
-        firstName: formData.firstName || allPatients[idx].firstName,
-        lastName: formData.lastName || allPatients[idx].lastName,
+    if (patient) {
+      const patch = {
+        firstName: formData.firstName || patient.firstName,
+        lastName: formData.lastName || patient.lastName,
         middleName: formData.middleName,
-        dateOfBirth: formData.dateOfBirth || allPatients[idx].dateOfBirth,
-        sex: formData.gender || allPatients[idx].sex,
-        address: formData.residentialAddress || allPatients[idx].address,
+        dateOfBirth: formData.dateOfBirth || patient.dateOfBirth,
+        sex: formData.gender || patient.sex,
+        address: formData.residentialAddress || patient.address,
         email: formData.email,
         mobile: formData.phoneCell,
         landline: formData.phoneHome,
@@ -1064,8 +1070,13 @@ export default function PatientProfile() {
         emergencyPhoneHome: formData.emergencyPhoneHome,
         emergencyPhoneCell: formData.emergencyPhoneCell,
       };
-      allPatients[idx] = updatedPatient;
-      savePatients(allPatients);
+      try {
+        updatedPatient = await updatePatient(patientId, patch);
+      } catch {
+        // Consultation record still saved above even if this sync fails —
+        // surface it quietly rather than losing the consultation save.
+        updatedPatient = { ...patient, ...patch };
+      }
     }
 
     setPatient(updatedPatient);
@@ -1206,7 +1217,7 @@ export default function PatientProfile() {
         return;
       }
 
-      const updatedPatient = savePatientPhoto(patientId, photoDataUrl);
+      const updatedPatient = await savePatientPhoto(patientId, photoDataUrl);
       if (updatedPatient) {
         setPatient(updatedPatient);
       }
@@ -1279,7 +1290,7 @@ export default function PatientProfile() {
         return;
       }
 
-      const updatedPatient = savePatientPhoto(patientId, photoDataUrl);
+      const updatedPatient = await savePatientPhoto(patientId, photoDataUrl);
       if (updatedPatient) {
         setPatient(updatedPatient);
       }
@@ -1384,11 +1395,11 @@ export default function PatientProfile() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const photoDataUrl = reader.result;
       if (!photoDataUrl) return;
 
-      const updatedPatient = savePatientPhoto(patientId, photoDataUrl);
+      const updatedPatient = await savePatientPhoto(patientId, photoDataUrl);
       if (updatedPatient) {
         setPatient(updatedPatient);
       }

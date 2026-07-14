@@ -13,6 +13,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
 
@@ -27,11 +28,14 @@ export default function Login() {
     }
   }, [user, navigate]);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
 
-    const result = login(username, password, role);
+    const result = await login(username, password, role);
+    setSubmitting(false);
+
     if (!result.success) {
       setError(result.error);
       return;
@@ -179,18 +183,16 @@ export default function Login() {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-sm shadow-blue-600/30 transition-colors"
+              disabled={submitting}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl shadow-sm shadow-blue-600/30 transition-colors"
             >
-              Login
+              {submitting ? "Logging in…" : "Login"}
             </button>
           </form>
         </div>
 
         <p className="mt-4 text-center text-xs text-white/70 drop-shadow-sm">
           For staff and administrator use only.
-        </p>
-        <p className="mt-1 text-center text-[11px] text-white/50 drop-shadow-sm">
-          © {new Date().getFullYear()} E. Zarate Hospital. All rights reserved.
         </p>
       </div>
     </div>

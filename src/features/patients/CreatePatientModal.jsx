@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import AddressFields, { emptyAddressValue } from "../../components/common/AddressFields";
 import { ageInYears } from "../../utils/age";
 import { useAuth } from "../../context/AuthContext";
-import { loadPatients, savePatients, generateHospitalNo } from "../../utils/patients";
+import { loadPatients, createPatient, generateHospitalNo } from "../../utils/patients";
 
 const SUFFIX_OPTIONS = ["", "Jr.", "Sr.", "II", "III", "IV"];
 
@@ -118,11 +118,26 @@ export default function CreatePatientModal({ onClose, onCreated }) {
   const { user } = useAuth();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Generated once when the modal opens so what's shown on screen is
   // exactly what gets saved — see generateHospitalNo() in utils/patients.js
   // for the {seq}{year}{month} pattern and duplicate-safety guarantee.
-  const [hospitalNo] = useState(() => generateHospitalNo());
+  // Loaded asynchronously now that patients live in Supabase instead of
+  // localStorage; re-derived fresh from the database again at submit time
+  // (see handleSubmit) in case another registration happened in the
+  // meantime, now that this is a real shared multi-user database.
+  const [hospitalNo, setHospitalNo] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    loadPatients().then((existing) => {
+      if (active) setHospitalNo(generateHospitalNo(existing));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -226,7 +241,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
     }));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError("");
 
@@ -241,10 +256,20 @@ export default function CreatePatientModal({ onClose, onCreated }) {
       return;
     }
 
+    setSubmitting(true);
+
+    // Re-derive the Hospital No. fresh right before saving rather than
+    // trusting the value generated when the modal opened — now that
+    // patients live in a real shared database instead of per-browser
+    // localStorage, another registration could have happened in the
+    // meantime (e.g. a teammate on another computer).
+    const latestPatients = await loadPatients();
+    const freshHospitalNo = generateHospitalNo(latestPatients);
+
     const patient = {
       patientId: generatePatientId(),
-      hospitalNo,
-      pin: hospitalNo,
+      hospitalNo: freshHospitalNo,
+      pin: freshHospitalNo,
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       middleName: form.middleName.trim(),
@@ -282,19 +307,16 @@ export default function CreatePatientModal({ onClose, onCreated }) {
 
       konsultaEligibility: "Not Set",
       patientType: PATIENT_TYPE_BY_ROLE[user?.role] || "OPD Patient",
-      createdAt: new Date().toISOString(),
     };
 
     try {
-      const existing = loadPatients();
-      const updated = [...existing, patient];
-      savePatients(updated);
+      const created = await createPatient(patient);
+      onCreated(created);
     } catch {
       setError("Could not save the patient. Please try again.");
-      return;
+    } finally {
+      setSubmitting(false);
     }
-
-    onCreated(patient);
   }
 
   return (
@@ -326,7 +348,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
               <div className="space-y-3">
                 <Field label="Hospital No.">
                   <input
-                    value={hospitalNo}
+                    value={hospitalNo || "Generating…"}
                     readOnly
                     title="Auto-generated: sequence + year + month"
                     className={`${inputClass} bg-slate-50 text-slate-600 cursor-not-allowed`}
@@ -751,9 +773,10 @@ export default function CreatePatientModal({ onClose, onCreated }) {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium transition-colors"
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
             >
-              Create and Select Patient
+              {submitting ? "Saving…" : "Create and Select Patient"}
             </button>
           </div>
         </form>

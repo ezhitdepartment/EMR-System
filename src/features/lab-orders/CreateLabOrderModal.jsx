@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { X, FlaskConical } from "lucide-react";
 import SearchableSelect from "../../components/common/SearchableSelect";
 import DiagnosticTestChecklist from "../../components/common/DiagnosticTestChecklist";
@@ -8,15 +8,7 @@ import {
   saveLabOrders,
 } from "../../utils/labOrders";
 import { emptyTestRecord, generateDiagnosticCode } from "../../utils/labOrderDiagnostics";
-
-function loadPatients() {
-  try {
-    const raw = JSON.parse(localStorage.getItem("patients") || "[]");
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
+import { loadPatients } from "../../utils/patients";
 
 function patientLabel(p) {
   const name = [p.lastName, p.firstName].filter(Boolean).join(", ");
@@ -25,11 +17,15 @@ function patientLabel(p) {
 }
 
 export default function CreateLabOrderModal({ onClose, onCreated, presetPatientId = null }) {
-  const patients = useMemo(loadPatients, []);
+  const [patients, setPatients] = useState([]);
   const [patientId, setPatientId] = useState(presetPatientId || "");
   const [diagnostics, setDiagnostics] = useState([]);
   const [testDetails, setTestDetails] = useState({});
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    loadPatients().then(setPatients);
+  }, []);
 
   const selectedPatient = patients.find((p) => p.patientId === patientId) || null;
   const patientLocked = Boolean(presetPatientId);

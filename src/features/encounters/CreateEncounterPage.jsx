@@ -95,7 +95,7 @@ export default function CreateEncounterPage() {
   const [step, setStep] = useState(1);
   const [patientTab, setPatientTab] = useState("patients"); // "patients" | "masterlist"
   const [hideIneligible, setHideIneligible] = useState(false);
-  const [patients, setPatients] = useState(loadPatients);
+  const [patients, setPatients] = useState([]);
   const [search, setSearch] = useState("");
   const [dobYear, setDobYear] = useState("");
   const [dobMonth, setDobMonth] = useState("");
@@ -129,18 +129,18 @@ export default function CreateEncounterPage() {
     }
   }, [presetPatientId, patients]);
 
-  // Pick up patient records saved from another tab/window (e.g. a photo
-  // updated from Patient Profile) so this stays in sync without needing a
-  // manual refresh — same pattern used on the Medicine Prescriptions and
-  // Reports pages.
+  // Pick up patient records changed elsewhere (e.g. a photo updated from
+  // Patient Profile) so this stays in sync without needing a manual
+  // refresh — same pattern used on the Medicine Prescriptions and Reports
+  // pages. The "storage" event no longer applies now that patients live in
+  // Supabase instead of localStorage, so only "focus" is kept.
   useEffect(() => {
-    function refreshPatients() {
-      setPatients(loadPatients());
+    async function refreshPatients() {
+      setPatients(await loadPatients());
     }
-    window.addEventListener("storage", refreshPatients);
+    refreshPatients();
     window.addEventListener("focus", refreshPatients);
     return () => {
-      window.removeEventListener("storage", refreshPatients);
       window.removeEventListener("focus", refreshPatients);
     };
   }, []);
@@ -235,7 +235,7 @@ export default function CreateEncounterPage() {
   }
 
   function handlePatientCreated(patient) {
-    setPatients(loadPatients());
+    setPatients((prev) => [patient, ...prev]);
     setSelectedPatientId(patient.patientId);
     setShowCreatePatient(false);
   }
@@ -278,10 +278,10 @@ export default function CreateEncounterPage() {
   // their Patient Profile immediately — and vice versa, since Patient
   // Profile writes to the same `patients` table via the same
   // savePatientPhoto() helper.
-  function applyPhoto(photoDataUrl) {
+  async function applyPhoto(photoDataUrl) {
     setPhoto(photoDataUrl);
     if (selectedPatient) {
-      const updated = savePatientPhoto(selectedPatient.patientId, photoDataUrl);
+      const updated = await savePatientPhoto(selectedPatient.patientId, photoDataUrl);
       if (updated) {
         setPatients((prev) => prev.map((p) => (p.patientId === updated.patientId ? updated : p)));
       }
@@ -462,7 +462,7 @@ export default function CreateEncounterPage() {
             </button>
             <button
               type="button"
-              onClick={() => setPatients(loadPatients())}
+              onClick={async () => setPatients(await loadPatients())}
               title="Refresh"
               className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors"
             >
