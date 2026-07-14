@@ -1,11 +1,166 @@
-import PageStub from "../../components/common/PageStub";
+import { useEffect, useState } from "react";
+import { RefreshCw, ShieldCheck, ScrollText, UserRound, Users2 } from "lucide-react";
+import { supabase } from "../../lib/supabaseClient";
+import { ROLE_OPTIONS } from "../../data/roles";
+
+const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]));
+
+const ROLE_BADGE_STYLES = {
+  admin: "bg-indigo-100 text-indigo-700",
+  doctor: "bg-teal-100 text-teal-700",
+  er_nurse: "bg-rose-100 text-rose-700",
+  opd_nurse: "bg-amber-100 text-amber-700",
+  med_tech: "bg-sky-100 text-sky-700",
+  xray_tech: "bg-violet-100 text-violet-700",
+};
+
+// "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the rest of the app).
+function formatDateCreated(iso) {
+  if (!iso) return "—";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "—";
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  const y = dt.getFullYear();
+  return `${m}/${d}/${y}`;
+}
 
 export default function Roles() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function refresh() {
+    setLoading(true);
+    setError("");
+    const { data, error: fetchError } = await supabase
+      .from("profiles")
+      .select("id, username, role, email, created_at")
+      .order("created_at", { ascending: false });
+
+    if (fetchError) {
+      setError(fetchError.message);
+      setUsers([]);
+    } else {
+      setUsers(data || []);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
   return (
-    <PageStub
-      module="Admin"
-      title="Roles"
-      description="Define roles and permission sets."
-    />
+    <div className="max-w-6xl">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700 mb-1">Admin</p>
+          <h1 className="text-2xl font-semibold text-slate-800">Roles</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            All staff accounts and their assigned role.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={refresh}
+          title="Refresh list"
+          className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+        >
+          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
+            <Users2 size={28} />
+            <p className="text-sm font-medium text-red-600">Couldn't load users</p>
+            <p className="text-xs text-slate-400">{error}</p>
+          </div>
+        ) : !loading && users.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
+            <Users2 size={28} />
+            <p className="text-sm font-medium">No users found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Username</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Role</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Email</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Date Created</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-16 text-center text-sm text-slate-400">
+                      Loading users…
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((u) => (
+                    <tr key={u.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-3 align-top font-medium text-slate-800 whitespace-nowrap">
+                        {u.username || "—"}
+                      </td>
+                      <td className="px-4 py-3 align-top whitespace-nowrap">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            ROLE_BADGE_STYLES[u.role] || "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {ROLE_LABELS[u.role] || u.role || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-top text-slate-600 whitespace-nowrap">
+                        {u.email || "—"}
+                      </td>
+                      <td className="px-4 py-3 align-top text-slate-600 whitespace-nowrap">
+                        {formatDateCreated(u.created_at)}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            title="Change Role"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                          >
+                            <ShieldCheck size={13} />
+                            Change Role
+                          </button>
+                          <button
+                            type="button"
+                            title="View Audit Log"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                          >
+                            <ScrollText size={13} />
+                            View Audit Log
+                          </button>
+                          <button
+                            type="button"
+                            title="View Profile"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                          >
+                            <UserRound size={13} />
+                            View Profile
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
