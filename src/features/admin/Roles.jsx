@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, ShieldCheck, ScrollText, UserRound, Users2 } from "lucide-react";
+import {
+  RefreshCw,
+  ShieldCheck,
+  ScrollText,
+  UserRound,
+  Users2,
+  Ban,
+  Trash2,
+  KeyRound,
+} from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { ROLE_OPTIONS } from "../../data/roles";
 
@@ -126,7 +135,7 @@ export default function Roles() {
                         {formatDateCreated(u.created_at)}
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5 max-w-xs">
                           <button
                             type="button"
                             title="Change Role"
@@ -150,6 +159,30 @@ export default function Roles() {
                           >
                             <UserRound size={13} />
                             View Profile
+                          </button>
+                          <button
+                            type="button"
+                            title="Reset Password"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                          >
+                            <KeyRound size={13} />
+                            Reset Password
+                          </button>
+                          <button
+                            type="button"
+                            title="Suspend"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
+                          >
+                            <Ban size={13} />
+                            Suspend
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete Account"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                          >
+                            <Trash2 size={13} />
+                            Delete Account
                           </button>
                         </div>
                       </td>
