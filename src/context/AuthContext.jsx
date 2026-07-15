@@ -38,6 +38,12 @@ export function AuthProvider({ children }) {
   // nobody's logged in" — AppRoutes.jsx should show a loading state instead
   // of bouncing to /login for a split second on every page refresh.
   const [loading, setLoading] = useState(true);
+  // Who's currently online, read from the same presence channel this tab
+  // tracks itself on — kept here (not in Roles.jsx) because a Realtime
+  // channel can only be subscribed to once; a second `supabase.channel()`
+  // call with the same name elsewhere returns that same already-subscribed
+  // channel, and attaching a new listener to it after subscribe() throws.
+  const [onlineUserIds, setOnlineUserIds] = useState(() => new Set());
 
   useEffect(() => {
     let active = true;
@@ -76,10 +82,19 @@ export function AuthProvider({ children }) {
   // connection lets it drop off automatically (no explicit "sign off"
   // step needed).
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setOnlineUserIds(new Set());
+      return;
+    }
 
     const channel = supabase.channel(ONLINE_PRESENCE_CHANNEL, {
       config: { presence: { key: user.id } },
+    });
+
+    // Listeners must be attached BEFORE subscribe() — Realtime rejects
+    // adding them afterward.
+    channel.on("presence", { event: "sync" }, () => {
+      setOnlineUserIds(new Set(Object.keys(channel.presenceState())));
     });
 
     channel.subscribe((status) => {
@@ -181,7 +196,9 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateProfile, changePassword }}>
+    <AuthContext.Provider
+      value={{ user, loading, onlineUserIds, login, logout, updateProfile, changePassword }}
+    >
       {children}
     </AuthContext.Provider>
   );

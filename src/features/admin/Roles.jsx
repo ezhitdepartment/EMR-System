@@ -14,7 +14,6 @@ import { supabase } from "../../lib/supabaseClient";
 import { ROLE_OPTIONS } from "../../data/roles";
 import { useAuth } from "../../context/AuthContext";
 import { setAccountSuspension } from "../../utils/adminUsers";
-import { ONLINE_PRESENCE_CHANNEL } from "../../lib/presence";
 import ResetPasswordModal from "./ResetPasswordModal";
 import DeleteAccountModal from "./DeleteAccountModal";
 
@@ -67,9 +66,8 @@ function StatusBadge({ status, online }) {
 
 export default function Roles() {
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, onlineUserIds } = useAuth();
   const [users, setUsers] = useState([]);
-  const [onlineIds, setOnlineIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(""); // row currently mid-action (suspend toggle)
@@ -96,24 +94,6 @@ export default function Roles() {
   useEffect(() => {
     refresh();
   }, []);
-
-  // Read-only view of the same presence channel AuthContext tracks
-  // "I'm online" on — this just listens, it doesn't track itself again.
-  useEffect(() => {
-    const channel = supabase.channel(ONLINE_PRESENCE_CHANNEL, {
-      config: { presence: { key: currentUser?.id || "roles-page-observer" } },
-    });
-
-    channel.on("presence", { event: "sync" }, () => {
-      setOnlineIds(new Set(Object.keys(channel.presenceState())));
-    });
-
-    channel.subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser?.id]);
 
   async function handleToggleSuspend(u) {
     const suspending = u.status !== "suspended";
@@ -216,7 +196,7 @@ export default function Roles() {
                           {u.email || "—"}
                         </td>
                         <td className="px-4 py-3 align-top whitespace-nowrap">
-                          <StatusBadge status={u.status} online={onlineIds.has(u.id)} />
+                          <StatusBadge status={u.status} online={onlineUserIds.has(u.id)} />
                         </td>
                         <td className="px-4 py-3 align-top text-slate-600 whitespace-nowrap">
                           {formatDateCreated(u.created_at)}
