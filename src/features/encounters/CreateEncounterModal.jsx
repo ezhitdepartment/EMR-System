@@ -1,25 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { X, CalendarPlus } from "lucide-react";
 import SearchableSelect from "../../components/common/SearchableSelect";
 import { useAuth } from "../../context/AuthContext";
 import {
   CONSULTATION_TYPE_OPTIONS,
   PAYMENT_TYPE_OPTIONS,
-  DOCTORS,
+  loadDoctors,
   STATUS,
-  generateEncounterId,
-  loadEncounters,
-  saveEncounters,
+  createEncounter,
 } from "../../utils/encounters";
-
-function loadPatients() {
-  try {
-    const raw = JSON.parse(localStorage.getItem("patients") || "[]");
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
+import { loadPatients } from "../../utils/patients";
 
 function patientLabel(p) {
   const name = [p.lastName, p.firstName].filter(Boolean).join(", ");
@@ -32,18 +22,25 @@ const inputClass =
 
 export default function CreateEncounterModal({ onClose, onCreated, presetPatientId = null }) {
   const { user } = useAuth();
-  const patients = useMemo(loadPatients, []);
+  const [patients, setPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
   const [patientId, setPatientId] = useState(presetPatientId || "");
   const [doctor, setDoctor] = useState("");
   const [consultationType, setConsultationType] = useState("");
   const [paymentType, setPaymentType] = useState("");
   const [appointmentDate, setAppointmentDate] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    loadPatients().then(setPatients);
+    loadDoctors().then(setDoctors);
+  }, []);
 
   const selectedPatient = patients.find((p) => p.patientId === patientId) || null;
   const patientLocked = Boolean(presetPatientId);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!patientId) {
       setError("Please select a patient.");
@@ -58,32 +55,30 @@ export default function CreateEncounterModal({ onClose, onCreated, presetPatient
       return;
     }
 
-    const existing = loadEncounters();
-    const encounter = {
-      id: generateEncounterId(existing),
-      patientId,
-      patient: {
-        firstName: selectedPatient?.firstName || "",
-        lastName: selectedPatient?.lastName || "",
-        middleName: selectedPatient?.middleName || "",
-        sex: selectedPatient?.sex || "",
-        dateOfBirth: selectedPatient?.dateOfBirth || "",
-      },
-      appointmentDate,
-      doctor,
-      paymentType,
-      consultationType,
-      createdBy: user?.username || "—",
-      status: STATUS.PENDING,
-      migratedStatus: "Not Migrated",
-      pcuStatus: "N/A",
-      triage: null,
-      waiver: null,
-      dateCreated: new Date().toISOString(),
-    };
-
-    saveEncounters([encounter, ...existing]);
-    onCreated(encounter);
+    setSubmitting(true);
+    setError("");
+    try {
+      const encounter = await createEncounter({
+        patientId,
+        appointmentDate,
+        doctor,
+        paymentType,
+        consultationType,
+        fee: 0,
+        reasonForVisiting: "",
+        photo: null,
+        createdBy: user?.id || null,
+        status: STATUS.PENDING,
+        nurseConsultationDone: false,
+        doctorConsultationDone: false,
+        migratedStatus: "Not Migrated",
+        pcuStatus: "N/A",
+      });
+      onCreated(encounter);
+    } catch (err) {
+      setError("Could not create the registration: " + err.message);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -123,7 +118,7 @@ export default function CreateEncounterModal({ onClose, onCreated, presetPatient
             <SearchableSelect
               value={doctor}
               onChange={setDoctor}
-              options={DOCTORS}
+              options={doctors}
               getValue={(d) => d}
               getLabel={(d) => d}
               placeholder="Select a doctor"
@@ -190,9 +185,10 @@ export default function CreateEncounterModal({ onClose, onCreated, presetPatient
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:opacity-60 text-white text-sm font-medium shadow-sm transition-colors"
             >
-              Create Registration
+              {submitting ? "Creating…" : "Create Registration"}
             </button>
           </div>
         </form>

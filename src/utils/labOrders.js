@@ -68,6 +68,34 @@ Object.entries(DIAGNOSTIC_GROUPS).forEach(([group, tests]) => {
   tests.forEach((t) => (FORM_TYPE_BY_TEST[t] = FORM_TYPE_BY_GROUP[group]));
 });
 
+// Same catalog as DIAGNOSTIC_GROUPS above, just reshaped into
+// { formType, categories: [{ category, tests }] } — what
+// DiagnosticTestChecklist.jsx (the shared checklist used by both
+// CreateLabOrderModal and the Consultation Form's Diagnostics section)
+// actually renders against. Derived rather than hand-duplicated so the
+// two can never drift out of sync with each other.
+export const LAB_ORDER_CATALOG = (() => {
+  const byFormType = {};
+  Object.entries(DIAGNOSTIC_GROUPS).forEach(([category, tests]) => {
+    const formType = FORM_TYPE_BY_GROUP[category];
+    if (!byFormType[formType]) byFormType[formType] = [];
+    byFormType[formType].push({ category, tests });
+  });
+  return Object.entries(byFormType).map(([formType, categories]) => ({ formType, categories }));
+})();
+
+// Tests where a single checkbox isn't enough — the requesting doctor/nurse
+// also needs to type a free-text detail (which site, which type). The
+// three catch-all "Others (...)" entries always need this ("Please
+// specify…" in the UI); "Extremities" additionally needs it since an X-ray
+// request has to name the specific limb/joint ("Indicate type/site…").
+export const TESTS_WITH_DETAIL = new Set([
+  "Others (Laboratory)",
+  "Others (X-Ray)",
+  "Others (Ultrasound & Imaging)",
+  "Extremities",
+]);
+
 // Which formTypes a role is allowed to work on — mirrors
 // current_user_can_access_form_type() in the SQL schema exactly. Admin and
 // nurses aren't restricted (nurses only ever create orders, never touch
