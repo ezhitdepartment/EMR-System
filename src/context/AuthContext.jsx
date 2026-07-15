@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { recordLogin } from "../utils/auditLogs";
 
 const AuthContext = createContext(null);
 
@@ -92,6 +93,7 @@ export function AuthProvider({ children }) {
     }
 
     setUser(profile);
+    recordLogin(profile); // fire-and-forget — never block a login on this
     return { success: true, role: profile.role };
   }
 
