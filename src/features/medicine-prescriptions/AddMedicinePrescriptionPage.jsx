@@ -14,12 +14,8 @@ import CreatePatientModal from "../patients/CreatePatientModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatDateCreated } from "../../utils/labOrders";
 import { loadPatients } from "../../utils/patients";
-import {
-  MEDICINE_CATALOG,
-  generateMedicinePrescriptionId,
-  loadMedicinePrescriptions,
-  saveMedicinePrescriptions,
-} from "../../utils/medicinePrescriptions";
+import { MEDICINE_CATALOG, createMedicinePrescription } from "../../utils/medicinePrescriptions";
+import { useAuth } from "../../context/AuthContext";
 
 function SortHeader({ label, field, sortField, sortDir, onSort }) {
   const active = sortField === field;
@@ -92,6 +88,7 @@ function newRow() {
 export default function AddMedicinePrescriptionPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const presetPatientId = location.state?.presetPatientId || "";
   const presetEncounterId = location.state?.presetEncounterId || "";
 
@@ -108,6 +105,7 @@ export default function AddMedicinePrescriptionPage() {
   const [prescribedBy, setPrescribedBy] = useState("");
   const [rows, setRows] = useState([newRow()]);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     loadPatients().then(setPatients);
@@ -203,7 +201,7 @@ export default function AddMedicinePrescriptionPage() {
     setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.rowId !== rowId) : prev));
   }
 
-  function handlePrescribe() {
+  async function handlePrescribe() {
     const items = rows.filter((r) => r.medicineName.trim() !== "");
     if (items.length === 0) {
       setError("Please add at least one medicine.");
@@ -214,36 +212,31 @@ export default function AddMedicinePrescriptionPage() {
       return;
     }
 
-    const existing = loadMedicinePrescriptions();
-    const record = {
-      id: generateMedicinePrescriptionId(existing),
-      patientId: selectedPatient.patientId,
-      encounterId: presetEncounterId || null,
-      patient: {
-        firstName: selectedPatient.firstName || "",
-        lastName: selectedPatient.lastName || "",
-        middleName: selectedPatient.middleName || "",
-        sex: selectedPatient.sex || "",
-        dateOfBirth: selectedPatient.dateOfBirth || "",
-        address: selectedPatient.address || "",
-      },
-      prescribedBy: prescribedBy.trim(),
-      items: items.map((r) => ({
-        medicineName: r.medicineName,
-        quantity: Number(r.quantity) || 0,
-        instructions: r.instructions.trim(),
-      })),
-      dateCreated: new Date().toISOString(),
-    };
-
-    saveMedicinePrescriptions([record, ...existing]);
-    navigate(
-      presetEncounterId
-        ? "/encounters"
-        : presetPatientId
-        ? `/patients/${presetPatientId}`
-        : "/medicine-prescriptions"
-    );
+    setSubmitting(true);
+    setError("");
+    try {
+      await createMedicinePrescription({
+        patientId: selectedPatient.patientId,
+        encounterId: presetEncounterId || null,
+        prescribedBy: prescribedBy.trim(),
+        createdBy: user?.id || null,
+        items: items.map((r) => ({
+          medicineName: r.medicineName,
+          quantity: Number(r.quantity) || 0,
+          instructions: r.instructions.trim(),
+        })),
+      });
+      navigate(
+        presetEncounterId
+          ? "/encounters"
+          : presetPatientId
+          ? `/patients/${presetPatientId}`
+          : "/medicine-prescriptions"
+      );
+    } catch (err) {
+      setError("Could not save the prescription: " + err.message);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -555,10 +548,11 @@ export default function AddMedicinePrescriptionPage() {
             <button
               type="button"
               onClick={handlePrescribe}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
+              disabled={submitting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:opacity-60 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
             >
               <Pill size={14} />
-              Add Prescription
+              {submitting ? "Saving…" : "Add Prescription"}
             </button>
           </div>
         </div>

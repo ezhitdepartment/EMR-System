@@ -24,7 +24,7 @@ import Icd10Autocomplete from "../../components/common/Icd10Autocomplete";
 import DiagnosticTestChecklist from "../../components/common/DiagnosticTestChecklist";
 import { useAuth } from "../../context/AuthContext";
 import { loadEncounters, formatDateCreated } from "../../utils/encounters";
-import { loadLabOrders } from "../../utils/labOrders";
+import { loadLabOrders, getLabOrderFileUrl } from "../../utils/labOrders";
 import { MEDICINE_CATALOG } from "../../utils/medicinePrescriptions";
 import { formatAge } from "../../utils/age";
 import ConsultationPatientInfoPDF from "./ConsultationPatientInfoPDF";
@@ -501,6 +501,54 @@ function RefRow({ label, value }) {
 function ConsultationReferencePanel({ patient, encounter, form }) {
   const { user } = useAuth();
   const [downloadingDoc, setDownloadingDoc] = useState(null); // "patientInfo" | "history" | null
+  const [registrations, setRegistrations] = useState([]);
+  const [labResultFiles, setLabResultFiles] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    if (encounter?.patientId) {
+      loadEncounters().then((all) => {
+        if (!active) return;
+        setRegistrations(
+          all
+            .filter((e) => e.patientId === encounter.patientId)
+            .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
+        );
+      });
+    } else {
+      setRegistrations([]);
+    }
+    return () => {
+      active = false;
+    };
+  }, [encounter?.patientId]);
+
+  // Every uploaded result file across this patient's lab orders — flattened
+  // out of order.tests[testName].files so the doctor doesn't have to leave
+  // the consultation to go check the Lab Orders module (which their role
+  // doesn't have direct access to anyway).
+  useEffect(() => {
+    let active = true;
+    if (patient.patientId) {
+      loadLabOrders().then((all) => {
+        if (!active) return;
+        setLabResultFiles(
+          all
+            .filter((order) => order.patientId === patient.patientId)
+            .flatMap((order) =>
+              Object.entries(order.tests || {}).flatMap(([testName, test]) =>
+                (test.files || []).map((f) => ({ ...f, testName, orderId: order.id }))
+              )
+            )
+        );
+      });
+    } else {
+      setLabResultFiles([]);
+    }
+    return () => {
+      active = false;
+    };
+  }, [patient.patientId]);
 
   async function viewPdf(docElement, filename, key) {
     setDownloadingDoc(key);
@@ -519,25 +567,6 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
   const fullName = [patient.firstName, patient.middleName, patient.lastName]
     .filter(Boolean)
     .join(" ");
-  const registrations = encounter?.patientId
-    ? loadEncounters()
-        .filter((e) => e.patientId === encounter.patientId)
-        .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
-    : [];
-
-  // Every uploaded result file across this patient's lab orders — flattened
-  // out of order.tests[testName].files so the doctor doesn't have to leave
-  // the consultation to go check the Lab Orders module (which their role
-  // doesn't have direct access to anyway).
-  const labResultFiles = patient.patientId
-    ? loadLabOrders()
-        .filter((order) => order.patientId === patient.patientId)
-        .flatMap((order) =>
-          Object.entries(order.tests || {}).flatMap(([testName, test]) =>
-            (test.files || []).map((f) => ({ ...f, testName, orderId: order.id }))
-          )
-        )
-    : [];
 
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-8">
@@ -660,7 +689,10 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
                 <button
                   key={`${f.orderId}-${f.testName}-${f.name}`}
                   type="button"
-                  onClick={() => window.open(f.dataUrl, "_blank")}
+                  onClick={async () => {
+                    const url = await getLabOrderFileUrl(f.storagePath);
+                    if (url) window.open(url, "_blank");
+                  }}
                   className="flex items-center justify-between gap-2 py-2 text-left hover:bg-slate-50 -mx-1 px-1 rounded transition-colors"
                 >
                   <span className="flex items-center gap-2 min-w-0">

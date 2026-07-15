@@ -52,16 +52,16 @@ export default function MedicinePrescriptions() {
   const [viewRecord, setViewRecord] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function refresh() {
-    setRecords(loadMedicinePrescriptions());
+  async function refresh() {
+    setRecords(await loadMedicinePrescriptions());
   }
 
   useEffect(() => {
     refresh();
-    window.addEventListener("storage", refresh);
+    // No more "storage" event — prescriptions live in Supabase now, not
+    // localStorage. "focus" still catches "came back to this tab".
     window.addEventListener("focus", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener("focus", refresh);
     };
   }, []);

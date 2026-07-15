@@ -24,11 +24,9 @@ import { formatAge } from "../../utils/age";
 import {
   CONSULTATION_TYPES,
   PAYMENT_TYPE_OPTIONS,
-  DOCTORS,
+  loadDoctors,
   STATUS,
-  generateEncounterId,
-  loadEncounters,
-  saveEncounters,
+  createEncounter,
   updateEncounter,
 } from "../../utils/encounters";
 import { useAuth } from "../../context/AuthContext";
@@ -103,6 +101,11 @@ export default function CreateEncounterPage() {
   const [sortDir, setSortDir] = useState("asc");
   const [selectedPatientId, setSelectedPatientId] = useState(presetPatientId);
   const [showCreatePatient, setShowCreatePatient] = useState(false);
+  const [doctors, setDoctors] = useState([]);
+
+  useEffect(() => {
+    loadDoctors().then(setDoctors);
+  }, []);
 
   // Step 2 — appointment details
   const [appointmentDate, setAppointmentDate] = useState(new Date().toISOString().slice(0, 10));
@@ -341,7 +344,7 @@ export default function CreateEncounterPage() {
     reader.readAsDataURL(file);
   }
 
-  function handleCreateEncounter() {
+  async function handleCreateEncounter() {
     if (!reasonForVisiting.trim()) {
       setError("Please fill in the reason for visiting.");
       return;
@@ -355,46 +358,35 @@ export default function CreateEncounterPage() {
       return;
     }
 
-    const existing = loadEncounters();
-    const encounter = {
-      id: generateEncounterId(existing),
-      patientId: selectedPatient.patientId,
-      patient: {
-        firstName: selectedPatient.firstName || "",
-        lastName: selectedPatient.lastName || "",
-        middleName: selectedPatient.middleName || "",
-        sex: selectedPatient.sex || "",
-        dateOfBirth: selectedPatient.dateOfBirth || "",
-        pin: selectedPatient.pin || "",
-      },
-      appointmentDate,
-      consultationType: consultationTypeLabel,
-      reasonForVisiting,
-      doctor,
-      fee: Number(fee) || 0,
-      paymentType,
-      photo,
-      createdBy: user?.username || "—",
-      status: STATUS.PENDING,
-      // Flips to STATUS.COMPLETED automatically once both a nurse and a
-      // doctor have saved their part of the Consultation Form for this
-      // encounter — see handleSaveConsultation in pages/patient/PatientProfile.jsx.
-      nurseConsultationDone: false,
-      doctorConsultationDone: false,
-      migratedStatus: "Not Migrated",
-      pcuStatus: "N/A",
-      triage: null,
-      waiver: null,
-      dateCreated: new Date().toISOString(),
-    };
-
-    saveEncounters([encounter, ...existing]);
-    setCreatedEncounter(encounter);
-    setStep(3);
+    try {
+      const created = await createEncounter({
+        patientId: selectedPatient.patientId,
+        appointmentDate,
+        consultationType: consultationTypeLabel,
+        reasonForVisiting,
+        doctor,
+        fee: Number(fee) || 0,
+        paymentType,
+        photo,
+        createdBy: user?.id || null,
+        status: STATUS.PENDING,
+        // Flips to STATUS.COMPLETED automatically once both a nurse and a
+        // doctor have saved their part of the Consultation Form for this
+        // encounter — see handleSaveConsultation in pages/patient/PatientProfile.jsx.
+        nurseConsultationDone: false,
+        doctorConsultationDone: false,
+        migratedStatus: "Not Migrated",
+        pcuStatus: "N/A",
+      });
+      setCreatedEncounter(created);
+      setStep(3);
+    } catch (err) {
+      setError("Could not create the registration: " + err.message);
+    }
   }
 
-  function refreshCreatedEncounter(patch) {
-    const updated = updateEncounter(createdEncounter.id, (e) => ({ ...e, ...patch }));
+  async function refreshCreatedEncounter(patch) {
+    const updated = await updateEncounter(createdEncounter.id, (e) => ({ ...e, ...patch }));
     setCreatedEncounter(updated);
   }
 
@@ -713,7 +705,7 @@ export default function CreateEncounterPage() {
                 </label>
                 <select value={doctor} onChange={(e) => setDoctor(e.target.value)} className={inputClass}>
                   <option value="">Select</option>
-                  {DOCTORS.map((d) => (
+                  {doctors.map((d) => (
                     <option key={d} value={d}>
                       {d}
                     </option>

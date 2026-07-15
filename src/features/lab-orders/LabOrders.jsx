@@ -62,8 +62,8 @@ export default function LabOrders() {
   const [showCreate, setShowCreate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function refresh() {
-    const all = loadLabOrders();
+  async function refresh() {
+    const all = await loadLabOrders();
     const scoped = allowedFormTypes
       ? all.filter((o) => (o.diagnostics || []).some((d) => allowedFormTypes.includes(FORM_TYPE_BY_TEST[d])))
       : all;
@@ -72,10 +72,10 @@ export default function LabOrders() {
 
   useEffect(() => {
     refresh();
-    window.addEventListener("storage", refresh);
+    // No more "storage" event — lab orders live in Supabase now, not
+    // localStorage. "focus" still catches "came back to this tab".
     window.addEventListener("focus", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener("focus", refresh);
     };
   }, []);

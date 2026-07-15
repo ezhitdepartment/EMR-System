@@ -1,11 +1,10 @@
-// Medicine Prescriptions data layer.
-//
-// Storage is localStorage for now — same pattern as utils/labOrders.js.
-// When Supabase is wired up, swap loadMedicinePrescriptions/saveMedicinePrescriptions
-// for `supabase.from("prescribed_medicines").select("*")` / `.insert(...)` and
-// everything that imports from this file keeps working unchanged.
+// Medicine Prescriptions data layer — now backed by Supabase
+// (`medicine_prescriptions` + its `prescription_items` child table)
+// instead of localStorage. Same rationale/pattern as utils/patients.js,
+// utils/encounters.js, and utils/labOrders.js.
 
-const STORAGE_KEY = "medicinePrescriptions";
+import { supabase } from "../lib/supabaseClient";
+import { getPatientUuid } from "./patients";
 
 // Starter formulary used for the medicine picker in AddMedicinePrescriptionPage.
 // admin/Medicines.jsx (the real formulary/inventory catalog) is still a stub —
@@ -100,60 +99,105 @@ export const MEDICINE_CATALOG = [
   "Insulin Glargine (Lantus)",
 ];
 
-export function loadMedicinePrescriptions() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(raw) ? raw : [];
-  } catch {
+function rowToRecord(row) {
+  if (!row) return null;
+  const p = row.patients || {};
+  return {
+    id: row.id,
+    patientId: p.patient_id || "",
+    encounterId: row.encounter_id || null,
+    patient: {
+      firstName: p.first_name || "",
+      lastName: p.last_name || "",
+      middleName: p.middle_name || "",
+      sex: p.sex || "",
+      dateOfBirth: p.date_of_birth || "",
+      address: p.address || "",
+    },
+    prescribedBy: row.prescribed_by || "",
+    items: (row.prescription_items || []).map((it) => ({
+      medicineName: it.medicine_name,
+      quantity: it.quantity ?? 0,
+      instructions: it.instructions || "",
+    })),
+    dateCreated: row.date_created,
+  };
+}
+
+const SELECT_WITH_JOINS = `
+  *,
+  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth, address ),
+  prescription_items ( * )
+`;
+
+export async function loadMedicinePrescriptions() {
+  const { data, error } = await supabase
+    .from("medicine_prescriptions")
+    .select(SELECT_WITH_JOINS)
+    .order("date_created", { ascending: false });
+  if (error) {
+    console.error("loadMedicinePrescriptions failed:", error.message);
     return [];
   }
+  return (data || []).map(rowToRecord);
 }
 
-export function saveMedicinePrescriptions(records) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-}
-
-export function findMedicinePrescriptionById(id) {
-  return loadMedicinePrescriptions().find((r) => r.id === id) || null;
+export async function findMedicinePrescriptionById(id) {
+  const { data, error } = await supabase
+    .from("medicine_prescriptions")
+    .select(SELECT_WITH_JOINS)
+    .eq("id", id)
+    .single();
+  if (error) return null;
+  return rowToRecord(data);
 }
 
 // Used by the Encounters table's Medication column — every medicine name
 // prescribed under this exact encounter/registration, across however many
 // prescriptions were created for it.
-export function getMedicineNamesForEncounter(encounterId) {
+export async function getMedicineNamesForEncounter(encounterId) {
   if (!encounterId) return [];
-  const names = loadMedicinePrescriptions()
-    .filter((r) => r.encounterId === encounterId)
-    .flatMap((r) => (r.items || []).map((item) => item.medicineName))
-    .filter(Boolean);
-  return Array.from(new Set(names));
+  const { data, error } = await supabase
+    .from("medicine_prescriptions")
+    .select("prescription_items ( medicine_name )")
+    .eq("encounter_id", encounterId);
+  if (error) {
+    console.error("getMedicineNamesForEncounter failed:", error.message);
+    return [];
+  }
+  const names = (data || []).flatMap((r) => (r.prescription_items || []).map((it) => it.medicine_name));
+  return Array.from(new Set(names.filter(Boolean)));
 }
 
-// Read-modify-write helper for a single record, matching updateLabOrder's
-// pattern in utils/labOrders.js.
-export function updateMedicinePrescription(id, updater) {
-  const records = loadMedicinePrescriptions();
-  const idx = records.findIndex((r) => r.id === id);
-  if (idx === -1) return null;
+// Creates a new prescription + its line items in one go. `record` is shaped
+// exactly like AddMedicinePrescriptionPage.jsx already builds it (patientId,
+// encounterId, prescribedBy, items: [{medicineName, quantity, instructions}]).
+export async function createMedicinePrescription(record) {
+  const patientUuid = await getPatientUuid(record.patientId);
+  if (!patientUuid) throw new Error(`No patient found with patientId "${record.patientId}"`);
 
-  const updated = updater({ ...records[idx] });
-  records[idx] = updated;
-  saveMedicinePrescriptions(records);
-  return updated;
-}
+  const { data: rxRow, error } = await supabase
+    .from("medicine_prescriptions")
+    .insert({
+      patient_id: patientUuid,
+      encounter_id: record.encounterId || null,
+      prescribed_by: record.prescribedBy,
+      created_by: record.createdBy || null,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
 
-// IDs look like MED-20260706-0012 — date created plus a per-day sequence
-// number, matching the reference screen and generateLabOrderId's pattern.
-export function generateMedicinePrescriptionId(existingRecords) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const prefix = `MED-${y}${m}${d}-`;
+  const itemRows = (record.items || []).map((it) => ({
+    prescription_id: rxRow.id,
+    medicine_name: it.medicineName,
+    quantity: it.quantity || 1,
+    instructions: it.instructions || "",
+  }));
+  const { error: itemsError } = await supabase.from("prescription_items").insert(itemRows);
+  if (itemsError) throw new Error(itemsError.message);
 
-  const todaysCount = existingRecords.filter((r) => (r.id || "").startsWith(prefix)).length;
-  const seq = String(todaysCount + 1).padStart(4, "0");
-  return `${prefix}${seq}`;
+  return findMedicinePrescriptionById(rxRow.id);
 }
 
 // "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the reference screen).

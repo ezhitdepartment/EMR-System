@@ -923,7 +923,11 @@ export default function PatientProfile() {
       setConsultationReadOnly(!!location.state?.consultationReadOnly);
       setConsultationReturnTo(location.state?.returnTo || null);
       const encId = location.state?.consultationEncounterId;
-      setConsultationEncounter(encId ? findEncounterById(encId) : null);
+      if (encId) {
+        findEncounterById(encId).then(setConsultationEncounter);
+      } else {
+        setConsultationEncounter(null);
+      }
       navigate(location.pathname, { replace: true, state: {} });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -937,18 +941,18 @@ export default function PatientProfile() {
   const [medicinePrescriptions, setMedicinePrescriptions] = useState([]);
   const [viewPrescribedRecord, setViewPrescribedRecord] = useState(null);
 
-  function refreshLabOrders(pid) {
-    setLabOrders(loadLabOrders().filter((o) => o.patientId === pid));
+  async function refreshLabOrders(pid) {
+    setLabOrders((await loadLabOrders()).filter((o) => o.patientId === pid));
   }
 
-  function refreshMedicinePrescriptions(pid) {
-    setMedicinePrescriptions(loadMedicinePrescriptions().filter((r) => r.patientId === pid));
+  async function refreshMedicinePrescriptions(pid) {
+    setMedicinePrescriptions((await loadMedicinePrescriptions()).filter((r) => r.patientId === pid));
   }
 
   useEffect(() => {
     let active = true;
     setPatient(undefined); // "still loading" sentinel — see the render guard below
-    findPatientById(patientId).then((found) => {
+    findPatientById(patientId).then(async (found) => {
       if (!active) return;
       setPatient(found);
       setEmr(found ? loadEmr(patientId) : null);
@@ -957,9 +961,9 @@ export default function PatientProfile() {
       setMedicalCertificate(found ? loadMedicalCertificate(patientId) : null);
       setConsultation(found ? loadConsultationHistory(patientId)[0] || null : null);
       setSharedClinical(found ? loadSharedClinical(patientId) : {});
-      setLabOrders(found ? loadLabOrders().filter((o) => o.patientId === patientId) : []);
+      setLabOrders(found ? (await loadLabOrders()).filter((o) => o.patientId === patientId) : []);
       setMedicinePrescriptions(
-        found ? loadMedicinePrescriptions().filter((r) => r.patientId === patientId) : []
+        found ? (await loadMedicinePrescriptions()).filter((r) => r.patientId === patientId) : []
       );
     });
     return () => {
@@ -1095,7 +1099,7 @@ export default function PatientProfile() {
       const isDoctor = user?.role === "doctor";
 
       if (isNurse || isDoctor) {
-        const updatedEncounter = updateEncounter(consultationEncounter.id, (e) => {
+        const updatedEncounter = await updateEncounter(consultationEncounter.id, (e) => {
           const next = { ...e };
           if (isNurse) next.nurseConsultationDone = true;
           if (isDoctor) next.doctorConsultationDone = true;

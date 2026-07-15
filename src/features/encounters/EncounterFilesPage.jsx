@@ -39,7 +39,7 @@ export default function EncounterFilesPage() {
   });
 
   useEffect(() => {
-    setEncounter(findEncounterById(encounterId));
+    findEncounterById(encounterId).then(setEncounter);
   }, [encounterId]);
 
   // These folders are the same documents shown on the patient's own
@@ -57,8 +57,8 @@ export default function EncounterFilesPage() {
     });
   }, [encounter?.patientId]);
 
-  function handleSaveWaiver(waiver) {
-    const updated = updateEncounter(encounterId, (e) => ({ ...e, waiver }));
+  async function handleSaveWaiver(waiver) {
+    const updated = await updateEncounter(encounterId, (e) => ({ ...e, waiver }));
     if (updated) setEncounter(updated);
     setShowWaiver(false);
   }

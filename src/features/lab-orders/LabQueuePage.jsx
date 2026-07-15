@@ -23,11 +23,13 @@ export default function LabQueuePage() {
   const [entries, setEntries] = useState([]);
   const [tick, setTick] = useState(0); // forces the "waiting for" times to refresh
 
-  function refresh() {
-    setEntries(getQueueEntries(group));
+  async function refresh() {
+    setEntries(await getQueueEntries(group));
   }
 
-  useEffect(refresh, [group]);
+  useEffect(() => {
+    refresh();
+  }, [group]);
 
   // Keep wait times honest without the person needing to hit refresh.
   useEffect(() => {
@@ -38,13 +40,13 @@ export default function LabQueuePage() {
   const serving = entries.find((e) => e.queueStatus === "SERVING") || null;
   const waiting = entries.filter((e) => e.queueStatus !== "SERVING");
 
-  function handleCallNext() {
-    callNext(group);
+  async function handleCallNext() {
+    await callNext(group);
     refresh();
   }
 
-  function handleReturnToQueue(entry) {
-    returnToQueue(entry.orderId, entry.diagnosticName);
+  async function handleReturnToQueue(entry) {
+    await returnToQueue(entry.orderId, entry.diagnosticName);
     refresh();
   }
 

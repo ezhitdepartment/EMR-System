@@ -99,6 +99,9 @@ function field(id, label, type = "number") {
 // diagnostic (CBC breakdown, FBS glucose, etc.). That's been simplified
 // down to a single Remarks field for every diagnostic — the file
 // upload/viewing in the Files section is what actually matters here now.
+
+import { supabase } from "../lib/supabaseClient";
+
 const REMARKS_ONLY_SCHEMA = {
   groups: [
     {
@@ -135,21 +138,27 @@ export function emptyTestRecord(code) {
   };
 }
 
-// "CBC-202607-0036" — prefix, then the order's year+month, then a
-// per-month sequence counted across every order that already has a test
-// of this type. Mirrors generateLabOrderId's date-based numbering.
-export function generateDiagnosticCode(allOrders, diagnosticName, when = new Date()) {
+// "CBC-202607-0036" — prefix, then the current year+month, then a
+// per-month sequence counted across every test of this type already in
+// the DB. Mirrors generate_lab_order_id()'s date-based numbering, just
+// computed client-side against a live count instead of a Postgres
+// sequence — fine here since codes are advisory tracking numbers, not
+// primary keys, so a rare collision under simultaneous submissions isn't
+// destructive the way a duplicate id would be.
+export async function generateDiagnosticCode(diagnosticName, when = new Date()) {
   const prefix = getDiagnosticCodePrefix(diagnosticName);
   const y = when.getFullYear();
   const m = String(when.getMonth() + 1).padStart(2, "0");
   const codePrefix = `${prefix}-${y}${m}-`;
 
-  let count = 0;
-  for (const order of allOrders) {
-    const rec = order.tests?.[diagnosticName];
-    if (rec?.code?.startsWith(codePrefix)) count += 1;
-  }
-  const seq = String(count + 1).padStart(4, "0");
+  const { count, error } = await supabase
+    .from("lab_order_tests")
+    .select("id", { count: "exact", head: true })
+    .eq("test_name", diagnosticName)
+    .like("code", `${codePrefix}%`);
+  if (error) console.error("generateDiagnosticCode failed:", error.message);
+
+  const seq = String((count || 0) + 1).padStart(4, "0");
   return `${codePrefix}${seq}`;
 }
 

@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, UserCog } from "lucide-react";
 import SearchableSelect from "../../components/common/SearchableSelect";
-import { DOCTORS } from "../../utils/encounters";
+import { loadDoctors } from "../../utils/encounters";
 
 export default function ReassignPhysicianModal({ encounter, onClose, onSave }) {
   const [doctor, setDoctor] = useState(encounter.doctor || "");
+  const [doctors, setDoctors] = useState([]);
+
+  useEffect(() => {
+    loadDoctors().then(setDoctors);
+  }, []);
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -38,7 +43,7 @@ export default function ReassignPhysicianModal({ encounter, onClose, onSave }) {
             <SearchableSelect
               value={doctor}
               onChange={setDoctor}
-              options={DOCTORS}
+              options={doctors}
               getValue={(d) => d}
               getLabel={(d) => d}
               placeholder="Select a doctor"

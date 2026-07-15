@@ -65,11 +65,14 @@ export default function TriagePage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const found = findEncounterById(encounterId);
-    setEncounter(found);
-    if (found?.triage) {
-      setForm({ ...emptyTriage, ...found.triage });
+    async function load() {
+      const found = await findEncounterById(encounterId);
+      setEncounter(found);
+      if (found?.triage) {
+        setForm({ ...emptyTriage, ...found.triage });
+      }
     }
+    load();
   }, [encounterId]);
 
   function set(field, value) {
@@ -82,14 +85,12 @@ export default function TriagePage() {
     });
   }
 
-  function handleUpdateTriage() {
-    const updated = updateEncounter(encounterId, (e) => ({
+  async function handleUpdateTriage() {
+    const updated = await updateEncounter(encounterId, (e) => ({
       ...e,
       triage: {
         ...form,
-        createdBy: e.triage?.createdBy || user?.username || "—",
-        createdAt: e.triage?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdByUuid: e.triage?.createdByUuid || user?.id || null,
       },
     }));
     if (updated) {

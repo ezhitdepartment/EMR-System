@@ -118,6 +118,21 @@ function patientToRow(p) {
 // rejection, etc.) rather than throwing, so a failed fetch degrades to an
 // empty list instead of crashing the page — same "never throw" contract
 // the old localStorage version had.
+// Every other table (encounters, lab_orders, medicine_prescriptions) FKs to
+// patients.id (the internal uuid), but the rest of the app only ever deals
+// in patientId (the human-readable "P-2026671587" code) — this is the one
+// place that bridges the two, so every other data-layer file can resolve
+// "which patient row do I attach this to" without duplicating the query.
+export async function getPatientUuid(patientId) {
+  const { data, error } = await supabase
+    .from("patients")
+    .select("id")
+    .eq("patient_id", patientId)
+    .single();
+  if (error) return null;
+  return data.id;
+}
+
 export async function loadPatients() {
   const { data, error } = await supabase
     .from("patients")

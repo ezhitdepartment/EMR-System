@@ -18,9 +18,11 @@ import {
 import {
   findLabOrderById,
   updateLabOrder,
-  loadLabOrders,
   formatDateCreated,
   FORM_TYPE_BY_TEST,
+  uploadLabOrderTestFile,
+  deleteLabOrderTestFile,
+  getLabOrderFileUrl,
 } from "../../utils/labOrders";
 import { ROLE_QUEUE_TYPES } from "../../utils/labQueue";
 import { useAuth } from "../../context/AuthContext";
@@ -55,19 +57,18 @@ function formatDob(dob) {
 
 // Makes sure every diagnostic on the order has a per-test record (code +
 // blank Laboratory Details/Results/Files) before the page renders. Only
-// touches localStorage if something was actually missing.
-function ensureTestRecords(order) {
+// writes anything if something was actually missing.
+async function ensureTestRecords(order) {
   const diagnostics = order.diagnostics || [];
   const tests = { ...(order.tests || {}) };
   let changed = false;
 
-  const allOrders = loadLabOrders();
-  diagnostics.forEach((name) => {
+  for (const name of diagnostics) {
     if (!tests[name]) {
-      tests[name] = emptyTestRecord(generateDiagnosticCode(allOrders, name));
+      tests[name] = emptyTestRecord(await generateDiagnosticCode(name));
       changed = true;
     }
-  });
+  }
 
   return changed ? { ...order, tests } : order;
 }
@@ -129,6 +130,7 @@ export default function ViewLabOrderPage() {
   const [selectedDiagnostic, setSelectedDiagnostic] = useState("");
   const [draft, setDraft] = useState(null);
   const [savedTick, setSavedTick] = useState(false);
+  const [filesBusy, setFilesBusy] = useState(false);
 
   const [summaryOpen, setSummaryOpen] = useState(true);
   const [labDetailsOpen, setLabDetailsOpen] = useState(true);
@@ -137,17 +139,20 @@ export default function ViewLabOrderPage() {
 
   // Load the order and backfill any missing per-test records.
   useEffect(() => {
-    const found = findLabOrderById(orderId);
-    if (!found) {
-      setOrder(null);
-      return;
+    async function load() {
+      const found = await findLabOrderById(orderId);
+      if (!found) {
+        setOrder(null);
+        return;
+      }
+      const withTests = await ensureTestRecords(found);
+      if (withTests !== found) {
+        setOrder(await updateLabOrder(orderId, () => withTests));
+      } else {
+        setOrder(found);
+      }
     }
-    const withTests = ensureTestRecords(found);
-    if (withTests !== found) {
-      setOrder(updateLabOrder(orderId, () => withTests));
-    } else {
-      setOrder(found);
-    }
+    load();
   }, [orderId]);
 
   // Default to the first diagnostic once the order is loaded — for a tech,
@@ -191,8 +196,8 @@ export default function ViewLabOrderPage() {
     ? "This test belongs to a different specialty — only the assigned tech can edit it."
     : null;
 
-  function persistCurrentTest(nextTestRecord) {
-    const updated = updateLabOrder(orderId, (o) => ({
+  async function persistCurrentTest(nextTestRecord) {
+    const updated = await updateLabOrder(orderId, (o) => ({
       ...o,
       tests: { ...o.tests, [selectedDiagnostic]: nextTestRecord },
     }));
@@ -200,9 +205,9 @@ export default function ViewLabOrderPage() {
     return updated;
   }
 
-  function handleSaveResults() {
+  async function handleSaveResults() {
     if (!draft || !canEditResults) return;
-    persistCurrentTest(draft);
+    await persistCurrentTest(draft);
     setSavedTick(true);
     setTimeout(() => setSavedTick(false), 2000);
   }
@@ -213,12 +218,7 @@ export default function ViewLabOrderPage() {
       // Persist status immediately so the order-level badge updates
       // (e.g. when marking a single-test order as DONE it should show COMPLETED).
       if (key === "status") {
-        const updated = persistCurrentTest(next);
-        // Refresh the order state so the header badge updates immediately
-        if (updated) {
-          const refreshed = findLabOrderById(orderId);
-          if (refreshed) setOrder(refreshed);
-        }
+        persistCurrentTest(next);
       }
       return next;
     });
@@ -228,39 +228,51 @@ export default function ViewLabOrderPage() {
     setDraft((d) => ({ ...d, results: { ...d.results, [fieldId]: value } }));
   }
 
-  function handleFilesSelected(fileList) {
+  async function handleFilesSelected(fileList) {
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
+    const testId = (draft || currentTest)?.id;
+    if (!testId) return;
 
-    Promise.all(
-      files.map(
-        (file) =>
-          new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () =>
-              resolve({
-                name: file.name,
-                dataUrl: reader.result,
-                uploadedAt: new Date().toISOString(),
-              });
-            reader.readAsDataURL(file);
-          })
-      )
-    ).then((newFiles) => {
-      const nextRecord = {
-        ...(draft || currentTest),
-        files: [...((draft || currentTest)?.files || []), ...newFiles],
-      };
-      setDraft(nextRecord);
-      persistCurrentTest(nextRecord);
-    });
+    setFilesBusy(true);
+    try {
+      for (const file of files) {
+        await uploadLabOrderTestFile(testId, file, user?.id || null);
+      }
+      const refreshed = await findLabOrderById(orderId);
+      if (refreshed) {
+        setOrder(refreshed);
+        const refreshedTest = refreshed.tests?.[selectedDiagnostic];
+        if (refreshedTest) setDraft({ ...refreshedTest, results: { ...(refreshedTest.results || {}) } });
+      }
+    } catch (err) {
+      window.alert("Could not upload file(s): " + err.message);
+    } finally {
+      setFilesBusy(false);
+    }
   }
 
-  function handleDeleteFile(index) {
-    const base = draft || currentTest;
-    const nextRecord = { ...base, files: (base.files || []).filter((_, i) => i !== index) };
-    setDraft(nextRecord);
-    persistCurrentTest(nextRecord);
+  async function handleDeleteFile(file) {
+    setFilesBusy(true);
+    try {
+      await deleteLabOrderTestFile(file.id, file.storagePath);
+      const refreshed = await findLabOrderById(orderId);
+      if (refreshed) {
+        setOrder(refreshed);
+        const refreshedTest = refreshed.tests?.[selectedDiagnostic];
+        if (refreshedTest) setDraft({ ...refreshedTest, results: { ...(refreshedTest.results || {}) } });
+      }
+    } catch (err) {
+      window.alert("Could not remove file: " + err.message);
+    } finally {
+      setFilesBusy(false);
+    }
+  }
+
+  async function handleViewFile(file) {
+    const url = await getLabOrderFileUrl(file.storagePath);
+    if (url) window.open(url, "_blank");
+    else window.alert("Could not open this file — it may have been removed.");
   }
 
   // Loading
@@ -567,12 +579,17 @@ export default function ViewLabOrderPage() {
 
                 {canEditResults && (
                   <div className="flex justify-center mb-4">
-                    <label className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors cursor-pointer">
+                    <label
+                      className={`inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors ${
+                        filesBusy ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                      }`}
+                    >
                       <Upload size={15} />
-                      Upload Files
+                      {filesBusy ? "Working…" : "Upload Files"}
                       <input
                         type="file"
                         multiple
+                        disabled={filesBusy}
                         className="hidden"
                         onChange={(e) => {
                           handleFilesSelected(e.target.files);
@@ -591,9 +608,9 @@ export default function ViewLabOrderPage() {
                     <p className="text-xs text-slate-400 py-2 text-center">No files uploaded yet.</p>
                   ) : (
                     <div className="flex flex-col gap-2">
-                      {draft.files.map((file, idx) => (
+                      {draft.files.map((file) => (
                         <div
-                          key={idx}
+                          key={file.id}
                           className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2"
                         >
                           <span className="flex items-center gap-2 text-sm text-slate-700 truncate">
@@ -603,7 +620,7 @@ export default function ViewLabOrderPage() {
                           <span className="flex items-center gap-2 shrink-0">
                             <button
                               type="button"
-                              onClick={() => window.open(file.dataUrl, "_blank")}
+                              onClick={() => handleViewFile(file)}
                               title="View file"
                               className="text-slate-400 hover:text-slate-600 transition-colors"
                             >
@@ -612,9 +629,10 @@ export default function ViewLabOrderPage() {
                             {canEditResults && (
                               <button
                                 type="button"
-                                onClick={() => handleDeleteFile(idx)}
+                                onClick={() => handleDeleteFile(file)}
+                                disabled={filesBusy}
                                 title="Remove file"
-                                className="text-red-400 hover:text-red-600 transition-colors"
+                                className="text-red-400 hover:text-red-600 disabled:opacity-50 transition-colors"
                               >
                                 <X size={15} />
                               </button>

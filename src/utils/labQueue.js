@@ -14,7 +14,7 @@
 // it naturally drops out of the queue.
 
 import { loadLabOrders, updateLabOrder, FORM_TYPE_BY_TEST } from "./labOrders";
-import { emptyTestRecord, generateDiagnosticCode } from "./labOrderDiagnostics";
+import { emptyTestRecord } from "./labOrderDiagnostics";
 
 // Which request-slip formTypes each role's queue pulls from.
 export const ROLE_QUEUE_TYPES = {
@@ -43,9 +43,9 @@ const QUEUE_GROUPS = {
 // Every still-pending diagnostic test belonging to the given queue group
 // ("Laboratory" or "Imaging"), oldest order first — that ordering *is* the
 // line: position 0 is next, regardless of who's marked "SERVING".
-export function getQueueEntries(group) {
+export async function getQueueEntries(group) {
   const formTypes = QUEUE_GROUPS[group] || [];
-  const orders = loadLabOrders();
+  const orders = await loadLabOrders();
   const entries = [];
 
   orders.forEach((order) => {
@@ -78,10 +78,15 @@ export function getQueueEntries(group) {
   return entries;
 }
 
-export function setQueueStatus(orderId, diagnosticName, queueStatus) {
+export async function setQueueStatus(orderId, diagnosticName, queueStatus) {
   return updateLabOrder(orderId, (o) => {
     const existing = o.tests?.[diagnosticName];
-    const base = existing || emptyTestRecord(generateDiagnosticCode(loadLabOrders(), diagnosticName));
+    // Fallback code is a placeholder ("LAB-pending") rather than an actual
+    // generated code — generateDiagnosticCode is async now and this
+    // updater callback must stay synchronous, so real code assignment
+    // stays where it already happens (CreateLabOrderModal, or
+    // ViewLabOrderPage's ensureTestRecords) rather than here.
+    const base = existing || emptyTestRecord(null);
     return {
       ...o,
       tests: {
@@ -95,20 +100,20 @@ export function setQueueStatus(orderId, diagnosticName, queueStatus) {
 // Demotes whoever's currently being served back to waiting, then pulls the
 // oldest waiting entry to the front. Only one "now serving" per queue group
 // at a time — this is what "call next" does.
-export function callNext(group) {
-  const entries = getQueueEntries(group);
+export async function callNext(group) {
+  const entries = await getQueueEntries(group);
   const currentlyServing = entries.find((e) => e.queueStatus === "SERVING");
   if (currentlyServing) {
-    setQueueStatus(currentlyServing.orderId, currentlyServing.diagnosticName, "WAITING");
+    await setQueueStatus(currentlyServing.orderId, currentlyServing.diagnosticName, "WAITING");
   }
 
-  const refreshed = currentlyServing ? getQueueEntries(group) : entries;
+  const refreshed = currentlyServing ? await getQueueEntries(group) : entries;
   const next = refreshed.find((e) => e.queueStatus === "WAITING");
-  if (next) setQueueStatus(next.orderId, next.diagnosticName, "SERVING");
+  if (next) await setQueueStatus(next.orderId, next.diagnosticName, "SERVING");
   return next || null;
 }
 
-export function returnToQueue(orderId, diagnosticName) {
+export async function returnToQueue(orderId, diagnosticName) {
   return setQueueStatus(orderId, diagnosticName, "WAITING");
 }
 

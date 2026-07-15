@@ -51,16 +51,16 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
   const [activeAction, setActiveAction] = useState(null); // "reassign" | "waiver"
   const [activeEncounter, setActiveEncounter] = useState(null);
 
-  function refresh() {
-    setEncounters(loadEncounters().filter((e) => e.patientId === patientId));
+  async function refresh() {
+    setEncounters((await loadEncounters()).filter((e) => e.patientId === patientId));
   }
 
   useEffect(() => {
     refresh();
-    window.addEventListener("storage", refresh);
+    // No more "storage" event — encounters live in Supabase now, not
+    // localStorage. "focus" still catches "came back to this tab".
     window.addEventListener("focus", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener("focus", refresh);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,9 +77,9 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
     setActiveEncounter(null);
   }
 
-  function handleCancel(encounter) {
+  async function handleCancel(encounter) {
     if (!window.confirm(`Cancel encounter ${encounter.id}? This can't be undone.`)) return;
-    updateEncounter(encounter.id, (e) => ({ ...e, status: STATUS.CANCELLED }));
+    await updateEncounter(encounter.id, (e) => ({ ...e, status: STATUS.CANCELLED }));
     refresh();
     setRowMenuId(null);
   }
@@ -261,8 +261,8 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
         <ReassignPhysicianModal
           encounter={activeEncounter}
           onClose={closeAction}
-          onSave={(doctor) => {
-            updateEncounter(activeEncounter.id, (e) => ({ ...e, doctor }));
+          onSave={async (doctor) => {
+            await updateEncounter(activeEncounter.id, (e) => ({ ...e, doctor }));
             refresh();
             closeAction();
           }}
@@ -273,8 +273,8 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
         <WaiverModal
           encounter={activeEncounter}
           onClose={closeAction}
-          onSave={(waiver) => {
-            updateEncounter(activeEncounter.id, (e) => ({ ...e, waiver }));
+          onSave={async (waiver) => {
+            await updateEncounter(activeEncounter.id, (e) => ({ ...e, waiver }));
             refresh();
             closeAction();
           }}

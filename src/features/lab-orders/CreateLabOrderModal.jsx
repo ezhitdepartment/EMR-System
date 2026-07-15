@@ -2,13 +2,10 @@ import { useEffect, useState } from "react";
 import { X, FlaskConical } from "lucide-react";
 import SearchableSelect from "../../components/common/SearchableSelect";
 import DiagnosticTestChecklist from "../../components/common/DiagnosticTestChecklist";
-import {
-  generateLabOrderId,
-  loadLabOrders,
-  saveLabOrders,
-} from "../../utils/labOrders";
+import { createLabOrder } from "../../utils/labOrders";
 import { emptyTestRecord, generateDiagnosticCode } from "../../utils/labOrderDiagnostics";
 import { loadPatients } from "../../utils/patients";
+import { useAuth } from "../../context/AuthContext";
 
 function patientLabel(p) {
   const name = [p.lastName, p.firstName].filter(Boolean).join(", ");
@@ -17,11 +14,13 @@ function patientLabel(p) {
 }
 
 export default function CreateLabOrderModal({ onClose, onCreated, presetPatientId = null }) {
+  const { user } = useAuth();
   const [patients, setPatients] = useState([]);
   const [patientId, setPatientId] = useState(presetPatientId || "");
   const [diagnostics, setDiagnostics] = useState([]);
   const [testDetails, setTestDetails] = useState({});
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     loadPatients().then(setPatients);
@@ -40,7 +39,7 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
     setTestDetails((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!patientId) {
       setError("Please select a patient.");
@@ -51,34 +50,32 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
       return;
     }
 
-    const existing = loadLabOrders();
-    const order = {
-      id: generateLabOrderId(existing),
-      patientId,
-      patient: {
-        firstName: selectedPatient?.firstName || "",
-        lastName: selectedPatient?.lastName || "",
-        middleName: selectedPatient?.middleName || "",
-        sex: selectedPatient?.sex || "",
-        dateOfBirth: selectedPatient?.dateOfBirth || "",
-      },
-      diagnostics,
-      testDetails,
-      dateCreated: new Date().toISOString(),
-    };
+    setSubmitting(true);
+    setError("");
+    try {
+      // Create every diagnostic's test record right now instead of waiting
+      // for ViewLabOrderPage to lazily create it on first open — otherwise
+      // a brand-new pending order is invisible to the queue (and to
+      // anything else that reads order.tests) until someone happens to
+      // click into it.
+      const tests = {};
+      for (const name of diagnostics) {
+        tests[name] = emptyTestRecord(await generateDiagnosticCode(name));
+      }
 
-    // Create every diagnostic's test record right now instead of waiting
-    // for ViewLabOrderPage to lazily create it on first open — otherwise a
-    // brand-new pending order is invisible to the queue (and to anything
-    // else that reads order.tests) until someone happens to click into it.
-    const tests = {};
-    diagnostics.forEach((name) => {
-      tests[name] = emptyTestRecord(generateDiagnosticCode(existing, name));
-    });
-    order.tests = tests;
-
-    saveLabOrders([order, ...existing]);
-    onCreated(order);
+      const order = await createLabOrder({
+        patientId,
+        diagnostics,
+        testDetails,
+        tests,
+        createdBy: user?.id || null,
+      });
+      onCreated(order);
+    } catch (err) {
+      setError("Could not create the lab order: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -157,9 +154,10 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
+              disabled={submitting}
+              className="rounded-lg bg-teal-700 hover:bg-teal-800 disabled:opacity-60 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
             >
-              Create Lab Order
+              {submitting ? "Creating…" : "Create Lab Order"}
             </button>
           </div>
         </form>

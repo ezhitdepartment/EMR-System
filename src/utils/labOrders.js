@@ -1,204 +1,291 @@
-// Lab Orders data layer.
+// Lab Orders data layer — now backed by Supabase (`lab_orders` +
+// `lab_order_tests` + `lab_order_test_files`) instead of localStorage.
 //
-// Storage is localStorage for now — same pattern Patients.jsx uses for
-// patient records. When Supabase is wired up, replace loadLabOrders/
-// saveLabOrders with `supabase.from("lab_orders").select("*")` /
-// `.insert(...)` and everything that imports from this file (LabOrders.jsx,
-// CreateLabOrderModal.jsx, ViewLabOrderModal.jsx) keeps working unchanged.
+// The rest of the app keeps working against the same shape it always has:
+//   order.diagnostics -> array of test names on this order
+//   order.testDetails -> { [testName]: freeTextDetail }
+//   order.tests        -> { [testName]: testRecord }
+// testRecord shape is unchanged too (code, status, queueStatus, isReferred,
+// performedBy, datePerformed, fee, results: { remarks }, files: [...]) —
+// only `files` changed meaningfully: each file is now a Storage object
+// (id, name, storagePath, uploadedAt) instead of a base64 dataUrl, since
+// files live in Supabase Storage now, not inline in the JSON blob. See
+// uploadLabOrderTestFile / deleteLabOrderTestFile / getLabOrderFileUrl
+// below for the new file flow.
 
-const STORAGE_KEY = "labOrders";
+import { supabase } from "../lib/supabaseClient";
+import { getPatientUuid } from "./patients";
 
-// Matches the hospital's 3 actual paper request slips exactly: the
-// Laboratory Request Form (Hematology / Blood Chemistry / Cardiac Markers /
-// Electrolytes / Hepatitis / Thyroid / other standalone tests), the X-Ray
-// Request Form, and the Ultrasound and Imaging Request Form. Grouped by
-// which physical slip and category each test belongs to, so the create-order
-// checklist can be organized the same way the paper forms are instead of one
-// long flat list.
-export const LAB_ORDER_CATALOG = [
-  {
-    formType: "Laboratory",
-    categories: [
-      {
-        category: "Hematology",
-        tests: ["CBC", "CBC w/ PC", "ESR", "Platelet Count", "Differential Count", "PT", "aPTT"],
-      },
-      {
-        category: "Blood Chemistry",
-        tests: [
-          "Hgt",
-          "FBS",
-          "Lipid Profile",
-          "SGPT",
-          "SGOT",
-          "Cholesterol",
-          "Triglyceride",
-          "HbA1c",
-          "BUN",
-          "Creatinine",
-          "BUA",
-        ],
-      },
-      {
-        category: "Cardiac Markers",
-        tests: ["CK-MB", "CPK", "CPK-MM", "Troponin I", "Troponin T"],
-      },
-      {
-        category: "Electrolytes",
-        tests: [
-          "Sodium Na+",
-          "Potassium K+",
-          "Chloride Cl-",
-          "Ionized Calcium",
-          "Lithium",
-          "Inorganic Phosphorous",
-          "Magnesium",
-        ],
-      },
-      {
-        category: "Hepatitis",
-        tests: ["Anti HAV IgG", "Anti HAV IgM", "HBcAb", "HBcAb IgM", "HBsAb", "HBsAg"],
-      },
-      {
-        category: "Thyroid",
-        tests: ["T3", "T4", "TSH", "Free T3", "Free T4"],
-      },
-      {
-        category: "Other Laboratory Tests",
-        tests: [
-          "Urinalysis",
-          "Fecalysis",
-          "Occult Blood",
-          "Drug Test - Methamphetamine/Marijuana",
-          "Others (Laboratory)",
-        ],
-      },
-    ],
-  },
-  {
-    formType: "X-Ray",
-    categories: [
-      {
-        category: "X-Ray",
-        tests: [
-          "Chest PA (Adult)",
-          "AP/LAT (Adult)",
-          "AP/LAT (Pedia)",
-          "Plain Abdomen",
-          "Apico-Lordotic",
-          "Thoracic Cage",
-          "Skull X-Ray",
-          "Lumbo-Sacral AP/LAT (Adult)",
-          "Lumbo-Sacral AP/LAT (Pedia)",
-          "Pelvic X-Ray",
-          "Extremities",
-          "Others (X-Ray)",
-        ],
-      },
-    ],
-  },
-  {
-    formType: "Ultrasound & Imaging",
-    categories: [
-      {
-        category: "Ultrasound & Imaging",
-        tests: [
-          "Whole Abdominal Ultrasound",
-          "HBT Ultrasound",
-          "KUB",
-          "KUB w/ Prostate",
-          "TransVaginal Ultrasound",
-          "Pelvic Ultrasound",
-          "Bio-Physical Score",
-          "2D Echocardiogram",
-          "CT Scan",
-          "MRI",
-          "Others (Ultrasound & Imaging)",
-        ],
-      },
-    ],
-  },
-];
+export const DIAGNOSTIC_GROUPS = {
+  Hematology: ["CBC", "CBC w/ PC", "ESR", "Platelet Count", "Differential Count", "PT", "aPTT"],
+  "Blood Chemistry": [
+    "Hgt", "FBS", "Lipid Profile", "SGPT", "SGOT", "Cholesterol", "Triglyceride",
+    "HbA1c", "BUN", "Creatinine", "BUA",
+  ],
+  "Cardiac Markers": ["CK-MB", "CPK", "CPK-MM", "Troponin I", "Troponin T"],
+  Electrolytes: [
+    "Sodium Na+", "Potassium K+", "Chloride Cl-", "Ionized Calcium", "Lithium",
+    "Inorganic Phosphorous", "Magnesium",
+  ],
+  Hepatitis: ["Anti HAV IgG", "Anti HAV IgM", "HBcAb", "HBcAb IgM", "HBsAb", "HBsAg"],
+  Thyroid: ["T3", "T4", "TSH", "Free T3", "Free T4"],
+  "Other Laboratory Tests": [
+    "Urinalysis", "Fecalysis", "Occult Blood",
+    "Drug Test - Methamphetamine/Marijuana", "Others (Laboratory)",
+  ],
+  "X-Ray": [
+    "Chest PA (Adult)", "AP/LAT (Adult)", "AP/LAT (Pedia)", "Plain Abdomen",
+    "Apico-Lordotic", "Thoracic Cage", "Skull X-Ray", "Lumbo-Sacral AP/LAT (Adult)",
+    "Lumbo-Sacral AP/LAT (Pedia)", "Pelvic X-Ray", "Extremities", "Others (X-Ray)",
+  ],
+  "Ultrasound & Imaging": [
+    "Whole Abdominal Ultrasound", "HBT Ultrasound", "KUB", "KUB w/ Prostate",
+    "TransVaginal Ultrasound", "Pelvic Ultrasound", "Bio-Physical Score",
+    "2D Echocardiogram", "CT Scan", "MRI", "Others (Ultrasound & Imaging)",
+  ],
+};
 
-// Flat list every existing consumer (search/filter, status derivation, code
-// generation) already expects — just generated from the catalog above so
-// there's one source of truth.
-export const DIAGNOSTIC_OPTIONS = LAB_ORDER_CATALOG.flatMap((form) =>
-  form.categories.flatMap((cat) => cat.tests)
-);
+export const DIAGNOSTIC_OPTIONS = Object.values(DIAGNOSTIC_GROUPS).flat();
 
-// Which physical request slip (and category within it) each test belongs
-// to — drives the grouped checklist UI in CreateLabOrderModal.
+// Which request-slip formType each group belongs to — mirrors
+// lab_test_catalog.form_type / current_user_can_access_form_type() in the
+// SQL schema, so a Med Tech only ever sees Laboratory and an X-ray Tech
+// only sees X-Ray/Ultrasound & Imaging.
+export const FORM_TYPE_BY_GROUP = {
+  Hematology: "Laboratory",
+  "Blood Chemistry": "Laboratory",
+  "Cardiac Markers": "Laboratory",
+  Electrolytes: "Laboratory",
+  Hepatitis: "Laboratory",
+  Thyroid: "Laboratory",
+  "Other Laboratory Tests": "Laboratory",
+  "X-Ray": "X-Ray",
+  "Ultrasound & Imaging": "Ultrasound & Imaging",
+};
+
 export const FORM_TYPE_BY_TEST = {};
-export const CATEGORY_BY_TEST = {};
-for (const form of LAB_ORDER_CATALOG) {
-  for (const cat of form.categories) {
-    for (const test of cat.tests) {
-      FORM_TYPE_BY_TEST[test] = form.formType;
-      CATEGORY_BY_TEST[test] = cat.category;
-    }
-  }
+Object.entries(DIAGNOSTIC_GROUPS).forEach(([group, tests]) => {
+  tests.forEach((t) => (FORM_TYPE_BY_TEST[t] = FORM_TYPE_BY_GROUP[group]));
+});
+
+// Which formTypes a role is allowed to work on — mirrors
+// current_user_can_access_form_type() in the SQL schema exactly. Admin and
+// nurses aren't restricted (nurses only ever create orders, never touch
+// results), only the two tech roles are scoped.
+export const ROLE_TEST_TYPES = {
+  med_tech: ["Laboratory"],
+  xray_tech: ["X-Ray", "Ultrasound & Imaging"],
+};
+
+export const STATUS_OPTIONS = ["PENDING", "DONE", "CANCELLED"];
+
+export const STATUS_STYLES = {
+  PENDING: "bg-amber-100 text-amber-700",
+  DONE: "bg-emerald-100 text-emerald-700",
+  CANCELLED: "bg-red-100 text-red-700",
+};
+
+function rowToTestRecord(t) {
+  return {
+    id: t.id, // uuid — needed for file upload/delete against this exact test
+    code: t.code || "",
+    status: t.status || "PENDING",
+    queueStatus: t.queue_status || "WAITING",
+    isReferred: t.is_referred || "",
+    performedBy: t.performed_by || "",
+    datePerformed: t.date_performed || "",
+    fee: t.fee ?? "",
+    testDetail: t.test_detail || "",
+    results: { remarks: t.remarks || "" },
+    files: (t.lab_order_test_files || []).map((f) => ({
+      id: f.id,
+      name: f.file_name,
+      storagePath: f.storage_path,
+      uploadedAt: f.uploaded_at,
+    })),
+  };
 }
 
-// Tests that have a blank line on the paper form for further detail (e.g.
-// "CT Scan, indicate type/s: ___", "Extremities ___"). The create-order
-// checklist shows a small text input next to these when checked.
-export const TESTS_WITH_DETAIL = new Set([
-  "Extremities",
-  "CT Scan",
-  "MRI",
-  "Others (Laboratory)",
-  "Others (X-Ray)",
-  "Others (Ultrasound & Imaging)",
-]);
+// Only the columns that live directly on a lab_order_tests row — files are
+// their own table, handled by the dedicated upload/delete functions below,
+// never through this generic mapper.
+function testRecordToRow(orderId, testName, rec) {
+  return {
+    order_id: orderId,
+    test_name: testName,
+    code: rec.code || null,
+    status: rec.status || "PENDING",
+    queue_status: rec.queueStatus || "WAITING",
+    is_referred: rec.isReferred || null,
+    performed_by: rec.performedBy || null,
+    date_performed: rec.datePerformed || null,
+    fee: rec.fee === "" || rec.fee == null ? null : Number(rec.fee),
+    remarks: rec.results?.remarks || null,
+    test_detail: rec.testDetail || null,
+  };
+}
 
-export function loadLabOrders() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(raw) ? raw : [];
-  } catch {
+function rowToOrder(row) {
+  if (!row) return null;
+  const p = row.patients || {};
+  const tests = {};
+  const diagnostics = [];
+  const testDetails = {};
+  (row.lab_order_tests || []).forEach((t) => {
+    diagnostics.push(t.test_name);
+    tests[t.test_name] = rowToTestRecord(t);
+    if (t.test_detail) testDetails[t.test_name] = t.test_detail;
+  });
+
+  return {
+    id: row.id,
+    patientId: p.patient_id || "",
+    patient: {
+      firstName: p.first_name || "",
+      lastName: p.last_name || "",
+      middleName: p.middle_name || "",
+      sex: p.sex || "",
+      dateOfBirth: p.date_of_birth || "",
+    },
+    diagnostics,
+    testDetails,
+    tests,
+    createdBy: row.profiles?.username || row.created_by || "—",
+    dateCreated: row.date_created,
+  };
+}
+
+const SELECT_WITH_JOINS = `
+  *,
+  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth ),
+  profiles!lab_orders_created_by_fkey ( username ),
+  lab_order_tests ( *, lab_order_test_files ( * ) )
+`;
+
+export async function loadLabOrders() {
+  const { data, error } = await supabase
+    .from("lab_orders")
+    .select(SELECT_WITH_JOINS)
+    .order("date_created", { ascending: false });
+  if (error) {
+    console.error("loadLabOrders failed:", error.message);
     return [];
   }
+  return (data || []).map(rowToOrder);
 }
 
-export function saveLabOrders(orders) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+export async function findLabOrderById(orderId) {
+  const { data, error } = await supabase
+    .from("lab_orders")
+    .select(SELECT_WITH_JOINS)
+    .eq("id", orderId)
+    .single();
+  if (error) return null;
+  return rowToOrder(data);
 }
 
-// IDs look like LAB-20260703-0020 — date the order was created plus a
-// per-day sequence number, matching the reference screen.
-export function generateLabOrderId(existingOrders) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const prefix = `LAB-${y}${m}${d}-`;
+// Creates a new order plus one lab_order_tests row per selected diagnostic.
+// `tests` is keyed by test name and only needs `code` at creation time
+// (CreateLabOrderModal.jsx pre-generates each code via
+// generateDiagnosticCode before calling this) — everything else defaults
+// on the DB side (status PENDING, queueStatus WAITING).
+export async function createLabOrder({ patientId, diagnostics, testDetails, tests, createdBy }) {
+  const patientUuid = await getPatientUuid(patientId);
+  if (!patientUuid) throw new Error(`No patient found with patientId "${patientId}"`);
 
-  const todaysCount = existingOrders.filter((o) => (o.id || "").startsWith(prefix)).length;
-  const seq = String(todaysCount + 1).padStart(4, "0");
-  return `${prefix}${seq}`;
+  const { data: orderRow, error } = await supabase
+    .from("lab_orders")
+    .insert({ patient_id: patientUuid, created_by: createdBy || null })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  const testRows = diagnostics.map((name) => ({
+    order_id: orderRow.id,
+    test_name: name,
+    code: tests?.[name]?.code || null,
+    test_detail: testDetails?.[name] || null,
+  }));
+  const { error: testsError } = await supabase.from("lab_order_tests").insert(testRows);
+  if (testsError) throw new Error(testsError.message);
+
+  return findLabOrderById(orderRow.id);
 }
 
-export function findLabOrderById(orderId) {
-  return loadLabOrders().find((o) => o.id === orderId) || null;
+// Read-modify-write a single order by id — same call shape as before
+// (`updater` receives the current order, returns the patch). Every
+// existing call site only ever replaces ONE test's entry inside
+// `order.tests` with a new object (spreading the rest), so — same pattern
+// as updateEncounter — a test is only written back to the DB if its
+// reference actually changed. Order-level fields (diagnostics/testDetails)
+// aren't mutated after creation by anything currently in the app, so
+// there's nothing else to diff here.
+export async function updateLabOrder(orderId, updater) {
+  const current = await findLabOrderById(orderId);
+  if (!current) return null;
+
+  const next = updater({ ...current });
+  const nextTests = next.tests || {};
+  const prevTests = current.tests || {};
+
+  for (const testName of Object.keys(nextTests)) {
+    if (nextTests[testName] !== prevTests[testName]) {
+      const { error } = await supabase
+        .from("lab_order_tests")
+        .upsert(testRecordToRow(orderId, testName, nextTests[testName]), {
+          onConflict: "order_id,test_name",
+        });
+      if (error) console.error("updateLabOrder failed:", error.message);
+    }
+  }
+
+  return findLabOrderById(orderId);
 }
 
-// Replaces one order in the stored list (matched by id) and persists.
-// Used by the lab order detail page whenever a per-test record changes
-// (status, results, files, etc.) — always read-modify-write the whole
-// order so nothing else in it gets clobbered.
-export function updateLabOrder(orderId, updater) {
-  const orders = loadLabOrders();
-  const idx = orders.findIndex((o) => o.id === orderId);
-  if (idx === -1) return null;
+// ---------------------------------------------------------------------
+// Result files — real Supabase Storage now ("lab-order-files" bucket,
+// private), not base64 blobs inline in the order. Each test's `id` (the
+// lab_order_tests row uuid, present on every testRecord above) scopes the
+// storage path so files from different tests/orders never collide.
+// ---------------------------------------------------------------------
 
-  const updated = updater({ ...orders[idx] });
-  orders[idx] = updated;
-  saveLabOrders(orders);
-  return updated;
+export async function uploadLabOrderTestFile(testId, file, uploadedBy) {
+  const path = `${testId}/${Date.now()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("lab-order-files").upload(path, file);
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { error: rowError } = await supabase.from("lab_order_test_files").insert({
+    test_id: testId,
+    file_name: file.name,
+    storage_path: path,
+    uploaded_by: uploadedBy || null,
+  });
+  if (rowError) throw new Error(rowError.message);
 }
 
-// "2026-07-03T09:15:00.000Z" -> "07/03/2026" (matches the reference screen).
+export async function deleteLabOrderTestFile(fileId, storagePath) {
+  const { error: storageError } = await supabase.storage.from("lab-order-files").remove([storagePath]);
+  if (storageError) console.error("deleteLabOrderTestFile (storage) failed:", storageError.message);
+
+  const { error } = await supabase.from("lab_order_test_files").delete().eq("id", fileId);
+  if (error) throw new Error(error.message);
+}
+
+// The bucket is private, so viewing/downloading a file needs a short-lived
+// signed URL rather than a public one — call this right before opening/
+// downloading, not ahead of time (it expires in an hour).
+export async function getLabOrderFileUrl(storagePath) {
+  const { data, error } = await supabase.storage
+    .from("lab-order-files")
+    .createSignedUrl(storagePath, 3600);
+  if (error) {
+    console.error("getLabOrderFileUrl failed:", error.message);
+    return null;
+  }
+  return data.signedUrl;
+}
+
+// "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the reference screen).
 export function formatDateCreated(iso) {
   if (!iso) return "—";
   const dt = new Date(iso);
