@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { recordLogin } from "../utils/auditLogs";
+import { ONLINE_PRESENCE_CHANNEL } from "../lib/presence";
 
 const AuthContext = createContext(null);
 
@@ -20,6 +21,8 @@ function profileRowToUser(row) {
     lastName: row.last_name || "",
     email: row.email || "",
     licenseNumber: row.license_number || "",
+    status: row.status || "active",
+    photo: row.photo || "",
   };
 }
 
@@ -67,6 +70,29 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  // "Online" in the Roles table comes from Realtime Presence, not a
+  // stored column — as long as this tab has a logged-in session open, it
+  // marks itself present on a shared channel; closing the tab / losing
+  // connection lets it drop off automatically (no explicit "sign off"
+  // step needed).
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase.channel(ONLINE_PRESENCE_CHANNEL, {
+      config: { presence: { key: user.id } },
+    });
+
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        channel.track({ online_at: new Date().toISOString() });
+      }
+    });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   async function login(username, password, role) {
     // Look up the email for this username first, since Supabase Auth signs
     // in with email/password, not username — see supabase_auth_lookup.sql.
@@ -79,6 +105,12 @@ export function AuthProvider({ children }) {
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      // Supabase Auth rejects a banned/suspended account's sign-in with a
+      // message that mentions "banned" — surface that as a clear reason
+      // instead of the generic invalid-credentials message.
+      if (error.message?.toLowerCase().includes("banned")) {
+        return { success: false, error: "This account has been suspended. Contact an admin." };
+      }
       return { success: false, error: "Invalid username or password." };
     }
 
@@ -86,6 +118,10 @@ export function AuthProvider({ children }) {
     if (!profile) {
       await supabase.auth.signOut();
       return { success: false, error: "Account has no profile set up. Contact an admin." };
+    }
+    if (profile.status === "suspended") {
+      await supabase.auth.signOut();
+      return { success: false, error: "This account has been suspended. Contact an admin." };
     }
     if (role && profile.role !== role) {
       await supabase.auth.signOut();

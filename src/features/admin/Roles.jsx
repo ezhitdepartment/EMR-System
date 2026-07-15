@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   RefreshCw,
-  ShieldCheck,
   ScrollText,
   UserRound,
   Users2,
   Ban,
   Trash2,
   KeyRound,
+  Circle,
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { ROLE_OPTIONS } from "../../data/roles";
+import { useAuth } from "../../context/AuthContext";
+import { setAccountSuspension } from "../../utils/adminUsers";
+import { ONLINE_PRESENCE_CHANNEL } from "../../lib/presence";
+import ResetPasswordModal from "./ResetPasswordModal";
+import DeleteAccountModal from "./DeleteAccountModal";
 
 const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]));
 
@@ -34,17 +40,48 @@ function formatDateCreated(iso) {
   return `${m}/${d}/${y}`;
 }
 
+function StatusBadge({ status, online }) {
+  if (status === "suspended") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+        <Circle size={7} className="fill-current" />
+        Suspended
+      </span>
+    );
+  }
+  if (online) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+        <Circle size={7} className="fill-current" />
+        Online
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+      <Circle size={7} className="fill-current" />
+      Offline
+    </span>
+  );
+}
+
 export default function Roles() {
+  const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
+  const [onlineIds, setOnlineIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState(""); // row currently mid-action (suspend toggle)
+  const [resetTarget, setResetTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function refresh() {
     setLoading(true);
     setError("");
     const { data, error: fetchError } = await supabase
       .from("profiles")
-      .select("id, username, role, email, created_at")
+      .select("id, username, role, email, status, created_at")
       .order("created_at", { ascending: false });
 
     if (fetchError) {
@@ -59,6 +96,49 @@ export default function Roles() {
   useEffect(() => {
     refresh();
   }, []);
+
+  // Read-only view of the same presence channel AuthContext tracks
+  // "I'm online" on — this just listens, it doesn't track itself again.
+  useEffect(() => {
+    const channel = supabase.channel(ONLINE_PRESENCE_CHANNEL, {
+      config: { presence: { key: currentUser?.id || "roles-page-observer" } },
+    });
+
+    channel.on("presence", { event: "sync" }, () => {
+      setOnlineIds(new Set(Object.keys(channel.presenceState())));
+    });
+
+    channel.subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id]);
+
+  async function handleToggleSuspend(u) {
+    const suspending = u.status !== "suspended";
+    const confirmed = window.confirm(
+      suspending
+        ? `Suspend ${u.username}? They won't be able to log in until you unsuspend them.`
+        : `Unsuspend ${u.username}? They'll be able to log in again.`
+    );
+    if (!confirmed) return;
+
+    setBusyId(u.id);
+    try {
+      const newStatus = await setAccountSuspension(u.id, suspending);
+      setUsers((list) => list.map((row) => (row.id === u.id ? { ...row, status: newStatus } : row)));
+    } catch (err) {
+      alert(err.message || "Something went wrong updating this account's status.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  function handleAccountDeleted(userId) {
+    setUsers((list) => list.filter((row) => row.id !== userId));
+    setDeleteTarget(null);
+  }
 
   return (
     <div className="max-w-6xl">
@@ -102,6 +182,7 @@ export default function Roles() {
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Username</th>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Role</th>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Email</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Status</th>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Date Created</th>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Actions</th>
                 </tr>
@@ -109,91 +190,124 @@ export default function Roles() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-16 text-center text-sm text-slate-400">
+                    <td colSpan={6} className="px-4 py-16 text-center text-sm text-slate-400">
                       Loading users…
                     </td>
                   </tr>
                 ) : (
-                  users.map((u) => (
-                    <tr key={u.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-3 align-top font-medium text-slate-800 whitespace-nowrap">
-                        {u.username || "—"}
-                      </td>
-                      <td className="px-4 py-3 align-top whitespace-nowrap">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            ROLE_BADGE_STYLES[u.role] || "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {ROLE_LABELS[u.role] || u.role || "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 align-top text-slate-600 whitespace-nowrap">
-                        {u.email || "—"}
-                      </td>
-                      <td className="px-4 py-3 align-top text-slate-600 whitespace-nowrap">
-                        {formatDateCreated(u.created_at)}
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="flex flex-wrap items-center gap-1.5 max-w-xs">
-                          <button
-                            type="button"
-                            title="Change Role"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                  users.map((u) => {
+                    const isSuspended = u.status === "suspended";
+                    const isSelf = u.id === currentUser?.id;
+                    return (
+                      <tr key={u.id} className="border-b border-slate-100 last:border-0">
+                        <td className="px-4 py-3 align-top font-medium text-slate-800 whitespace-nowrap">
+                          {u.username || "—"}
+                        </td>
+                        <td className="px-4 py-3 align-top whitespace-nowrap">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              ROLE_BADGE_STYLES[u.role] || "bg-slate-100 text-slate-600"
+                            }`}
                           >
-                            <ShieldCheck size={13} />
-                            Change Role
-                          </button>
-                          <button
-                            type="button"
-                            title="View Audit Log"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
-                          >
-                            <ScrollText size={13} />
-                            View Audit Log
-                          </button>
-                          <button
-                            type="button"
-                            title="View Profile"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
-                          >
-                            <UserRound size={13} />
-                            View Profile
-                          </button>
-                          <button
-                            type="button"
-                            title="Reset Password"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
-                          >
-                            <KeyRound size={13} />
-                            Reset Password
-                          </button>
-                          <button
-                            type="button"
-                            title="Suspend"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
-                          >
-                            <Ban size={13} />
-                            Suspend
-                          </button>
-                          <button
-                            type="button"
-                            title="Delete Account"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
-                          >
-                            <Trash2 size={13} />
-                            Delete Account
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                            {ROLE_LABELS[u.role] || u.role || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 align-top text-slate-600 whitespace-nowrap">
+                          {u.email || "—"}
+                        </td>
+                        <td className="px-4 py-3 align-top whitespace-nowrap">
+                          <StatusBadge status={u.status} online={onlineIds.has(u.id)} />
+                        </td>
+                        <td className="px-4 py-3 align-top text-slate-600 whitespace-nowrap">
+                          {formatDateCreated(u.created_at)}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <div className="flex flex-wrap items-center gap-1.5 max-w-xs">
+                            <button
+                              type="button"
+                              title="View Audit Log"
+                              onClick={() =>
+                                navigate(`/admin/roles/${u.id}/audit-log`, {
+                                  state: { username: u.username },
+                                })
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                            >
+                              <ScrollText size={13} />
+                              View Audit Log
+                            </button>
+                            <button
+                              type="button"
+                              title="View Profile"
+                              onClick={() => navigate(`/admin/roles/${u.id}`)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                            >
+                              <UserRound size={13} />
+                              View Profile
+                            </button>
+                            <button
+                              type="button"
+                              title="Reset Password"
+                              onClick={() => setResetTarget(u)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                            >
+                              <KeyRound size={13} />
+                              Reset Password
+                            </button>
+                            <button
+                              type="button"
+                              title={isSelf ? "You can't suspend your own account" : "Suspend"}
+                              onClick={() => handleToggleSuspend(u)}
+                              disabled={isSelf || busyId === u.id}
+                              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isSuspended
+                                  ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                  : "border-amber-300 text-amber-700 hover:bg-amber-50"
+                              }`}
+                            >
+                              <Ban size={13} />
+                              {busyId === u.id ? "Updating…" : isSuspended ? "Unsuspend" : "Suspend"}
+                            </button>
+                            <button
+                              type="button"
+                              title={isSelf ? "You can't delete your own account" : "Delete Account"}
+                              onClick={() => setDeleteTarget(u)}
+                              disabled={isSelf}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Trash2 size={13} />
+                              Delete Account
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
+          onDone={() => {
+            setResetTarget(null);
+            alert(`${resetTarget.username}'s password has been reset to its original value.`);
+          }}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteAccountModal
+          user={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => handleAccountDeleted(deleteTarget.id)}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ function rowToLoginEvent(row) {
   if (!row) return null;
   return {
     id: row.id,
+    userId: row.user_id,
     username: row.username,
     role: row.role,
     prefix: row.prefix || "",
@@ -28,6 +29,21 @@ export async function loadLoginHistory() {
     .order("logged_in_at", { ascending: false });
   if (error) {
     console.error("loadLoginHistory failed:", error.message);
+    return [];
+  }
+  return (data || []).map(rowToLoginEvent);
+}
+
+// Same as loadLoginHistory() but scoped to one account — backs the
+// per-user "View Audit Log" page reached from Roles.jsx.
+export async function loadLoginHistoryForUser(userId) {
+  const { data, error } = await supabase
+    .from("login_events")
+    .select("*")
+    .eq("user_id", userId)
+    .order("logged_in_at", { ascending: false });
+  if (error) {
+    console.error("loadLoginHistoryForUser failed:", error.message);
     return [];
   }
   return (data || []).map(rowToLoginEvent);

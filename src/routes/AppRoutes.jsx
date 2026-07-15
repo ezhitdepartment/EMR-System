@@ -21,6 +21,8 @@ import Masterlist from "../features/phc/Masterlist";
 import YakapTracker from "../features/phc/YakapTracker";
 import Users from "../features/admin/Users";
 import Roles from "../features/admin/Roles";
+import UserProfilePage from "../features/admin/UserProfilePage";
+import UserAuditLogPage from "../features/admin/UserAuditLogPage";
 import Medicines from "../features/admin/Medicines";
 import AuditLogs from "../features/admin/AuditLogs";
 import Settings from "../features/admin/Settings";
@@ -155,6 +157,14 @@ export default function AppRoutes() {
           <Route
             path="/admin/roles"
             element={hasFeatureAccess(user?.role, "adminTools") ? <Roles /> : <Navigate to="/patients" replace />}
+          />
+          <Route
+            path="/admin/roles/:userId"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <UserProfilePage /> : <Navigate to="/patients" replace />}
+          />
+          <Route
+            path="/admin/roles/:userId/audit-log"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <UserAuditLogPage /> : <Navigate to="/patients" replace />}
           />
           <Route
             path="/admin/medicines"
