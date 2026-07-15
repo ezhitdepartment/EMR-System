@@ -68,34 +68,6 @@ Object.entries(DIAGNOSTIC_GROUPS).forEach(([group, tests]) => {
   tests.forEach((t) => (FORM_TYPE_BY_TEST[t] = FORM_TYPE_BY_GROUP[group]));
 });
 
-// Same catalog as DIAGNOSTIC_GROUPS above, just reshaped into
-// { formType, categories: [{ category, tests }] } — what
-// DiagnosticTestChecklist.jsx (the shared checklist used by both
-// CreateLabOrderModal and the Consultation Form's Diagnostics section)
-// actually renders against. Derived rather than hand-duplicated so the
-// two can never drift out of sync with each other.
-export const LAB_ORDER_CATALOG = (() => {
-  const byFormType = {};
-  Object.entries(DIAGNOSTIC_GROUPS).forEach(([category, tests]) => {
-    const formType = FORM_TYPE_BY_GROUP[category];
-    if (!byFormType[formType]) byFormType[formType] = [];
-    byFormType[formType].push({ category, tests });
-  });
-  return Object.entries(byFormType).map(([formType, categories]) => ({ formType, categories }));
-})();
-
-// Tests where a single checkbox isn't enough — the requesting doctor/nurse
-// also needs to type a free-text detail (which site, which type). The
-// three catch-all "Others (...)" entries always need this ("Please
-// specify…" in the UI); "Extremities" additionally needs it since an X-ray
-// request has to name the specific limb/joint ("Indicate type/site…").
-export const TESTS_WITH_DETAIL = new Set([
-  "Others (Laboratory)",
-  "Others (X-Ray)",
-  "Others (Ultrasound & Imaging)",
-  "Extremities",
-]);
-
 // Which formTypes a role is allowed to work on — mirrors
 // current_user_can_access_form_type() in the SQL schema exactly. Admin and
 // nurses aren't restricted (nurses only ever create orders, never touch
@@ -258,11 +230,19 @@ export async function updateLabOrder(orderId, updater) {
 
   for (const testName of Object.keys(nextTests)) {
     if (nextTests[testName] !== prevTests[testName]) {
+      // A plain UPDATE, not an upsert: the row for this test already
+      // exists (createLabOrder() inserts one per test up front), and
+      // Postgres/RLS treats "INSERT ... ON CONFLICT DO UPDATE" as
+      // requiring the INSERT policy's WITH CHECK to pass for every row —
+      // even ones that only ever take the DO UPDATE path. Med Tech/X-ray
+      // Tech are allowed to update lab_order_tests but not create a lab
+      // order, so upserting here was silently blocked by the INSERT
+      // policy the moment they tried to change a status or save results.
       const { error } = await supabase
         .from("lab_order_tests")
-        .upsert(testRecordToRow(orderId, testName, nextTests[testName]), {
-          onConflict: "order_id,test_name",
-        });
+        .update(testRecordToRow(orderId, testName, nextTests[testName]))
+        .eq("order_id", orderId)
+        .eq("test_name", testName);
       if (error) console.error("updateLabOrder failed:", error.message);
     }
   }
