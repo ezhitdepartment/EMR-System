@@ -355,9 +355,8 @@ export const initialConsultationForm = {
   disposition: "",
   dispositionNotes: "",
 
-  // Diagnostics ordered for this visit
   // Diagnostics ordered for this visit — same selectable checklist as
-  // Lab Orders (utils/labOrders.js LAB_ORDER_CATALOG), plus free-text notes
+  // Lab Orders (utils/labOrders.js DIAGNOSTIC_GROUPS), plus free-text notes
   // for anything not on that list.
   diagnosticsSelected: [],
   diagnosticsTestDetails: {},
