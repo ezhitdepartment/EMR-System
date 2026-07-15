@@ -11,6 +11,7 @@ import {
   Pill,
 } from "lucide-react";
 import CreatePatientModal from "../patients/CreatePatientModal";
+import SearchableSelect from "../../components/common/SearchableSelect";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatDateCreated } from "../../utils/labOrders";
 import { loadPatients } from "../../utils/patients";
@@ -488,18 +489,15 @@ export default function AddMedicinePrescriptionPage() {
                   key={row.rowId}
                   className="grid grid-cols-[1fr_70px_1fr_28px] gap-2 items-start"
                 >
-                  <select
+                  <SearchableSelect
                     value={row.medicineName}
-                    onChange={(e) => selectMedicine(row.rowId, e.target.value)}
-                    className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
-                  >
-                    <option value="">Select medicine</option>
-                    {MEDICINE_CATALOG.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(name) => selectMedicine(row.rowId, name)}
+                    options={MEDICINE_CATALOG}
+                    getValue={(name) => name}
+                    getLabel={(name) => name}
+                    placeholder="Select medicine"
+                    inputClass="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                  />
                   <input
                     type="number"
                     min="1"
