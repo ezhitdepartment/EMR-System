@@ -199,7 +199,7 @@ export default function Dashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
-                  <th className="px-4 py-2 font-medium">ID</th>
+                  <th className="px-4 py-2 font-medium">Hospital No.</th>
                   <th className="px-4 py-2 font-medium">Patient Name</th>
                   <th className="px-4 py-2 font-medium">Age</th>
                   <th className="px-4 py-2 font-medium">Sex</th>
@@ -219,7 +219,7 @@ export default function Dashboard() {
                       onClick={() => navigate(`/patients/${p.patientId}`)}
                       className="border-b border-slate-50 last:border-0 hover:bg-teal-50/60 cursor-pointer transition-colors"
                     >
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-500">{p.patientId}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-500">{p.hospitalNo || "—"}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="flex items-center gap-2">
                           {p.photo ? (
