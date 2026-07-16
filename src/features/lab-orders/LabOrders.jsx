@@ -14,6 +14,7 @@ import {
   Download,
   ListOrdered,
   CreditCard,
+  Lock,
 } from "lucide-react";
 import CreateLabOrderModal from "./CreateLabOrderModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
@@ -62,6 +63,13 @@ export default function LabOrders() {
   // for everyone else instead of letting them click and hit a permission
   // error.
   const canManageBilling = ["admin", "cashier"].includes(user?.role);
+  // Med Tech/X-ray Tech can see an unpaid order in this list (RLS doesn't
+  // hide the row itself) but can't open it — matches
+  // current_user_lab_order_payment_ok() in the SQL, which is what
+  // actually blocks the underlying test/result data once they're in
+  // there. This just stops the click before it happens, with a clear
+  // reason, instead of sending them to a page that would come back empty.
+  const isTechRole = ["med_tech", "xray_tech"].includes(user?.role);
   // Med Tech / X-ray Tech only work one type of test each — don't clutter
   // their list with orders that are 100% the other specialty. A mixed
   // order (e.g. a CBC + a Chest X-Ray on the same slip) still shows up for
@@ -386,25 +394,38 @@ export default function LabOrders() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paged.map((o) => (
-                    <tr
-                      key={o.id}
-                      onClick={() => navigate(`/lab-orders/${o.id}`)}
-                      className="border-b border-slate-100 hover:bg-teal-50/60 cursor-pointer transition-colors"
-                    >
-                      <td className="px-4 py-3 font-medium text-teal-700 whitespace-nowrap align-top">
-                        {o.id}
-                      </td>
-                      <td className="px-4 py-3 align-top whitespace-nowrap">
-                        <p className="font-semibold text-slate-800">{o._fullName || "—"}</p>
-                        <p className="text-xs text-slate-500">{formatAge(o.patient?.dateOfBirth)}</p>
-                        <p className="text-xs text-slate-500 uppercase">{o.patient?.sex || "—"}</p>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="flex flex-wrap gap-1.5 max-w-xs">
-                          {(o.diagnostics || []).map((d) => (
-                            <span
-                              key={d}
+                  {paged.map((o) => {
+                    const locked = isTechRole && o.paymentStatus !== "paid";
+                    return (
+                      <tr
+                        key={o.id}
+                        onClick={() => {
+                          if (locked) return;
+                          navigate(`/lab-orders/${o.id}`);
+                        }}
+                        title={locked ? "This order hasn't been paid yet — ask Cashier/Admin to mark it Paid first." : undefined}
+                        className={`border-b border-slate-100 transition-colors ${
+                          locked
+                            ? "opacity-60 cursor-not-allowed"
+                            : "hover:bg-teal-50/60 cursor-pointer"
+                        }`}
+                      >
+                        <td className="px-4 py-3 font-medium text-teal-700 whitespace-nowrap align-top">
+                          <span className="inline-flex items-center gap-1.5">
+                            {locked && <Lock size={12} className="text-slate-400" />}
+                            {o.id}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 align-top whitespace-nowrap">
+                          <p className="font-semibold text-slate-800">{o._fullName || "—"}</p>
+                          <p className="text-xs text-slate-500">{formatAge(o.patient?.dateOfBirth)}</p>
+                          <p className="text-xs text-slate-500 uppercase">{o.patient?.sex || "—"}</p>
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <div className="flex flex-wrap gap-1.5 max-w-xs">
+                            {(o.diagnostics || []).map((d) => (
+                              <span
+                                key={d}
                               className="rounded-md bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 uppercase whitespace-nowrap"
                             >
                               {d}
@@ -456,7 +477,8 @@ export default function LabOrders() {
                         {formatDateCreated(o.dateCreated)}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

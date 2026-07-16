@@ -15,6 +15,7 @@ import {
   X,
   Check,
   CreditCard,
+  Lock,
 } from "lucide-react";
 import {
   findLabOrderById,
@@ -317,6 +318,33 @@ export default function ViewLabOrderPage() {
         <p className="text-sm font-semibold text-slate-800 mb-1">Lab order not found</p>
         <p className="text-xs text-slate-500 mb-4">
           We couldn't find a lab order with ID "{orderId}". It may have been removed.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 text-sm font-medium transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Back to Lab Orders
+        </button>
+      </div>
+    );
+  }
+
+  // Payment required (Med Tech/X-ray Tech only) — the order row itself is
+  // visible to them (see the Lab Orders list), but RLS blocks the actual
+  // test/result data underneath it until it's paid, so there's nothing
+  // real to show here yet. This mainly covers someone opening/bookmarking
+  // the URL directly — the list page already stops the click before it
+  // gets here.
+  if (TECH_ROLES.includes(user?.role) && order.paymentStatus !== "paid") {
+    return (
+      <div className="max-w-lg mx-auto mt-16 bg-white border border-slate-200 rounded-xl shadow-sm p-8 text-center">
+        <Lock size={24} className="mx-auto text-slate-300 mb-2" />
+        <p className="text-sm font-semibold text-slate-800 mb-1">Payment required</p>
+        <p className="text-xs text-slate-500 mb-4">
+          This lab order hasn't been paid yet. Ask Cashier or Admin to mark it Paid before you can
+          view or work on it.
         </p>
         <button
           type="button"
