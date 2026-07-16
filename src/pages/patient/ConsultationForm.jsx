@@ -868,6 +868,12 @@ export default function ConsultationForm({
   function handleSubmit(e) {
     e.preventDefault();
     if (readOnly) return;
+    // Cashier and Staff now reach Registration too, but they were never
+    // meant to author a consultation — and the database's
+    // consultation_author_role enum only knows er_nurse/opd_nurse/doctor/
+    // admin, so letting this through for any other role would fail as a
+    // confusing DB error instead of just... not happening.
+    if (!isNurse && !isDoctor && user?.role !== "admin") return;
     onSave?.(form);
     onClose?.();
   }
@@ -1896,7 +1902,7 @@ export default function ConsultationForm({
           >
             {readOnly ? "Close" : "Cancel"}
           </button>
-          {!readOnly && (
+          {!readOnly && (isNurse || isDoctor || user?.role === "admin") && (
             <button
               type="submit"
               className="px-8 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium transition-colors"

@@ -63,19 +63,19 @@ export default function AppRoutes() {
           "/admin" landing page (Dashboard) inside this same layout below. */}
       {(STAFF_ROLES.includes(user?.role) || user?.role === "admin") && (
         <Route element={<DashboardLayout />}>
-          {/* "/patients" is the one feature every role in ROLE_FEATURE_ACCESS
+          {/* "/reports" is the one feature every role in ROLE_FEATURE_ACCESS
               has, so it's the safe fallback wherever a role hits a route
               its dashboard doesn't include. */}
-          <Route index element={<Navigate to="/patients" replace />} />
+          <Route index element={<Navigate to="/reports" replace />} />
 
           <Route
             path="/admin"
-            element={hasFeatureAccess(user?.role, "adminDashboard") ? <Dashboard /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "adminDashboard") ? <Dashboard /> : <Navigate to="/reports" replace />}
           />
 
           <Route
             path="/encounters"
-            element={hasFeatureAccess(user?.role, "registration") ? <Encounters /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "registration") ? <Encounters /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/encounters/create"
@@ -83,14 +83,14 @@ export default function AppRoutes() {
               hasFeatureAccess(user?.role, "registration") ? (
                 <CreateEncounterPage />
               ) : (
-                <Navigate to="/patients" replace />
+                <Navigate to="/reports" replace />
               )
             }
           />
           <Route
             path="/encounters/:encounterId/triage"
             element={
-              hasFeatureAccess(user?.role, "registration") ? <TriagePage /> : <Navigate to="/patients" replace />
+              hasFeatureAccess(user?.role, "registration") ? <TriagePage /> : <Navigate to="/reports" replace />
             }
           />
           <Route
@@ -99,25 +99,28 @@ export default function AppRoutes() {
               hasFeatureAccess(user?.role, "registration") ? (
                 <EncounterFilesPage />
               ) : (
-                <Navigate to="/patients" replace />
+                <Navigate to="/reports" replace />
               )
             }
           />
 
-          <Route path="/patients" element={<Patients />} />
+          <Route
+            path="/patients"
+            element={hasFeatureAccess(user?.role, "patients") ? <Patients /> : <Navigate to="/reports" replace />}
+          />
 
           <Route
             path="/lab-orders"
-            element={hasFeatureAccess(user?.role, "labOrders") ? <LabOrders /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "labOrders") ? <LabOrders /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/lab-orders/queue"
-            element={hasFeatureAccess(user?.role, "labOrders") ? <LabQueuePage /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "labOrders") ? <LabQueuePage /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/lab-orders/:orderId"
             element={
-              hasFeatureAccess(user?.role, "labOrders") ? <ViewLabOrderPage /> : <Navigate to="/patients" replace />
+              hasFeatureAccess(user?.role, "labOrders") ? <ViewLabOrderPage /> : <Navigate to="/reports" replace />
             }
           />
 
@@ -127,7 +130,7 @@ export default function AppRoutes() {
               hasFeatureAccess(user?.role, "medicinePrescriptions") ? (
                 <MedicinePrescriptions />
               ) : (
-                <Navigate to="/patients" replace />
+                <Navigate to="/reports" replace />
               )
             }
           />
@@ -137,7 +140,7 @@ export default function AppRoutes() {
               hasFeatureAccess(user?.role, "medicinePrescriptions") ? (
                 <AddMedicinePrescriptionPage />
               ) : (
-                <Navigate to="/patients" replace />
+                <Navigate to="/reports" replace />
               )
             }
           />
@@ -147,36 +150,36 @@ export default function AppRoutes() {
           <Route path="/phc/masterlist" element={<Masterlist />} />
           <Route
             path="/phc/yakap-tracker"
-            element={hasFeatureAccess(user?.role, "yakapTracker") ? <YakapTracker /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "yakapTracker") ? <YakapTracker /> : <Navigate to="/reports" replace />}
           />
 
           <Route
             path="/admin/users"
-            element={hasFeatureAccess(user?.role, "adminTools") ? <Users /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "adminTools") ? <Users /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/admin/roles"
-            element={hasFeatureAccess(user?.role, "adminTools") ? <Roles /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "adminTools") ? <Roles /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/admin/roles/:userId"
-            element={hasFeatureAccess(user?.role, "adminTools") ? <UserProfilePage /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "adminTools") ? <UserProfilePage /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/admin/roles/:userId/audit-log"
-            element={hasFeatureAccess(user?.role, "adminTools") ? <UserAuditLogPage /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "adminTools") ? <UserAuditLogPage /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/admin/medicines"
-            element={hasFeatureAccess(user?.role, "adminTools") ? <Medicines /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "medicines") ? <Medicines /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/admin/audit-logs"
-            element={hasFeatureAccess(user?.role, "adminTools") ? <AuditLogs /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "adminTools") ? <AuditLogs /> : <Navigate to="/reports" replace />}
           />
           <Route
             path="/admin/settings"
-            element={hasFeatureAccess(user?.role, "adminTools") ? <Settings /> : <Navigate to="/patients" replace />}
+            element={hasFeatureAccess(user?.role, "adminTools") ? <Settings /> : <Navigate to="/reports" replace />}
           />
         </Route>
       )}

@@ -21,6 +21,10 @@ export const navGroups = [
       },
       { label: "Reports", path: "/reports", icon: "FileBarChart2", feature: "reports" },
       { label: "Archive", path: "/archive", icon: "Archive", feature: "archive" },
+      // Its own "medicines" feature key (not "adminTools") so Pharmacist
+      // can see it too — was previously bundled under the Admin group
+      // below, which only ever included true admin-only tools.
+      { label: "Medicines", path: "/admin/medicines", icon: "Package2", feature: "medicines" },
     ],
   },
   {
@@ -33,7 +37,6 @@ export const navGroups = [
     label: "Admin",
     items: [
       { label: "Roles", path: "/admin/roles", icon: "ShieldCheck", feature: "adminTools" },
-      { label: "Medicines", path: "/admin/medicines", icon: "Package2", feature: "adminTools" },
       { label: "Audit Logs", path: "/admin/audit-logs", icon: "History", feature: "adminTools" },
       { label: "Settings", path: "/admin/settings", icon: "Settings", feature: "adminTools" },
     ],

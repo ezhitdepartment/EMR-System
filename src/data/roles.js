@@ -9,6 +9,9 @@ export const ROLE_OPTIONS = [
   { value: "opd_nurse", label: "OPD Nurse" },
   { value: "med_tech", label: "Med Tech" },
   { value: "xray_tech", label: "X-ray Tech" },
+  { value: "cashier", label: "Cashier" },
+  { value: "pharmacist", label: "Pharmacist" },
+  { value: "staff", label: "Staff" },
 ];
 
 // Every role except "admin" is a staff-dashboard role — used by AppRoutes.jsx
@@ -16,7 +19,10 @@ export const ROLE_OPTIONS = [
 // decides *which parts* of it they see). Admin gets the dashboard too (see
 // AppRoutes.jsx), just via its own check since it also keeps its separate
 // /admin area.
-export const STAFF_ROLES = ["doctor", "er_nurse", "opd_nurse", "med_tech", "xray_tech"];
+export const STAFF_ROLES = [
+  "doctor", "er_nurse", "opd_nurse", "med_tech", "xray_tech",
+  "cashier", "pharmacist", "staff",
+];
 
 // Which dashboard features (see the `feature` key on each item in
 // data/navigation.js) each role can see/reach. "all" means unrestricted —
@@ -29,6 +35,17 @@ export const ROLE_FEATURE_ACCESS = {
   doctor: ["registration", "patients", "medicinePrescriptions", "reports", "masterlist", "archive"],
   med_tech: ["patients", "labOrders", "reports", "masterlist", "archive"],
   xray_tech: ["patients", "labOrders", "reports", "masterlist", "archive"],
+  // NOTE: Cashier can view Lab Orders and Medicine Prescriptions, but this
+  // single "medicinePrescriptions" feature flag is also what grants
+  // create/edit rights on that table today (see ADDENDUM D in the SQL
+  // schema) — there's no separate view-only tier for prescriptions yet the
+  // way Lab Orders has current_user_can_create_lab_order() vs
+  // current_user_can_edit_lab_results(). Cashier is deliberately NOT added
+  // to either of those two lab-order functions, so their Lab Orders access
+  // is view-only even though "labOrders" is in this list.
+  cashier: ["labOrders", "registration", "archive", "reports", "medicinePrescriptions"],
+  pharmacist: ["medicinePrescriptions", "medicines", "reports", "archive"],
+  staff: ["registration", "patients", "archive", "reports"],
 };
 
 // Explicit exceptions layered on top of ROLE_FEATURE_ACCESS above. Admin's

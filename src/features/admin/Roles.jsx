@@ -26,6 +26,9 @@ const ROLE_BADGE_STYLES = {
   opd_nurse: "bg-amber-100 text-amber-700",
   med_tech: "bg-sky-100 text-sky-700",
   xray_tech: "bg-violet-100 text-violet-700",
+  cashier: "bg-orange-100 text-orange-700",
+  pharmacist: "bg-emerald-100 text-emerald-700",
+  staff: "bg-slate-200 text-slate-700",
 };
 
 // "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the rest of the app).
