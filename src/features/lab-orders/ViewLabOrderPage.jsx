@@ -14,10 +14,12 @@ import {
   Eye,
   X,
   Check,
+  CreditCard,
 } from "lucide-react";
 import {
   findLabOrderById,
   updateLabOrder,
+  updatePaymentStatus,
   formatDateCreated,
   FORM_TYPE_BY_TEST,
   uploadLabOrderTestFile,
@@ -40,9 +42,12 @@ import {
 // Nurses can create orders and see results, but not edit them. Techs can
 // edit results, but only for tests that belong to their own specialty
 // (Laboratory for med_tech; X-Ray/Ultrasound & Imaging for xray_tech) — not
-// create orders. Doctors and admins keep full access, same as before.
+// create orders. Cashier is billing-only: never edits results, only ever
+// touches payment status. Doctors and admins keep full access, same as
+// before.
 const NURSE_ROLES = ["er_nurse", "opd_nurse"];
 const TECH_ROLES = ["med_tech", "xray_tech"];
+const VIEW_ONLY_RESULTS_ROLES = [...NURSE_ROLES, "cashier"];
 
 // "1957-03-31" -> "03/31/1957" (matches the reference screen's Date of Birth column).
 function formatDob(dob) {
@@ -131,6 +136,7 @@ export default function ViewLabOrderPage() {
   const [draft, setDraft] = useState(null);
   const [savedTick, setSavedTick] = useState(false);
   const [filesBusy, setFilesBusy] = useState(false);
+  const [busyPayment, setBusyPayment] = useState(false);
 
   const [summaryOpen, setSummaryOpen] = useState(true);
   const [labDetailsOpen, setLabDetailsOpen] = useState(true);
@@ -178,23 +184,46 @@ export default function ViewLabOrderPage() {
     [selectedDiagnostic]
   );
 
-  // Nurses: view-only, full stop. Techs: can only edit tests that belong to
-  // their own specialty (e.g. an X-ray Tech can see a CBC on a mixed order
-  // but can't touch it — that's the Med Tech's queue). Everyone else
-  // (doctor, admin) keeps unrestricted access, same as before this change.
+  // Nurses/Cashier: view-only, full stop. Techs: can only edit tests that
+  // belong to their own specialty (e.g. an X-ray Tech can see a CBC on a
+  // mixed order but can't touch it — that's the Med Tech's queue).
+  // Everyone else (doctor, admin) keeps unrestricted access, same as
+  // before this change.
   const testFormType = selectedDiagnostic ? FORM_TYPE_BY_TEST[selectedDiagnostic] : null;
   const isNurse = NURSE_ROLES.includes(user?.role);
+  const isCashier = user?.role === "cashier";
   const isTech = TECH_ROLES.includes(user?.role);
-  const canEditResults = isNurse
+  const canEditResults = VIEW_ONLY_RESULTS_ROLES.includes(user?.role)
     ? false
     : isTech
     ? (ROLE_QUEUE_TYPES[user.role] || []).includes(testFormType)
     : true;
-  const readOnlyReason = isNurse
+  const readOnlyReason = isCashier
+    ? "Cashier accounts can only update payment status here — lab results are view-only."
+    : isNurse
     ? "Your role has view-only access to lab results."
     : isTech && !canEditResults
     ? "This test belongs to a different specialty — only the assigned tech can edit it."
     : null;
+
+  // Only Cashier/Admin can change payment status — matches
+  // current_user_can_manage_billing() in the SQL, which is what actually
+  // enforces this.
+  const canManageBilling = ["admin", "cashier"].includes(user?.role);
+
+  async function handleTogglePayment() {
+    if (!canManageBilling || busyPayment || !order) return;
+    const nextStatus = order.paymentStatus === "paid" ? "unpaid" : "paid";
+    setBusyPayment(true);
+    try {
+      const updated = await updatePaymentStatus(order.id, nextStatus);
+      if (updated) setOrder(updated);
+    } catch (err) {
+      window.alert(err.message || "Couldn't update payment status.");
+    } finally {
+      setBusyPayment(false);
+    }
+  }
 
   async function persistCurrentTest(nextTestRecord) {
     const updated = await updateLabOrder(orderId, (o) => ({
@@ -344,6 +373,28 @@ export default function ViewLabOrderPage() {
               className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${ORDER_STATUS_STYLES[orderStatus]}`}
             >
               {orderStatus}
+            </span>
+            <span
+              role={canManageBilling ? "button" : undefined}
+              onClick={(e) => {
+                e.stopPropagation(); // don't collapse/expand the summary card
+                handleTogglePayment();
+              }}
+              title={
+                canManageBilling
+                  ? `Mark as ${order.paymentStatus === "paid" ? "Unpaid" : "Paid"}`
+                  : "Only Cashier/Admin can change this"
+              }
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                order.paymentStatus === "paid"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-700"
+              } ${canManageBilling ? "cursor-pointer hover:opacity-75" : "cursor-default"} ${
+                busyPayment ? "opacity-50" : ""
+              }`}
+            >
+              <CreditCard size={11} />
+              {busyPayment ? "Updating…" : order.paymentStatus === "paid" ? "Paid" : "Unpaid"}
             </span>
           </span>
           {summaryOpen ? (

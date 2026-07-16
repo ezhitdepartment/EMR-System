@@ -51,8 +51,11 @@ export default function LabOrders() {
   const navigate = useNavigate();
   const { user } = useAuth();
   // Techs work results, not create orders — that's the requesting nurse's
-  // job. Doctors/admins/nurses keep the ability to create.
-  const canCreateOrder = !["med_tech", "xray_tech"].includes(user?.role);
+  // job. Cashier is billing-only, same reasoning. Doctors/admins/nurses
+  // keep the ability to create. Matches
+  // current_user_can_create_lab_order() in the SQL exactly, so the button
+  // never appears for a role that would get rejected on submit anyway.
+  const canCreateOrder = !["med_tech", "xray_tech", "cashier"].includes(user?.role);
   // Only Cashier/Admin can flip payment status — matches
   // current_user_can_manage_billing() in the SQL, which is what actually
   // enforces this; the role check here just keeps the badge non-clickable
