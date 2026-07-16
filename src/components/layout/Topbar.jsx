@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Menu, Search, Bell, ChevronDown, UserCog, LogOut } from "lucide-react";
+import { Menu, Search, ChevronDown, UserCog, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import AccountSettingsModal from "./AccountSettingsModal";
+import NotificationBell from "./NotificationBell";
 import "./Topbar.css";
 
 export default function Topbar({ onMenuClick }) {
@@ -55,10 +56,7 @@ export default function Topbar({ onMenuClick }) {
       </div>
 
       <div className="topbar__actions">
-        <button className="topbar__icon-btn" aria-label="Notifications">
-          <Bell size={18} />
-          <span className="topbar__badge" />
-        </button>
+        <NotificationBell />
 
         <div className="topbar__user-menu" ref={menuRef}>
           <button
