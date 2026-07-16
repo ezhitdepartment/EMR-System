@@ -16,6 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 import BarChart from "../../components/common/BarChart";
 import {
   REPORT_TYPES,
+  loadReportData,
   getAvailableYears,
   getMonthlyPatientCounts,
   getYearlyPatientCounts,
@@ -101,6 +102,10 @@ export default function Reports() {
   const [reports, setReports] = useState(() => loadReports());
   const [activeTypeTab, setActiveTypeTab] = useState("All Reports");
   const [tableYear, setTableYear] = useState("All");
+
+  const [reportData, setReportData] = useState({ patients: [], consultations: [] });
+  const [dataLoading, setDataLoading] = useState(true);
+  const { patients, consultations } = reportData;
 
   const [sort, setSort] = useState({ key: "generated", dir: "desc" });
   const [page, setPage] = useState(1);
