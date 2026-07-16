@@ -13,11 +13,18 @@ import {
   MoreVertical,
   Download,
   ListOrdered,
+  CreditCard,
 } from "lucide-react";
 import CreateLabOrderModal from "./CreateLabOrderModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatAge } from "../../utils/age";
-import { DIAGNOSTIC_OPTIONS, formatDateCreated, loadLabOrders, FORM_TYPE_BY_TEST } from "../../utils/labOrders";
+import {
+  DIAGNOSTIC_OPTIONS,
+  formatDateCreated,
+  loadLabOrders,
+  updatePaymentStatus,
+  FORM_TYPE_BY_TEST,
+} from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
 import { ROLE_QUEUE_TYPES } from "../../utils/labQueue";
 
@@ -46,6 +53,12 @@ export default function LabOrders() {
   // Techs work results, not create orders — that's the requesting nurse's
   // job. Doctors/admins/nurses keep the ability to create.
   const canCreateOrder = !["med_tech", "xray_tech"].includes(user?.role);
+  // Only Cashier/Admin can flip payment status — matches
+  // current_user_can_manage_billing() in the SQL, which is what actually
+  // enforces this; the role check here just keeps the badge non-clickable
+  // for everyone else instead of letting them click and hit a permission
+  // error.
+  const canManageBilling = ["admin", "cashier"].includes(user?.role);
   // Med Tech / X-ray Tech only work one type of test each — don't clutter
   // their list with orders that are 100% the other specialty. A mixed
   // order (e.g. a CBC + a Chest X-Ray on the same slip) still shows up for
@@ -61,6 +74,7 @@ export default function LabOrders() {
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [busyPaymentId, setBusyPaymentId] = useState("");
 
   async function refresh() {
     const all = await loadLabOrders();
@@ -68,6 +82,22 @@ export default function LabOrders() {
       ? all.filter((o) => (o.diagnostics || []).some((d) => allowedFormTypes.includes(FORM_TYPE_BY_TEST[d])))
       : all;
     setOrders(scoped);
+  }
+
+  async function handleTogglePayment(e, order) {
+    e.stopPropagation(); // don't trigger the row's onClick (navigate to order detail)
+    if (!canManageBilling || busyPaymentId) return;
+
+    const nextStatus = order.paymentStatus === "paid" ? "unpaid" : "paid";
+    setBusyPaymentId(order.id);
+    try {
+      const updated = await updatePaymentStatus(order.id, nextStatus);
+      setOrders((list) => list.map((o) => (o.id === order.id ? updated : o)));
+    } catch (err) {
+      alert(err.message || "Couldn't update payment status.");
+    } finally {
+      setBusyPaymentId("");
+    }
   }
 
   useEffect(() => {
@@ -168,12 +198,13 @@ export default function LabOrders() {
   const rangeEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
 
   function exportCsv() {
-    const header = ["ID", "Patient", "Diagnostics", "Diagnostic Count", "Date Created"];
+    const header = ["ID", "Patient", "Diagnostics", "Diagnostic Count", "Payment Status", "Date Created"];
     const rows = filtered.map((o) => [
       o.id,
       o._fullName,
       (o.diagnostics || []).join("; "),
       o.diagnostics?.length || 0,
+      o.paymentStatus === "paid" ? "Paid" : "Unpaid",
       formatDateCreated(o.dateCreated),
     ]);
     const csv = [header, ...rows]
@@ -330,6 +361,7 @@ export default function LabOrders() {
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Patient</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Diagnostics</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Status</th>
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Payment Status</th>
                     <th className="px-4 py-3">
                       <SortHeader
                         label="Diagnostic Count"
@@ -385,6 +417,34 @@ export default function LabOrders() {
                         >
                           {getOrderStatus(o)}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 align-top whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => handleTogglePayment(e, o)}
+                          disabled={!canManageBilling || busyPaymentId === o.id}
+                          title={
+                            canManageBilling
+                              ? `Mark as ${o.paymentStatus === "paid" ? "Unpaid" : "Paid"}`
+                              : "Only Cashier/Admin can change this"
+                          }
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                            o.paymentStatus === "paid"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          } ${
+                            canManageBilling
+                              ? "cursor-pointer hover:opacity-75"
+                              : "cursor-default"
+                          } ${busyPaymentId === o.id ? "opacity-50" : ""}`}
+                        >
+                          <CreditCard size={11} />
+                          {busyPaymentId === o.id
+                            ? "Updating…"
+                            : o.paymentStatus === "paid"
+                              ? "Paid"
+                              : "Unpaid"}
+                        </button>
                       </td>
                       <td className="px-4 py-3 align-top text-center text-slate-700">
                         {o.diagnostics?.length || 0}

@@ -150,6 +150,7 @@ function rowToOrder(row) {
     diagnostics,
     testDetails,
     tests,
+    paymentStatus: row.payment_status || "unpaid",
     createdBy: row.profiles?.username || row.created_by || "—",
     dateCreated: row.date_created,
   };
@@ -210,6 +211,23 @@ export async function createLabOrder({ patientId, diagnostics, testDetails, test
   if (testsError) throw new Error(testsError.message);
 
   return findLabOrderById(orderRow.id);
+}
+
+// Toggles an order's billing status between "paid" and "unpaid". RLS
+// restricts this to Cashier/Admin server-side (see
+// current_user_can_manage_billing() in the SQL) — a nurse/tech calling
+// this will get a permission error back from Supabase, not a silent
+// no-op, so callers should surface that rather than swallow it.
+export async function updatePaymentStatus(orderId, paymentStatus) {
+  if (!["paid", "unpaid"].includes(paymentStatus)) {
+    throw new Error(`Invalid payment status "${paymentStatus}"`);
+  }
+  const { error } = await supabase
+    .from("lab_orders")
+    .update({ payment_status: paymentStatus })
+    .eq("id", orderId);
+  if (error) throw new Error(error.message);
+  return findLabOrderById(orderId);
 }
 
 // Read-modify-write a single order by id — same call shape as before
