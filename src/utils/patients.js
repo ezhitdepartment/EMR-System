@@ -123,9 +123,72 @@ function rowToPatient(row) {
   };
 }
 
+// Column map shared by patientPatchToRow below. camelCase key -> snake_case
+// column name, for every column a caller might patch.
+const PATIENT_FIELD_COLUMNS = {
+  hospitalNo: "hospital_no",
+  pin: "pin",
+  firstName: "first_name",
+  lastName: "last_name",
+  middleName: "middle_name",
+  suffix: "suffix",
+  sex: "sex",
+  dateOfBirth: "date_of_birth",
+  email: "email",
+  landline: "landline",
+  mobile: "mobile",
+  photo: "photo",
+  hasGuardian: "has_guardian",
+  address: "address",
+  region: "region",
+  regionCode: "region_code",
+  province: "province",
+  provinceCode: "province_code",
+  city: "city",
+  cityCode: "city_code",
+  barangay: "barangay",
+  zipCode: "zip_code",
+  motherName: "mother_name",
+  motherContact: "mother_contact",
+  fatherName: "father_name",
+  fatherContact: "father_contact",
+  nationality: "nationality",
+  religion: "religion",
+  maritalStatus: "marital_status",
+  emergencyName: "emergency_name",
+  emergencyAddress: "emergency_address",
+  emergencyRelationship: "emergency_relationship",
+  emergencyPhoneHome: "emergency_phone_home",
+  emergencyPhoneCell: "emergency_phone_cell",
+  konsultaEligibility: "konsulta_eligibility",
+};
+
+// Unlike patientToRow (used for inserts, where every column needs *some*
+// value), this only includes columns the caller actually passed in
+// `updates` — so a partial patch (e.g. the Consultation Form only sending
+// name/DOB/address/contacts) can never silently null out hospital_no
+// (NOT NULL — that's what was throwing the 23502 error), wipe
+// region/province/city, reset has_guardian to false, or blank the photo,
+// just because those fields happened to be absent from *this* patch.
+function patientPatchToRow(updates) {
+  const row = {};
+  for (const [camelKey, column] of Object.entries(PATIENT_FIELD_COLUMNS)) {
+    if (!Object.prototype.hasOwnProperty.call(updates, camelKey)) continue;
+    let value = updates[camelKey];
+    // date_of_birth is NOT NULL — never let an accidentally-cleared form
+    // field ("") turn into a real NULL and trip the constraint.
+    if (camelKey === "dateOfBirth" && !value) continue;
+    if (camelKey === "hasGuardian") value = !!value;
+    row[column] = value;
+  }
+  return row;
+}
+
 // Inverse of rowToPatient — only includes columns that exist in the table
 // (drops any UI-only fields like the "emergencySameAsX" checkboxes, which
-// CreatePatientModal.jsx resolves into plain values before saving).
+// CreatePatientModal.jsx resolves into plain values before saving). Used
+// for INSERTS ONLY, where every column needs a real value/default — see
+// patientPatchToRow above for updates.
 function patientToRow(p) {
   return {
     patient_id: p.patientId,
@@ -243,7 +306,7 @@ export async function createPatient(patient) {
 export async function updatePatient(patientId, updates) {
   const { data, error } = await supabase
     .from("patients")
-    .update(patientToRow({ patientId, ...updates }))
+    .update(patientPatchToRow(updates))
     .eq("patient_id", patientId)
     .select("*, patient_guardians(*)")
     .single();
