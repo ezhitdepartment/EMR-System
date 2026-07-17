@@ -986,7 +986,10 @@ export default function PatientProfile() {
       );
     } catch (err) {
       alert(`Couldn't save the consultation: ${err.message || "unknown error"}`);
-      return;
+      // Re-throw so ConsultationForm's handleSubmit (which now awaits this)
+      // knows the save failed and keeps the form open with the data intact,
+      // instead of closing it as if nothing went wrong.
+      throw err;
     }
 
     // Auto-create a Lab Order for whatever the doctor checked off in the
@@ -2016,7 +2019,22 @@ export default function PatientProfile() {
           Consultation / OPD Consultation folders in Patient Files. */}
       {showConsultation && (
         <ConsultationForm
-          initialValues={consultation || patientToConsultationSeed(patient, sharedClinical)}
+          initialValues={
+            // When opened for a specific registration (consultationEncounter
+            // set — e.g. the doctor's "Start Consultation" for the same
+            // encounter the nurse already saved a note against), pre-fill
+            // from THAT encounter's most recent entry, not just whichever
+            // consultation is globally newest for the patient — a patient
+            // with more than one visit on file would otherwise show the
+            // wrong visit's notes. Falls back to the patient-wide latest
+            // (or a blank seed) when there's no encounter-specific entry
+            // yet, or when opened generally (no encounter in play).
+            (consultationEncounter
+              ? consultationHistoryList.find((e) => e.encounterId === consultationEncounter.id)
+              : consultation) ||
+            consultation ||
+            patientToConsultationSeed(patient, sharedClinical)
+          }
           readOnly={consultationReadOnly}
           onSave={handleSaveConsultation}
           onClose={() => {
