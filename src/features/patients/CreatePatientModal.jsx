@@ -2,19 +2,9 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import AddressFields, { emptyAddressValue } from "../../components/common/AddressFields";
 import { ageInYears } from "../../utils/age";
-import { useAuth } from "../../context/AuthContext";
 import { loadPatients, createPatient, generateHospitalNo } from "../../utils/patients";
 
 const SUFFIX_OPTIONS = ["", "Jr.", "Sr.", "II", "III", "IV"];
-
-// Which "Patient Type" gets stamped on a new patient record, based on the
-// role of whoever registered them. Any role not listed here (doctor, admin,
-// med_tech, xray_tech, etc.) falls back to "OPD Patient" — the general,
-// non-emergency case.
-const PATIENT_TYPE_BY_ROLE = {
-  er_nurse: "ER Patient",
-  opd_nurse: "OPD Patient",
-};
 
 function generatePatientId() {
   const year = new Date().getFullYear();
@@ -115,7 +105,6 @@ function MobileField({ value, onChange }) {
 }
 
 export default function CreatePatientModal({ onClose, onCreated }) {
-  const { user } = useAuth();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -306,7 +295,6 @@ export default function CreatePatientModal({ onClose, onCreated }) {
       emergencyPhoneCell: form.emergencyPhoneCell.trim(),
 
       konsultaEligibility: "Not Set",
-      patientType: PATIENT_TYPE_BY_ROLE[user?.role] || "OPD Patient",
     };
 
     try {

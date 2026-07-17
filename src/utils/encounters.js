@@ -77,6 +77,17 @@ export async function loadDoctors() {
   return (data || []).map((r) => r.name);
 }
 
+// Which "Patient Type" gets stamped on a registration, based on the role
+// of whoever's creating it. Any role not listed here (doctor, admin,
+// med_tech, xray_tech, cashier, etc.) falls back to "OPD Patient" — the
+// general, non-emergency case. Decided per-registration now, not once
+// per-patient, since the same patient can be an ER case one visit and an
+// OPD case the next.
+export const PATIENT_TYPE_BY_ROLE = {
+  er_nurse: "ER Patient",
+  opd_nurse: "OPD Patient",
+};
+
 function rowToEncounter(row) {
   if (!row) return null;
   const p = row.patients || {};
@@ -93,8 +104,8 @@ function rowToEncounter(row) {
       sex: p.sex || "",
       dateOfBirth: p.date_of_birth || "",
       pin: p.pin || "",
-      patientType: p.patient_type || "",
     },
+    patientType: row.patient_type || "OPD Patient",
     appointmentDate: row.appointment_date,
     consultationType: row.consultation_type,
     reasonForVisiting: row.reason_for_visiting || "",
@@ -195,6 +206,7 @@ function encounterToRow(e) {
     payment_type: e.paymentType || "",
     photo_url: e.photo || null,
     status: e.status,
+    patient_type: e.patientType || "OPD Patient",
     nurse_consultation_done: !!e.nurseConsultationDone,
     doctor_consultation_done: !!e.doctorConsultationDone,
     migrated_status: e.migratedStatus || "Not Migrated",
@@ -204,7 +216,7 @@ function encounterToRow(e) {
 
 const SELECT_WITH_JOINS = `
   *,
-  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth, pin, patient_type ),
+  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth, pin ),
   profiles!encounters_created_by_fkey ( username ),
   encounter_triage ( *, profiles ( username ) ),
   encounter_waivers ( * )

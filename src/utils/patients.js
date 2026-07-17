@@ -110,7 +110,9 @@ function patientToRow(p) {
     emergency_phone_cell: p.emergencyPhoneCell || "",
 
     konsulta_eligibility: p.konsultaEligibility || "Not Set",
-    patient_type: p.patientType || "",
+    // patient_type is intentionally not set here anymore — it's now
+    // decided per-registration (encounters.patient_type), not once at
+    // patient creation. See PATIENT_TYPE_BY_ROLE in utils/encounters.js.
   };
 }
 

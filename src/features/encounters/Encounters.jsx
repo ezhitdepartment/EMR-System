@@ -460,15 +460,15 @@ export default function Encounters() {
                         <p className="text-xs text-slate-500 uppercase">{e.patient?.sex || "—"}</p>
                       </td>
                       <td className="px-4 py-3 align-top whitespace-nowrap">
-                        {e.patient?.patientType ? (
+                        {e.patientType ? (
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase ${
-                              e.patient.patientType === "ER Patient"
+                              e.patientType === "ER Patient"
                                 ? "bg-red-50 text-red-700"
                                 : "bg-blue-50 text-blue-700"
                             }`}
                           >
-                            {e.patient.patientType}
+                            {e.patientType}
                           </span>
                         ) : (
                           "—"

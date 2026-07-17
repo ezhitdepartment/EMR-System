@@ -28,6 +28,7 @@ import {
   STATUS,
   createEncounter,
   updateEncounter,
+  PATIENT_TYPE_BY_ROLE,
 } from "../../utils/encounters";
 import { useAuth } from "../../context/AuthContext";
 import { loadPatients, savePatientPhoto } from "../../utils/patients";
@@ -370,6 +371,13 @@ export default function CreateEncounterPage() {
         photo,
         createdBy: user?.id || null,
         status: STATUS.PENDING,
+        // Which type of nurse is doing THIS registration — an ER Nurse
+        // registration marks the patient as an ER Patient for this visit,
+        // an OPD Nurse registration marks it OPD, and every other role
+        // (doctor, admin, etc.) defaults to OPD Patient. This is decided
+        // fresh per registration, not inherited from the patient record —
+        // see PATIENT_TYPE_BY_ROLE in utils/encounters.js.
+        patientType: PATIENT_TYPE_BY_ROLE[user?.role] || "OPD Patient",
         // Flips to STATUS.COMPLETED automatically once both a nurse and a
         // doctor have saved their part of the Consultation Form for this
         // encounter — see handleSaveConsultation in pages/patient/PatientProfile.jsx.
