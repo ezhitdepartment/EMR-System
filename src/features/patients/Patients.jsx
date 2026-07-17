@@ -263,7 +263,6 @@ export default function Patients() {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Hospital No.</th>
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Patient Type</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Last Name</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">First Name</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Middle Name</th>
@@ -287,21 +286,6 @@ export default function Patients() {
                     >
                       <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
                         {p.hospitalNo || p.pin || "—"}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {p.patientType ? (
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase ${
-                              p.patientType === "ER Patient"
-                                ? "bg-red-50 text-red-700"
-                                : "bg-blue-50 text-blue-700"
-                            }`}
-                          >
-                            {p.patientType}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-800 whitespace-nowrap">
                         {p.lastName || "—"}

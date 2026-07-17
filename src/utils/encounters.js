@@ -93,6 +93,7 @@ function rowToEncounter(row) {
       sex: p.sex || "",
       dateOfBirth: p.date_of_birth || "",
       pin: p.pin || "",
+      patientType: p.patient_type || "",
     },
     appointmentDate: row.appointment_date,
     consultationType: row.consultation_type,
@@ -203,7 +204,7 @@ function encounterToRow(e) {
 
 const SELECT_WITH_JOINS = `
   *,
-  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth, pin ),
+  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth, pin, patient_type ),
   profiles!encounters_created_by_fkey ( username ),
   encounter_triage ( *, profiles ( username ) ),
   encounter_waivers ( * )

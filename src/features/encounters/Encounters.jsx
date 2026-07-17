@@ -423,6 +423,7 @@ export default function Encounters() {
                       />
                     </th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Patient</th>
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Patient Type</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Pay Type</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Type</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Doctor</th>
@@ -457,6 +458,21 @@ export default function Encounters() {
                         <p className="text-xs text-slate-500">{e.patient?.pin || e.patientId}</p>
                         <p className="text-xs text-slate-500">{formatAge(e.patient?.dateOfBirth)}</p>
                         <p className="text-xs text-slate-500 uppercase">{e.patient?.sex || "—"}</p>
+                      </td>
+                      <td className="px-4 py-3 align-top whitespace-nowrap">
+                        {e.patient?.patientType ? (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase ${
+                              e.patient.patientType === "ER Patient"
+                                ? "bg-red-50 text-red-700"
+                                : "bg-blue-50 text-blue-700"
+                            }`}
+                          >
+                            {e.patient.patientType}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{e.paymentType || "—"}</td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{e.consultationType || "—"}</td>
