@@ -56,7 +56,7 @@ import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions
 import { findEncounterById, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
 import { loadLabOrders, createLabOrder, formatDateCreated } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
-import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
+import { loadMedicinePrescriptions, createMedicinePrescription } from "../../utils/medicinePrescriptions";
 import {
   loadSharedClinical,
   saveSharedClinical,
@@ -855,16 +855,15 @@ export default function PatientProfile() {
   // a page refresh doesn't reopen it.
   useEffect(() => {
     if (location.state?.openConsultation) {
-      setShowConsultation(true);
       setConsultationReadOnly(!!location.state?.consultationReadOnly);
       setConsultationReturnTo(location.state?.returnTo || null);
       const encId = location.state?.consultationEncounterId;
-      if (encId) {
-        findEncounterById(encId).then(setConsultationEncounter);
-      } else {
-        setConsultationEncounter(null);
-      }
       navigate(location.pathname, { replace: true, state: {} });
+      (async () => {
+        await refreshConsultationHistory(patientId);
+        setConsultationEncounter(encId ? await findEncounterById(encId) : null);
+        setShowConsultation(true);
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
@@ -885,6 +884,24 @@ export default function PatientProfile() {
     setMedicinePrescriptions((await loadMedicinePrescriptions()).filter((r) => r.patientId === pid));
   }
 
+  // Pulls the freshest consultation rows for this patient from Supabase and
+  // syncs both consultationHistoryList and consultation (the globally-latest
+  // entry) from them. consultationHistoryList/consultation are normally only
+  // populated once, at mount (see the effect below) — but this page can sit
+  // open on one device/tab while a different role saves their part of the
+  // same encounter's Consultation Form on another device. Without refetching
+  // right before the form opens, initialValues would be built from whatever
+  // was on file at THIS page's mount time, silently missing anything saved
+  // elsewhere since — which is what made the doctor's side panel look empty
+  // of the nurse's intake (and vice versa). Call this immediately before
+  // setShowConsultation(true) at every entry point, not just on mount.
+  async function refreshConsultationHistory(pid) {
+    const history = await loadConsultationHistory(pid);
+    setConsultationHistoryList(history);
+    setConsultation(history[0] || null);
+    return history;
+  }
+
   useEffect(() => {
     let active = true;
     setPatient(undefined); // "still loading" sentinel — see the render guard below
@@ -897,9 +914,12 @@ export default function PatientProfile() {
       setDischarge(docs.discharge);
       setKonsultaReferral(docs.konsulta);
       setMedicalCertificate(docs.medcert);
-      const history = found ? await loadConsultationHistory(patientId) : [];
-      setConsultationHistoryList(history);
-      setConsultation(history[0] || null);
+      if (found) {
+        await refreshConsultationHistory(patientId);
+      } else {
+        setConsultationHistoryList([]);
+        setConsultation(null);
+      }
       setSharedClinical(found ? await loadSharedClinical(patientId) : {});
       setLabOrders(found ? (await loadLabOrders()).filter((o) => o.patientId === patientId) : []);
       setMedicinePrescriptions(
@@ -1017,6 +1037,41 @@ export default function PatientProfile() {
         // surface it so the doctor knows to place the order manually.
         alert(
           `The consultation was saved, but the lab order couldn't be created automatically: ${
+            err.message || "unknown error"
+          }`
+        );
+      }
+    }
+
+    // Same idea for the Medicine Prescription section: the Rx pad on the
+    // Consultation Form used to only ever save into consultations.details
+    // (fine for redisplaying it on this same consultation, but invisible
+    // to the standalone Medicine Prescriptions module, Pharmacist role, and
+    // reports — all of which read the real medicine_prescriptions /
+    // prescription_items tables). Mirror the auto-lab-order block above so
+    // a real prescription record is created too.
+    const rxItems = (formData.prescriptionItems || []).filter((it) => (it.medicineName || "").trim());
+    if (user?.role === "doctor" && rxItems.length > 0) {
+      try {
+        const prescribedBy =
+          [user?.prefix, user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+          user?.username ||
+          "";
+        await createMedicinePrescription({
+          patientId,
+          encounterId: consultationEncounter?.id ?? null,
+          prescribedBy,
+          createdBy: user?.id ?? null,
+          items: rxItems.map((it) => ({
+            medicineName: it.medicineName,
+            quantity: Number(it.quantity) || 1,
+            instructions: it.instructions || "",
+          })),
+        });
+        refreshMedicinePrescriptions(patientId);
+      } catch (err) {
+        alert(
+          `The consultation was saved, but the medicine prescription couldn't be recorded automatically: ${
             err.message || "unknown error"
           }`
         );
@@ -1683,10 +1738,11 @@ export default function PatientProfile() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     setConsultationReadOnly(false);
                     setConsultationReturnTo(null);
                     setConsultationEncounter(null);
+                    await refreshConsultationHistory(patientId);
                     setShowConsultation(true);
                   }}
                   title="Add consultation"
@@ -1811,10 +1867,11 @@ export default function PatientProfile() {
                           <p className="text-xs text-slate-400">No {emptyCopy} recorded.</p>
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               setConsultationReadOnly(false);
                               setConsultationReturnTo(null);
                               setConsultationEncounter(null);
+                              await refreshConsultationHistory(patientId);
                               setShowConsultation(true);
                             }}
                             className="text-xs font-semibold text-teal-700 hover:text-teal-800"
