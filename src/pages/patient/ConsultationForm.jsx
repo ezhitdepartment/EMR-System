@@ -17,6 +17,9 @@ import {
   FileText,
   Paperclip,
   Loader2,
+  ClipboardCheck,
+  Stethoscope,
+  Pill,
 } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import AddressFields from "../../components/common/AddressFields";
@@ -458,7 +461,10 @@ export const initialConsultationForm = {
 // Doctor's reference panel — everything the nurse captured during intake
 // and triage, laid out beside the doctor's own (much shorter) form so
 // nothing they need is hidden behind a section they can't open. Only
-// rendered for the doctor role; nurses/admin already see the full form.
+// rendered for the doctor role — canEdit() hides NURSE_SECTIONS from
+// doctors (and DOCTOR_SECTIONS from nurses, see
+// DoctorConsultationReferencePanel below) the same way, so admin is the
+// only role that ever sees every section inline in the main form itself.
 // ─────────────────────────────────────────────────────────────────────────
 function RefCard({ title, icon: Icon, defaultOpen = false, children, empty }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -773,6 +779,152 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Nurse's reference panel — the doctor's clinical assessment and plan
+// (Diagnosis, Disposition, Diagnostics Ordered, Medicine Prescription),
+// laid out the same way ConsultationReferencePanel above shows the nurse's
+// intake data to the doctor. Only rendered for nurse roles; admin already
+// sees the full form (every section, doctor's included).
+//
+// Reads straight off the same shared `form` state the rest of the modal
+// uses — that's already seeded from the patient's latest saved
+// consultation entry (see initialValues in PatientProfile.jsx), so once a
+// doctor has saved at least one consultation for this patient, their
+// fields show up here automatically, with no separate fetch needed.
+// ─────────────────────────────────────────────────────────────────────────
+function DoctorConsultationReferencePanel({ patient, form }) {
+  const fullName = [patient.firstName, patient.middleName, patient.lastName]
+    .filter(Boolean)
+    .join(" ");
+  const hasDoctorRecord =
+    form.diagnosis ||
+    form.disposition ||
+    (form.icdDiagnoses || []).length > 0 ||
+    (form.diagnosticsSelected || []).length > 0 ||
+    (form.prescriptionItems || []).length > 0;
+
+  return (
+    <aside className="flex flex-col gap-3 lg:sticky lg:top-8">
+      {/* Patient summary — same header as the doctor's panel, so both
+          sides of this form feel like one continuous system. */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+        <div className="flex items-center gap-3">
+          {patient.photo ? (
+            <img
+              src={patient.photo}
+              alt={fullName}
+              className="w-12 h-12 rounded-full object-cover border border-slate-200 shrink-0"
+            />
+          ) : (
+            <span className="flex items-center justify-center w-12 h-12 rounded-full bg-teal-700 text-white text-sm font-bold shrink-0">
+              {(patient.firstName?.[0] || "") + (patient.lastName?.[0] || "") || <User size={16} />}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-slate-800 truncate">{fullName || "—"}</p>
+            <p className="text-xs text-slate-500">
+              {patient.hospitalNo || patient.pin || "—"} · {formatAge(patient.dateOfBirth)} ·{" "}
+              {(patient.sex || "—").toUpperCase()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 px-1 -mb-1">
+        Recorded by the physician
+      </p>
+
+      {!hasDoctorRecord && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+          <p className="text-xs text-slate-400 italic">
+            No physician consultation on file for this patient yet — this fills in automatically once a
+            doctor saves their part of the Consultation Form.
+          </p>
+        </div>
+      )}
+
+      {/* Diagnosis */}
+      <RefCard
+        title="Diagnosis"
+        icon={ClipboardCheck}
+        defaultOpen
+        empty={!form.diagnosis && (form.icdDiagnoses || []).length === 0 ? "No diagnosis recorded yet." : null}
+      >
+        {(form.icdDiagnoses || []).length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {form.icdDiagnoses.map((d) => (
+              <span
+                key={d.code}
+                className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-semibold px-2 py-1"
+              >
+                {d.code} — {d.name}
+              </span>
+            ))}
+          </div>
+        )}
+        {form.diagnosis && <p className="whitespace-pre-wrap">{form.diagnosis}</p>}
+      </RefCard>
+
+      {/* Disposition */}
+      <RefCard
+        title="Disposition"
+        icon={Stethoscope}
+        defaultOpen
+        empty={!form.disposition ? "No disposition recorded yet." : null}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <RefRow label="Disposition" value={form.disposition} />
+          <RefRow label="Notes" value={form.dispositionNotes} />
+        </div>
+      </RefCard>
+
+      {/* Diagnostics / Tests Ordered — same checklist as Lab Orders, so a
+          nurse can see at a glance what the doctor wants done without
+          leaving this form. */}
+      <RefCard
+        title="Diagnostics Ordered"
+        icon={FlaskConical}
+        empty={(form.diagnosticsSelected || []).length === 0 && !form.diagnosticsNotes ? "No diagnostics ordered yet." : null}
+      >
+        {(form.diagnosticsSelected || []).length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {form.diagnosticsSelected.map((name) => (
+              <span
+                key={name}
+                className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-semibold px-2 py-1"
+              >
+                {name}
+                {form.diagnosticsTestDetails?.[name] ? ` — ${form.diagnosticsTestDetails[name]}` : ""}
+              </span>
+            ))}
+          </div>
+        )}
+        {form.diagnosticsNotes && (
+          <p className="text-xs text-slate-500 whitespace-pre-wrap">{form.diagnosticsNotes}</p>
+        )}
+      </RefCard>
+
+      {/* Medicine Prescription */}
+      <RefCard
+        title="Medicine Prescription"
+        icon={Pill}
+        empty={(form.prescriptionItems || []).length === 0 ? "No medicine prescribed yet." : null}
+      >
+        <div className="flex flex-col divide-y divide-slate-100">
+          {(form.prescriptionItems || []).map((item) => (
+            <div key={item.id} className="py-2">
+              <p className="font-medium text-slate-800">
+                {item.medicineName || "—"} {item.quantity ? `× ${item.quantity}` : ""}
+              </p>
+              {item.instructions && <p className="text-xs text-slate-400">{item.instructions}</p>}
+            </div>
+          ))}
+        </div>
+      </RefCard>
+    </aside>
+  );
+}
+
 export default function ConsultationForm({
   initialValues,
   readOnly = false,
@@ -899,7 +1051,7 @@ export default function ConsultationForm({
 
       <div
         className={`mx-auto my-8 px-4 items-start ${
-          isDoctor
+          isDoctor || isNurse
             ? "max-w-7xl grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6"
             : "max-w-5xl"
         }`}
@@ -1916,6 +2068,7 @@ export default function ConsultationForm({
       {isDoctor && (
         <ConsultationReferencePanel patient={patient} encounter={encounter} form={form} />
       )}
+      {isNurse && <DoctorConsultationReferencePanel patient={patient} form={form} />}
       </div>
     </div>
   );
