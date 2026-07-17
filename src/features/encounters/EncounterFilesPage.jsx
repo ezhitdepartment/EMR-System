@@ -18,12 +18,7 @@ import {
 import { formatAge } from "../../utils/age";
 import WaiverModal from "./WaiverModal";
 import { updateEncounter } from "../../utils/encounters";
-import {
-  loadEmr,
-  loadDischarge,
-  loadKonsultaReferral,
-  loadMedicalCertificate,
-} from "../../pages/patient/PatientProfile";
+import { loadAllPatientDocuments } from "../../utils/patientDocuments";
 
 export default function EncounterFilesPage() {
   const { encounterId } = useParams();
@@ -49,12 +44,19 @@ export default function EncounterFilesPage() {
   // that tab to actually view/edit/download.
   useEffect(() => {
     if (!encounter?.patientId) return;
-    setDocuments({
-      emr: loadEmr(encounter.patientId),
-      discharge: loadDischarge(encounter.patientId),
-      konsultaReferral: loadKonsultaReferral(encounter.patientId),
-      medicalCertificate: loadMedicalCertificate(encounter.patientId),
+    let active = true;
+    loadAllPatientDocuments(encounter.patientId).then((docs) => {
+      if (!active) return;
+      setDocuments({
+        emr: docs.emr,
+        discharge: docs.discharge,
+        konsultaReferral: docs.konsulta,
+        medicalCertificate: docs.medcert,
+      });
     });
+    return () => {
+      active = false;
+    };
   }, [encounter?.patientId]);
 
   async function handleSaveWaiver(waiver) {

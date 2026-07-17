@@ -65,42 +65,13 @@ import {
 } from "./sharedClinicalFields";
 import { findPatientById, updatePatient, savePatientPhoto } from "../../utils/patients";
 import { loadConsultationHistory, saveConsultationEntry } from "../../utils/consultations";
-
-export function loadEmr(patientId) {
-  try {
-    const all = JSON.parse(localStorage.getItem("patientEMR") || "{}");
-    return all[patientId] || null;
-  } catch {
-    return null;
-  }
-}
-
-export function loadDischarge(patientId) {
-  try {
-    const all = JSON.parse(localStorage.getItem("patientDischarge") || "{}");
-    return all[patientId] || null;
-  } catch {
-    return null;
-  }
-}
-
-export function loadKonsultaReferral(patientId) {
-  try {
-    const all = JSON.parse(localStorage.getItem("patientKonsultaReferral") || "{}");
-    return all[patientId] || null;
-  } catch {
-    return null;
-  }
-}
-
-export function loadMedicalCertificate(patientId) {
-  try {
-    const all = JSON.parse(localStorage.getItem("patientMedicalCertificate") || "{}");
-    return all[patientId] || null;
-  } catch {
-    return null;
-  }
-}
+import {
+  loadAllPatientDocuments,
+  saveEmr,
+  saveDischarge,
+  saveKonsultaReferral,
+  saveMedicalCertificate,
+} from "../../utils/patientDocuments";
 
 // loadConsultationHistory / saveConsultationEntry now live in
 // utils/consultations.js (imported above) so the Registration table's
@@ -920,14 +891,16 @@ export default function PatientProfile() {
     findPatientById(patientId).then(async (found) => {
       if (!active) return;
       setPatient(found);
-      setEmr(found ? loadEmr(patientId) : null);
-      setDischarge(found ? loadDischarge(patientId) : null);
-      setKonsultaReferral(found ? loadKonsultaReferral(patientId) : null);
-      setMedicalCertificate(found ? loadMedicalCertificate(patientId) : null);
+      const docs = found ? await loadAllPatientDocuments(patientId) : { emr: null, discharge: null, konsulta: null, medcert: null };
+      if (!active) return;
+      setEmr(docs.emr);
+      setDischarge(docs.discharge);
+      setKonsultaReferral(docs.konsulta);
+      setMedicalCertificate(docs.medcert);
       const history = found ? await loadConsultationHistory(patientId) : [];
       setConsultationHistoryList(history);
       setConsultation(history[0] || null);
-      setSharedClinical(found ? loadSharedClinical(patientId) : {});
+      setSharedClinical(found ? await loadSharedClinical(patientId) : {});
       setLabOrders(found ? (await loadLabOrders()).filter((o) => o.patientId === patientId) : []);
       setMedicinePrescriptions(
         found ? (await loadMedicinePrescriptions()).filter((r) => r.patientId === patientId) : []
@@ -967,44 +940,29 @@ export default function PatientProfile() {
   // in the other forms' already-saved records — so filling one form in
   // fills the others in right away, without waiting for someone to reopen
   // them. A field some other form already has a value for is left alone.
-  function syncSharedClinical(formKey, formData) {
+  async function syncSharedClinical(formKey, formData) {
     const contributed = extractSharedFields(formData, formKey);
     if (Object.keys(contributed).length === 0) return;
-    const merged = saveSharedClinical(patientId, contributed);
+    const merged = await saveSharedClinical(patientId, contributed);
     setSharedClinical(merged);
 
     const siblings = [
-      ["emr", emr, setEmr, "patientEMR"],
-      ["discharge", discharge, setDischarge, "patientDischarge"],
-      ["konsulta", konsultaReferral, setKonsultaReferral, "patientKonsultaReferral"],
-      ["medcert", medicalCertificate, setMedicalCertificate, "patientMedicalCertificate"],
+      ["emr", emr, setEmr, saveEmr],
+      ["discharge", discharge, setDischarge, saveDischarge],
+      ["konsulta", konsultaReferral, setKonsultaReferral, saveKonsultaReferral],
+      ["medcert", medicalCertificate, setMedicalCertificate, saveMedicalCertificate],
     ];
-    for (const [key, record, setter, storageKey] of siblings) {
+    for (const [key, record, setter, saveFn] of siblings) {
       if (key === formKey || !record) continue;
       const { patched, changed } = fillBlanksFromShared(record, key, merged);
       if (!changed) continue;
-      let all = {};
-      try {
-        all = JSON.parse(localStorage.getItem(storageKey) || "{}");
-      } catch {
-        all = {};
-      }
-      all[patientId] = patched;
-      localStorage.setItem(storageKey, JSON.stringify(all));
-      setter(patched);
+      const saved = await saveFn(patientId, patched, user?.id ?? null);
+      setter(saved);
     }
   }
 
-  function handleSaveEmr(formData) {
-    const updatedEmr = { ...formData, updatedAt: new Date().toISOString() };
-    let allEmr = {};
-    try {
-      allEmr = JSON.parse(localStorage.getItem("patientEMR") || "{}");
-    } catch {
-      allEmr = {};
-    }
-    allEmr[patientId] = updatedEmr;
-    localStorage.setItem("patientEMR", JSON.stringify(allEmr));
+  async function handleSaveEmr(formData) {
+    const updatedEmr = await saveEmr(patientId, formData, user?.id ?? null);
     setEmr(updatedEmr);
     syncSharedClinical("emr", formData);
   }
@@ -1134,44 +1092,20 @@ export default function PatientProfile() {
     }
   }
 
-  function handleSaveDischarge(formData) {
-    const updated = { ...formData, updatedAt: new Date().toISOString() };
-    let all = {};
-    try {
-      all = JSON.parse(localStorage.getItem("patientDischarge") || "{}");
-    } catch {
-      all = {};
-    }
-    all[patientId] = updated;
-    localStorage.setItem("patientDischarge", JSON.stringify(all));
+  async function handleSaveDischarge(formData) {
+    const updated = await saveDischarge(patientId, formData, user?.id ?? null);
     setDischarge(updated);
     syncSharedClinical("discharge", formData);
   }
 
-  function handleSaveKonsultaReferral(formData) {
-    const updated = { ...formData, updatedAt: new Date().toISOString() };
-    let all = {};
-    try {
-      all = JSON.parse(localStorage.getItem("patientKonsultaReferral") || "{}");
-    } catch {
-      all = {};
-    }
-    all[patientId] = updated;
-    localStorage.setItem("patientKonsultaReferral", JSON.stringify(all));
+  async function handleSaveKonsultaReferral(formData) {
+    const updated = await saveKonsultaReferral(patientId, formData, user?.id ?? null);
     setKonsultaReferral(updated);
     syncSharedClinical("konsulta", formData);
   }
 
-  function handleSaveMedicalCertificate(formData) {
-    const updated = { ...formData, updatedAt: new Date().toISOString() };
-    let all = {};
-    try {
-      all = JSON.parse(localStorage.getItem("patientMedicalCertificate") || "{}");
-    } catch {
-      all = {};
-    }
-    all[patientId] = updated;
-    localStorage.setItem("patientMedicalCertificate", JSON.stringify(all));
+  async function handleSaveMedicalCertificate(formData) {
+    const updated = await saveMedicalCertificate(patientId, formData, user?.id ?? null);
     setMedicalCertificate(updated);
     syncSharedClinical("medcert", formData);
   }

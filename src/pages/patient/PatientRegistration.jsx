@@ -136,10 +136,13 @@ export default function PatientRegistration({
     }
 
     setSubmitted(true);
-    // Save to localStorage for now — replace with Supabase insert later
-    const records = JSON.parse(localStorage.getItem("patientRecords") || "[]");
-    records.push({ ...form, submittedAt: new Date().toISOString() });
-    localStorage.setItem("patientRecords", JSON.stringify(records));
+    // NOTE: this "create" path (mode !== "edit") isn't wired up to any
+    // route today — PatientProfile.jsx only ever mounts this component
+    // with mode="edit" as the EMR editor, whose onSave hands the form back
+    // to the caller (see the branch above). If a standalone "create a
+    // fresh EMR record" flow gets built later, persist `form` via
+    // src/utils/patientDocuments.js's saveEmr() here instead of writing to
+    // localStorage.
     // Open the PDF preview instead of jumping straight to a download
     setShowPreview(true);
   }

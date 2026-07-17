@@ -49,25 +49,36 @@ export const SHARED_FIELD_MAP = {
   },
 };
 
-export function loadSharedClinical(patientId) {
-  try {
-    const all = JSON.parse(localStorage.getItem("patientSharedClinical") || "{}");
-    return all[patientId] || {};
-  } catch {
+// Backed by Supabase's `patients.shared_clinical` jsonb column (see
+// supabase_migration_clinical_documents.sql) instead of the old
+// `patientSharedClinical` localStorage blob — genuinely 1:1 with a
+// patient, so it rides along on the same row rather than its own table.
+import { supabase } from "../../lib/supabaseClient";
+
+export async function loadSharedClinical(patientId) {
+  if (!patientId) return {};
+  const { data, error } = await supabase
+    .from("patients")
+    .select("shared_clinical")
+    .eq("patient_id", patientId)
+    .maybeSingle();
+  if (error) {
+    console.error("Loading shared clinical fields failed:", error.message);
     return {};
   }
+  return data?.shared_clinical || {};
 }
 
-export function saveSharedClinical(patientId, patch) {
-  let all = {};
-  try {
-    all = JSON.parse(localStorage.getItem("patientSharedClinical") || "{}");
-  } catch {
-    all = {};
+export async function saveSharedClinical(patientId, patch) {
+  const current = await loadSharedClinical(patientId);
+  const merged = { ...current, ...patch };
+  const { error } = await supabase
+    .from("patients")
+    .update({ shared_clinical: merged })
+    .eq("patient_id", patientId);
+  if (error) {
+    console.error("Saving shared clinical fields failed:", error.message);
   }
-  const merged = { ...(all[patientId] || {}), ...patch };
-  all[patientId] = merged;
-  localStorage.setItem("patientSharedClinical", JSON.stringify(all));
   return merged;
 }
 
