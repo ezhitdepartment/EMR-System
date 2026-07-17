@@ -13,8 +13,68 @@
 
 import { supabase } from "../lib/supabaseClient";
 
+// patient_guardians is a separate 1:1 table (PK = FK = patients.id), not a
+// column on `patients` — see rowToGuardian/guardianToRow below. Supabase
+// returns it embedded as `row.patient_guardians` (an object, since the FK
+// column is also that table's primary key, making the relation to-one)
+// whenever the caller's .select() asks for it.
+function rowToGuardian(row) {
+  if (!row) return {};
+  return {
+    firstName: row.first_name || "",
+    lastName: row.last_name || "",
+    middleName: row.middle_name || "",
+    suffix: row.suffix || "",
+    sex: row.sex || "",
+    dateOfBirth: row.date_of_birth || "",
+    pin: row.pin || "",
+    landline: row.landline || "",
+    mobile: row.mobile || "",
+  };
+}
+
+function guardianToRow(patientUuid, guardian) {
+  return {
+    patient_id: patientUuid,
+    first_name: guardian.firstName || "",
+    last_name: guardian.lastName || "",
+    middle_name: guardian.middleName || "",
+    suffix: guardian.suffix || "",
+    // enum column — send null instead of "" or Postgres rejects it with a
+    // 400 ("invalid input value for enum patient_sex").
+    sex: guardian.sex || null,
+    date_of_birth: guardian.dateOfBirth || null,
+    pin: guardian.pin || "",
+    landline: guardian.landline || "",
+    mobile: guardian.mobile || "",
+  };
+}
+
+// Upserts (or clears) the guardian row for one patient. Kept out of
+// patientToRow/rowToPatient entirely — those two only ever touch actual
+// `patients` columns now, so a stray extra key can never trigger a
+// PostgREST "column not found" 400 again.
+async function upsertGuardian(patientUuid, guardian) {
+  const { data, error } = await supabase
+    .from("patient_guardians")
+    .upsert(guardianToRow(patientUuid, guardian))
+    .select()
+    .single();
+  if (error) {
+    console.error("Saving guardian failed:", error.message);
+    return {};
+  }
+  return rowToGuardian(data);
+}
+
+async function deleteGuardian(patientUuid) {
+  const { error } = await supabase.from("patient_guardians").delete().eq("patient_id", patientUuid);
+  if (error) console.error("Removing guardian failed:", error.message);
+}
+
 function rowToPatient(row) {
   if (!row) return null;
+  const guardianRow = Array.isArray(row.patient_guardians) ? row.patient_guardians[0] : row.patient_guardians;
   return {
     patientId: row.patient_id,
     hospitalNo: row.hospital_no || "",
@@ -31,7 +91,7 @@ function rowToPatient(row) {
     photo: row.photo || "",
 
     hasGuardian: row.has_guardian || false,
-    guardian: row.guardian || {},
+    guardian: rowToGuardian(guardianRow),
 
     address: row.address || "",
     region: row.region || "",
@@ -83,7 +143,6 @@ function patientToRow(p) {
     photo: p.photo || null,
 
     has_guardian: !!p.hasGuardian,
-    guardian: p.guardian || {},
 
     address: p.address || "",
     region: p.region || "",
@@ -138,7 +197,7 @@ export async function getPatientUuid(patientId) {
 export async function loadPatients() {
   const { data, error } = await supabase
     .from("patients")
-    .select("*")
+    .select("*, patient_guardians(*)")
     .order("created_at", { ascending: false });
   if (error) {
     console.error("loadPatients failed:", error.message);
@@ -150,7 +209,7 @@ export async function loadPatients() {
 export async function findPatientById(patientId) {
   const { data, error } = await supabase
     .from("patients")
-    .select("*")
+    .select("*, patient_guardians(*)")
     .eq("patient_id", patientId)
     .single();
   if (error) return null;
@@ -167,7 +226,15 @@ export async function createPatient(patient) {
     .select()
     .single();
   if (error) throw new Error(error.message);
-  return rowToPatient(data);
+
+  // patients.id (the uuid PK) only exists once the insert above returns —
+  // that's why guardian is written as a second, separate statement rather
+  // than folded into the same insert.
+  const result = rowToPatient(data);
+  if (patient.hasGuardian && patient.guardian) {
+    result.guardian = await upsertGuardian(data.id, patient.guardian);
+  }
+  return result;
 }
 
 // Read-modify-write a single patient by id. `updater` receives the current
@@ -178,10 +245,22 @@ export async function updatePatient(patientId, updates) {
     .from("patients")
     .update(patientToRow({ patientId, ...updates }))
     .eq("patient_id", patientId)
-    .select()
+    .select("*, patient_guardians(*)")
     .single();
   if (error) throw new Error(error.message);
-  return rowToPatient(data);
+
+  const result = rowToPatient(data);
+  // Most callers (e.g. the Consultation Form's patient-sync patch) never
+  // mention guardian at all — leave whatever's already in patient_guardians
+  // untouched in that case (rowToPatient above already reflects it via the
+  // embedded select). Only write/clear it when this patch explicitly says to.
+  if (updates.hasGuardian === false) {
+    await deleteGuardian(data.id);
+    result.guardian = {};
+  } else if (updates.hasGuardian && updates.guardian) {
+    result.guardian = await upsertGuardian(data.id, updates.guardian);
+  }
+  return result;
 }
 
 // Updates just the `photo` field for one patient and returns the updated
