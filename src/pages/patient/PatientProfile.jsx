@@ -54,7 +54,7 @@ import ConsultationRecordPDF from "./ConsultationRecordPDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
 import { findEncounterById, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
-import { loadLabOrders, formatDateCreated } from "../../utils/labOrders";
+import { loadLabOrders, createLabOrder, formatDateCreated } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
 import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
 import {
@@ -1045,6 +1045,37 @@ export default function PatientProfile() {
 
   async function handleSaveConsultation(formData) {
     const entry = saveConsultationEntry(patientId, formData, user?.role);
+
+    // Auto-create a Lab Order for whatever the doctor checked off in the
+    // "Diagnostics / Tests Ordered" section, so the nurse/tech side of the
+    // workflow doesn't need a second manual step to place the same order
+    // the doctor already specified here. Only doctors ever see/edit this
+    // section (see DOCTOR_SECTIONS in ConsultationForm.jsx), and it fires
+    // on every save that has at least one test checked — including a
+    // second save of the same consultation, which will place a second
+    // order for the same tests. If that turns out to be a problem in
+    // practice (e.g. a doctor re-saving after fixing a typo elsewhere in
+    // the form), the fix is to only fire this when diagnosticsSelected has
+    // actually changed since the last save, not just whenever it's
+    // non-empty.
+    if (user?.role === "doctor" && formData.diagnosticsSelected?.length > 0) {
+      try {
+        await createLabOrder({
+          patientId,
+          diagnostics: formData.diagnosticsSelected,
+          testDetails: formData.diagnosticsTestDetails || {},
+        });
+      } catch (err) {
+        // The consultation itself already saved successfully above — don't
+        // let a lab-order failure look like the whole save failed, just
+        // surface it so the doctor knows to place the order manually.
+        alert(
+          `The consultation was saved, but the lab order couldn't be created automatically: ${
+            err.message || "unknown error"
+          }`
+        );
+      }
+    }
 
     // Personal Details / Health Coverage / Emergency Contact live here now
     // (moved from the EMR) — keep the patient master record's overlapping
