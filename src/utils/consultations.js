@@ -115,14 +115,24 @@ export async function saveConsultationEntry(patientId, formData, authorRole, enc
   return rowToEntry(data);
 }
 
-// "Hypertension, Stage 2" — or, if the doctor picked ICD-10 codes instead
-// of (or in addition to) typing free text, those codes/names joined
-// together. Whichever the doctor actually filled in on the Consultation
-// Form's Diagnosis section.
+// "Common cold (J00)" — the free-text diagnosis with whatever ICD-10
+// code(s) the doctor picked appended in parentheses. If only one of the
+// two was filled in, that one alone is returned (no dangling "()" or
+// stray comma). Whichever the doctor actually filled in on the
+// Consultation Form's Diagnosis section.
 export function formatDiagnosisText(entry) {
   if (!entry) return "";
-  if (entry.diagnosis) return entry.diagnosis;
-  if (Array.isArray(entry.icdDiagnoses) && entry.icdDiagnoses.length > 0) {
+
+  const text = (entry.diagnosis || "").trim();
+  const codes = Array.isArray(entry.icdDiagnoses)
+    ? entry.icdDiagnoses.map((d) => d.code).filter(Boolean)
+    : [];
+
+  if (text && codes.length > 0) return `${text} (${codes.join(", ")})`;
+  if (text) return text;
+  if (codes.length > 0) {
+    // No free text at all — fall back to the fuller "code — name" form
+    // so the column still reads clearly on its own.
     return entry.icdDiagnoses.map((d) => (d.name ? `${d.code} — ${d.name}` : d.code)).join(", ");
   }
   return "";
