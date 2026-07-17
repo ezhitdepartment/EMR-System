@@ -212,9 +212,8 @@ export default function ViewLabOrderPage() {
   // enforces this.
   const canManageBilling = ["admin", "cashier"].includes(user?.role);
 
-  async function handleTogglePayment() {
+  async function handlePaymentStatusChange(nextStatus) {
     if (!canManageBilling || busyPayment || !order) return;
-    const nextStatus = order.paymentStatus === "paid" ? "unpaid" : "paid";
     setBusyPayment(true);
     try {
       const updated = await updatePaymentStatus(order.id, nextStatus);
@@ -403,26 +402,14 @@ export default function ViewLabOrderPage() {
               {orderStatus}
             </span>
             <span
-              role={canManageBilling ? "button" : undefined}
-              onClick={(e) => {
-                e.stopPropagation(); // don't collapse/expand the summary card
-                handleTogglePayment();
-              }}
-              title={
-                canManageBilling
-                  ? `Mark as ${order.paymentStatus === "paid" ? "Unpaid" : "Paid"}`
-                  : "Only Cashier/Admin can change this"
-              }
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                 order.paymentStatus === "paid"
                   ? "bg-emerald-100 text-emerald-700"
                   : "bg-amber-100 text-amber-700"
-              } ${canManageBilling ? "cursor-pointer hover:opacity-75" : "cursor-default"} ${
-                busyPayment ? "opacity-50" : ""
               }`}
             >
               <CreditCard size={11} />
-              {busyPayment ? "Updating…" : order.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+              {order.paymentStatus === "paid" ? "Paid" : "Unpaid"}
             </span>
           </span>
           {summaryOpen ? (
@@ -527,6 +514,33 @@ export default function ViewLabOrderPage() {
                   {readOnlyReason}
                 </div>
               )}
+
+              {/* Payment Status — deliberately OUTSIDE the fieldset below:
+                  that fieldset is disabled based on canEditResults (lab
+                  results permission), but Cashier can't edit results at
+                  all (canEditResults is false for them) while still
+                  needing to use this control — nesting it inside a
+                  disabled <fieldset> would force it disabled too,
+                  regardless of its own disabled prop. */}
+              <div className="rounded-lg border border-slate-200 p-4">
+                <label className="block max-w-xs">
+                  <span className="block text-xs font-medium text-slate-500 mb-1">
+                    Payment Status
+                  </span>
+                  <select
+                    value={order.paymentStatus === "paid" ? "paid" : "unpaid"}
+                    onChange={(e) => handlePaymentStatusChange(e.target.value)}
+                    disabled={!canManageBilling || busyPayment}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600 disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="unpaid">Unpaid</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </label>
+                {!canManageBilling && (
+                  <p className="mt-1.5 text-xs text-slate-400">Only Cashier/Admin can change this.</p>
+                )}
+              </div>
 
               <fieldset disabled={!canEditResults} className="contents">
 
