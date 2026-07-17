@@ -64,6 +64,7 @@ import {
   fillBlanksFromShared,
 } from "./sharedClinicalFields";
 import { findPatientById, updatePatient, savePatientPhoto } from "../../utils/patients";
+import { loadConsultationHistory, saveConsultationEntry } from "../../utils/consultations";
 
 export function loadEmr(patientId) {
   try {
@@ -101,46 +102,9 @@ export function loadMedicalCertificate(patientId) {
   }
 }
 
-// Every save appends a new entry instead of overwriting — that's what lets
-// Patient Files show a real history (ER Consultation / OPD Consultation /
-// Medical Record) instead of just the single latest save. Entries are
-// tagged with who authored them (`authorRole`) so each folder can filter
-// to just its own kind of consultation.
-function loadConsultationHistory(patientId) {
-  try {
-    const all = JSON.parse(localStorage.getItem("patientConsultation") || "{}");
-    const raw = all[patientId];
-    if (!raw) return [];
-    // Backward-compat: earlier versions stored one overwritten object per
-    // patient instead of an array — treat that as a one-entry history.
-    const list = Array.isArray(raw) ? raw : [raw];
-    return [...list].sort(
-      (a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0)
-    );
-  } catch {
-    return [];
-  }
-}
-
-function saveConsultationEntry(patientId, formData, authorRole) {
-  let all = {};
-  try {
-    all = JSON.parse(localStorage.getItem("patientConsultation") || "{}");
-  } catch {
-    all = {};
-  }
-  const raw = all[patientId];
-  const existingList = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  const entry = {
-    ...formData,
-    id: `CONS-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    createdAt: new Date().toISOString(),
-    authorRole,
-  };
-  all[patientId] = [...existingList, entry];
-  localStorage.setItem("patientConsultation", JSON.stringify(all));
-  return entry;
-}
+// loadConsultationHistory / saveConsultationEntry now live in
+// utils/consultations.js (imported above) so the Registration table's
+// Diagnosis column can read the same data — see loadDiagnosesByEncounter().
 
 // "DIMAS, ROBETH O." — used to name downloaded files after the patient.
 function patientFileLabel(patient) {
@@ -875,6 +839,7 @@ export default function PatientProfile() {
   const [medicalCertificate, setMedicalCertificate] = useState(null);
   const [showMedicalCertificate, setShowMedicalCertificate] = useState(false);
   const [consultation, setConsultation] = useState(null);
+  const [consultationHistoryList, setConsultationHistoryList] = useState([]);
   const [showConsultation, setShowConsultation] = useState(false);
   const [consultationReturnTo, setConsultationReturnTo] = useState(null);
   const [consultationReadOnly, setConsultationReadOnly] = useState(false);
@@ -959,7 +924,9 @@ export default function PatientProfile() {
       setDischarge(found ? loadDischarge(patientId) : null);
       setKonsultaReferral(found ? loadKonsultaReferral(patientId) : null);
       setMedicalCertificate(found ? loadMedicalCertificate(patientId) : null);
-      setConsultation(found ? loadConsultationHistory(patientId)[0] || null : null);
+      const history = found ? await loadConsultationHistory(patientId) : [];
+      setConsultationHistoryList(history);
+      setConsultation(history[0] || null);
       setSharedClinical(found ? loadSharedClinical(patientId) : {});
       setLabOrders(found ? (await loadLabOrders()).filter((o) => o.patientId === patientId) : []);
       setMedicinePrescriptions(
@@ -1008,7 +975,6 @@ export default function PatientProfile() {
 
     const siblings = [
       ["emr", emr, setEmr, "patientEMR"],
-      ["consultation", consultation, setConsultation, "patientConsultation"],
       ["discharge", discharge, setDischarge, "patientDischarge"],
       ["konsulta", konsultaReferral, setKonsultaReferral, "patientKonsultaReferral"],
       ["medcert", medicalCertificate, setMedicalCertificate, "patientMedicalCertificate"],
@@ -1044,7 +1010,26 @@ export default function PatientProfile() {
   }
 
   async function handleSaveConsultation(formData) {
-    const entry = saveConsultationEntry(patientId, formData, user?.role);
+    // consultationEncounter is only set when this form was opened from a
+    // specific registration (Registration's "Start Consultation" button) —
+    // see the effect above that resolves consultationEncounterId. Saves
+    // made from the general Patient Profile aren't tied to a registration,
+    // so they simply won't show up in the Registration table's Diagnosis
+    // column, same as they don't count toward that registration's
+    // auto-completion below.
+    let entry;
+    try {
+      entry = await saveConsultationEntry(
+        patientId,
+        formData,
+        user?.role,
+        consultationEncounter?.id ?? null,
+        user?.id ?? null
+      );
+    } catch (err) {
+      alert(`Couldn't save the consultation: ${err.message || "unknown error"}`);
+      return;
+    }
 
     // Auto-create a Lab Order for whatever the doctor checked off in the
     // "Diagnostics / Tests Ordered" section, so the nurse/tech side of the
@@ -1116,6 +1101,7 @@ export default function PatientProfile() {
 
     setPatient(updatedPatient);
     setConsultation(entry);
+    setConsultationHistoryList((list) => [entry, ...list]);
     syncSharedClinical("consultation", formData);
 
     // Registration auto-completion: once both a nurse and a doctor have
@@ -2022,7 +2008,7 @@ export default function PatientProfile() {
                 discharge={discharge}
                 konsultaReferral={konsultaReferral}
                 medicalCertificate={medicalCertificate}
-                consultationHistory={loadConsultationHistory(patientId)}
+                consultationHistory={consultationHistoryList}
                 downloadingPdf={downloadingPdf}
                 downloadingDischargePdf={downloadingDischargePdf}
                 downloadingKonsultaPdf={downloadingKonsultaPdf}

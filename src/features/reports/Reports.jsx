@@ -16,6 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 import BarChart from "../../components/common/BarChart";
 import {
   REPORT_TYPES,
+  fetchReportSourceData,
   getAvailableYears,
   getMonthlyPatientCounts,
   getYearlyPatientCounts,
@@ -98,7 +99,8 @@ export default function Reports() {
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState(null);
 
-  const [reports, setReports] = useState(() => loadReports());
+  const [reports, setReports] = useState([]);
+  const [reportData, setReportData] = useState({ patients: [], consultations: [] });
   const [activeTypeTab, setActiveTypeTab] = useState("All Reports");
   const [tableYear, setTableYear] = useState("All");
 
@@ -111,35 +113,47 @@ export default function Reports() {
     Object.fromEntries(ALL_COLUMNS.map((c) => [c.id, true]))
   );
 
-  const availableYears = useMemo(() => getAvailableYears(), []);
+  const availableYears = useMemo(() => getAvailableYears(reportData), [reportData]);
   const graphYear = tableYear !== "All" ? tableYear : availableYears[0];
-  const monthlyPatientData = useMemo(() => getMonthlyPatientCounts(graphYear), [graphYear, reports]);
-  const yearlyPatientData = useMemo(() => getYearlyPatientCounts(), [reports]);
+  const monthlyPatientData = useMemo(
+    () => getMonthlyPatientCounts(reportData.patients, graphYear),
+    [graphYear, reportData]
+  );
+  const yearlyPatientData = useMemo(() => getYearlyPatientCounts(reportData.patients), [reportData]);
 
-  function refresh() {
-    setReports(loadReports());
+  async function refresh() {
+    const [data, reportsList] = await Promise.all([fetchReportSourceData(), loadReports()]);
+    setReportData(data);
+    setReports(reportsList);
   }
 
-  function handleGenerate() {
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleGenerate() {
     if (!reportType || !year) return;
     setGenerating(true);
     setPreview(null);
-    setTimeout(() => {
-      const rows = getReportRows(reportType, year);
-      const report = {
-        id: generateReportId(),
-        reportType,
-        year,
-        generatedAt: new Date().toISOString(),
-        generatedBy: user?.username || "Unknown",
-        status: "Completed",
-        rowCount: rows.length,
-      };
-      addReport(report);
-      setReports(loadReports());
-      setPreview({ ...report, rows });
+    const rows = getReportRows(reportType, year, reportData);
+    const report = {
+      id: generateReportId(),
+      reportType,
+      year,
+      generatedBy: user?.username || "Unknown",
+      status: "Completed",
+      rowCount: rows.length,
+    };
+    try {
+      const saved = await addReport(report, user?.id ?? null);
+      setReports((list) => [saved, ...list]);
+      setPreview({ ...saved, rows });
+    } catch (err) {
+      alert(`Couldn't save this report: ${err.message || "unknown error"}`);
+    } finally {
       setGenerating(false);
-    }, 700);
+    }
   }
 
   function handleSort(key) {
@@ -173,7 +187,7 @@ export default function Reports() {
   }, [activeTypeTab, tableYear, pageSize]);
 
   function handleDownloadRow(report) {
-    const rows = getReportRows(report.reportType, report.year);
+    const rows = getReportRows(report.reportType, report.year, reportData);
     if (rows.length === 0) {
       window.alert("This report has no rows to export.");
       return;
@@ -330,7 +344,7 @@ export default function Reports() {
           {preview.reportType === "Diagnosis Report" && (
             <div className="mb-4">
               <BarChart
-                data={getDiagnosisBreakdown(preview.year)
+                data={getDiagnosisBreakdown(reportData.consultations, preview.year)
                   .slice(0, 8)
                   .map((d) => ({ label: d.label, value: d.count }))}
                 color="#b45309"
@@ -342,7 +356,7 @@ export default function Reports() {
           {preview.reportType === "ICD-10 Diagnosis Report" && (
             <div className="mb-4">
               <BarChart
-                data={getIcd10DiagnosisReportRows(preview.year)
+                data={getIcd10DiagnosisReportRows(reportData.consultations, preview.year)
                   .slice(0, 8)
                   .map((d) => ({ label: `${d.code} — ${d.name}`, value: d.patientCount }))}
                 color="#0f766e"

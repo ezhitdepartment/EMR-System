@@ -1,11 +1,14 @@
-// Reports pulls from the data that actually exists today — patient records
-// and each patient's (single, latest) consultation record. The Encounters
-// and Yakap Tracker modules are still placeholders, and consultations are
-// stored one-per-patient (overwritten on save, not a full visit history),
-// so a couple of things are worth knowing about what these reports can
-// and can't show:
-//   - "Encounter Report" reflects each patient's most recent consultation,
-//     not a full multi-visit history — that's the data available.
+// Reports — now pulls from real Supabase data (patients + the full
+// consultation history) instead of localStorage, via fetchReportSourceData()
+// below. Same rationale as utils/patients.js, utils/encounters.js, and
+// utils/consultations.js: the "Reports" feature never actually connected to
+// real data before, so every report on this page has always been empty in
+// practice, no matter how many patients/consultations existed.
+//
+// Design carried over unchanged from before:
+//   - "Encounter Report" reflects each saved consultation record, one row
+//     per save (not per registration) — that's the data available; a
+//     patient with 3 consultation saves this year shows up 3 times.
 //   - "Diagnosis Report" parses the free-text Active Diagnoses field
 //     (doctors write prose, not a coded list) by splitting on commas /
 //     semicolons / line breaks — best-effort, not a precise clinical code.
@@ -19,9 +22,17 @@
 //   - "Yakap Report" approximates the DOH Yakap program's target
 //     population (senior citizens, NCD risk factors) from the closest
 //     existing fields, since there's no dedicated Yakap dataset yet.
-const REPORTS_KEY = "generatedReports";
-const PATIENTS_KEY = "patients";
-const CONSULTATION_KEY = "patientConsultation";
+//
+// One thing that DID change along with the data source: consultation
+// entries were previously (mis)matched by c.updatedAt, a field consultation
+// saves never actually set (that's an EMR/Discharge/Konsulta/MedCert-only
+// field) — so every date-filtered report silently returned zero rows
+// before, regardless of how much real data existed. This version matches
+// on c.createdAt, which every consultation row actually has.
+
+import { supabase } from "../lib/supabaseClient";
+import { loadPatients } from "./patients";
+import { loadAllConsultations } from "./consultations";
 
 export const REPORT_TYPES = [
   "Encounter Report",
@@ -35,28 +46,14 @@ export const MONTH_LABELS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-function loadPatients() {
-  try {
-    return JSON.parse(localStorage.getItem(PATIENTS_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-// Flattens the patientId-keyed consultation object into an array, with the
-// matching patient record merged in for name/DOB/etc.
-function loadConsultations() {
-  try {
-    const all = JSON.parse(localStorage.getItem(CONSULTATION_KEY) || "{}");
-    const patients = loadPatients();
-    return Object.entries(all).map(([patientId, record]) => ({
-      ...record,
-      patientId,
-      patient: patients.find((p) => p.patientId === patientId) || null,
-    }));
-  } catch {
-    return [];
-  }
+// Fetches both source datasets once. Call this on mount and whenever the
+// person hits Refresh, then pass the result into every function below
+// instead of each one re-querying Supabase on its own — same reasoning as
+// Encounters.jsx loading encounters/prescriptions once per refresh() and
+// filtering/sorting them client-side from there.
+export async function fetchReportSourceData() {
+  const [patients, consultations] = await Promise.all([loadPatients(), loadAllConsultations()]);
+  return { patients, consultations };
 }
 
 function yearOf(dateStr) {
@@ -96,30 +93,30 @@ export function parseDiagnoses(text) {
     .map((s) => s.replace(/\s+/g, " "));
 }
 
-export function getAvailableYears() {
+export function getAvailableYears({ patients, consultations }) {
   const years = new Set([new Date().getFullYear()]);
-  loadConsultations().forEach((c) => {
-    const y = yearOf(c.updatedAt);
+  consultations.forEach((c) => {
+    const y = yearOf(c.createdAt);
     if (y) years.add(y);
   });
-  loadPatients().forEach((p) => {
+  patients.forEach((p) => {
     const y = yearOf(p.createdAt);
     if (y) years.add(y);
   });
   return Array.from(years).sort((a, b) => b - a);
 }
 
-function getEncountersForYear(year) {
-  return loadConsultations().filter((c) => yearOf(c.updatedAt) === Number(year));
+function getEncountersForYear(consultations, year) {
+  return consultations.filter((c) => yearOf(c.createdAt) === Number(year));
 }
 
 // Patients CREATED per month/year — distinct from encounters. A patient is
 // only created once (via CreatePatientModal), so unlike consultations this
 // reflects real, non-overwritten history — every patient ever registered
 // shows up here, keyed by their record's createdAt.
-export function getMonthlyPatientCounts(year) {
+export function getMonthlyPatientCounts(patients, year) {
   const counts = Array(12).fill(0);
-  loadPatients().forEach((p) => {
+  patients.forEach((p) => {
     if (yearOf(p.createdAt) === Number(year)) {
       const m = monthOf(p.createdAt);
       if (m !== null) counts[m] += 1;
@@ -128,9 +125,9 @@ export function getMonthlyPatientCounts(year) {
   return MONTH_LABELS.map((label, i) => ({ label, value: counts[i] }));
 }
 
-export function getYearlyPatientCounts() {
+export function getYearlyPatientCounts(patients) {
   const counts = {};
-  loadPatients().forEach((p) => {
+  patients.forEach((p) => {
     const y = yearOf(p.createdAt);
     if (y) counts[y] = (counts[y] || 0) + 1;
   });
@@ -138,9 +135,9 @@ export function getYearlyPatientCounts() {
   return years.map((year) => ({ label: String(year), value: counts[year] }));
 }
 
-export function getDiagnosisBreakdown(year) {
+export function getDiagnosisBreakdown(consultations, year) {
   const counts = new Map();
-  getEncountersForYear(year).forEach((c) => {
+  getEncountersForYear(consultations, year).forEach((c) => {
     parseDiagnoses(c.activeDiagnoses).forEach((dx) => {
       const key = dx.toLowerCase();
       const existing = counts.get(key);
@@ -151,18 +148,18 @@ export function getDiagnosisBreakdown(year) {
   return Array.from(counts.values()).sort((a, b) => b.count - a.count);
 }
 
-export function getEncounterReportRows(year) {
-  return getEncountersForYear(year).map((c) => ({
+export function getEncounterReportRows(consultations, year) {
+  return getEncountersForYear(consultations, year).map((c) => ({
     patientId: c.patientId,
     patientName: patientName(c.patient, c.patientId),
-    date: c.updatedAt ? c.updatedAt.slice(0, 10) : "",
+    date: c.createdAt ? c.createdAt.slice(0, 10) : "",
     chiefComplaint: c.chiefComplaint || "",
     diagnosis: c.activeDiagnoses || "",
   }));
 }
 
-export function getYakapReportRows(year) {
-  return getEncountersForYear(year)
+export function getYakapReportRows(consultations, year) {
+  return getEncountersForYear(consultations, year)
     .filter((c) => {
       const age = ageOf(c.patient?.dateOfBirth);
       return (
@@ -175,7 +172,7 @@ export function getYakapReportRows(year) {
     .map((c) => ({
       patientId: c.patientId,
       patientName: patientName(c.patient, c.patientId),
-      date: c.updatedAt ? c.updatedAt.slice(0, 10) : "",
+      date: c.createdAt ? c.createdAt.slice(0, 10) : "",
       age: ageOf(c.patient?.dateOfBirth) ?? "",
       riskLevel: c.riskLevel || "",
       diabetes: c.diagnosedDiabetes || "",
@@ -187,9 +184,9 @@ export function getYakapReportRows(year) {
 // One row per ICD-10 code that's actually been assigned this year, with
 // how many distinct patients carry it — "how many patients have that
 // disease", not a raw count of every time it was picked.
-export function getIcd10DiagnosisReportRows(year) {
+export function getIcd10DiagnosisReportRows(consultations, year) {
   const byCode = new Map(); // code -> { code, name, patientIds: Set }
-  getEncountersForYear(year).forEach((c) => {
+  getEncountersForYear(consultations, year).forEach((c) => {
     (c.icdDiagnoses || []).forEach((dx) => {
       if (!dx?.code) return;
       const entry = byCode.get(dx.code) || { code: dx.code, name: dx.name || "", patientIds: new Set() };
@@ -203,33 +200,66 @@ export function getIcd10DiagnosisReportRows(year) {
     .sort((a, b) => b.patientCount - a.patientCount);
 }
 
-export function getReportRows(reportType, year) {
-  if (reportType === "Diagnosis Report") return getDiagnosisBreakdown(year);
-  if (reportType === "ICD-10 Diagnosis Report") return getIcd10DiagnosisReportRows(year);
-  if (reportType === "Yakap Report") return getYakapReportRows(year);
-  return getEncounterReportRows(year);
+export function getReportRows(reportType, year, { consultations }) {
+  if (reportType === "Diagnosis Report") return getDiagnosisBreakdown(consultations, year);
+  if (reportType === "ICD-10 Diagnosis Report") return getIcd10DiagnosisReportRows(consultations, year);
+  if (reportType === "Yakap Report") return getYakapReportRows(consultations, year);
+  return getEncounterReportRows(consultations, year);
 }
 
-// --- Generated-report ledger ("Recent Reports" table) ---------------------
+// --- Generated-report ledger ("Recent Reports" table) ----------------------
+// Backed by the `generated_reports` table (see reports-addendum.sql for the
+// extra columns this needs — generated_by_name/row_count/status — on top
+// of what the original schema already had).
 
-export function loadReports() {
-  try {
-    return JSON.parse(localStorage.getItem(REPORTS_KEY) || "[]");
-  } catch {
+function rowToReport(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    reportType: row.report_type,
+    year: row.year,
+    generatedAt: row.generated_at,
+    generatedBy: row.generated_by_name || "Unknown",
+    status: row.status || "Completed",
+    rowCount: row.row_count || 0,
+  };
+}
+
+export async function loadReports() {
+  const { data, error } = await supabase
+    .from("generated_reports")
+    .select("*")
+    .order("generated_at", { ascending: false });
+  if (error) {
+    console.error("loadReports failed:", error.message);
     return [];
   }
-}
-
-function saveReports(list) {
-  localStorage.setItem(REPORTS_KEY, JSON.stringify(list));
+  return (data || []).map(rowToReport);
 }
 
 export function generateReportId() {
   return `RPT-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`;
 }
 
-export function addReport(report) {
-  const list = [report, ...loadReports()];
-  saveReports(list);
-  return list;
+// `report` is shaped exactly like Reports.jsx's handleGenerate already
+// builds it (reportType, year, generatedBy, rowCount, status). generatedBy
+// is the display name to denormalize onto the row; generatedById (the
+// signed-in user's profile id) is separate so getUserActivityStats-style
+// per-user stats elsewhere can still filter on it.
+export async function addReport(report, generatedById = null) {
+  const { data, error } = await supabase
+    .from("generated_reports")
+    .insert({
+      id: report.id,
+      report_type: report.reportType,
+      year: Number(report.year),
+      generated_by: generatedById,
+      generated_by_name: report.generatedBy || null,
+      row_count: report.rowCount || 0,
+      status: report.status || "Completed",
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToReport(data);
 }

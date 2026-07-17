@@ -33,6 +33,7 @@ import {
   formatDateCreated,
 } from "../../utils/encounters";
 import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
+import { loadDiagnosesByEncounter } from "../../utils/consultations";
 
 const PAGE_SIZE = 8;
 const TABS = ["ALL", STATUS.PENDING, STATUS.COMPLETED, STATUS.CANCELLED];
@@ -72,6 +73,7 @@ export default function Encounters() {
   const navigate = useNavigate();
   const [encounters, setEncounters] = useState([]);
   const [medicationsByEncounter, setMedicationsByEncounter] = useState({});
+  const [diagnosesByEncounter, setDiagnosesByEncounter] = useState({});
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [migratedFilter, setMigratedFilter] = useState("All");
@@ -103,6 +105,11 @@ export default function Encounters() {
       );
     });
     setMedicationsByEncounter(byEncounter);
+
+    // Diagnosis column — the doctor's Clinical Diagnosis (or ICD-10 picks)
+    // from the Consultation Form, matched back to whichever registration
+    // it was saved against.
+    setDiagnosesByEncounter(await loadDiagnosesByEncounter());
   }
 
   useEffect(() => {
@@ -478,7 +485,15 @@ export default function Encounters() {
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{e.consultationType || "—"}</td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{e.doctor || "—"}</td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{e.createdBy || "—"}</td>
-                      <td className="px-4 py-3 align-top whitespace-nowrap text-slate-400">—</td>
+                      <td className="px-4 py-3 align-top max-w-[220px]">
+                        {diagnosesByEncounter[e.id] ? (
+                          <p className="text-slate-700 truncate" title={diagnosesByEncounter[e.id]}>
+                            {diagnosesByEncounter[e.id]}
+                          </p>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 align-top max-w-[220px]">
                         {medicationsByEncounter[e.id]?.length ? (
                           <p className="text-slate-700 truncate" title={medicationsByEncounter[e.id].join(", ")}>
