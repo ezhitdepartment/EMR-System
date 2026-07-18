@@ -418,8 +418,9 @@ export default function Encounters() {
                 <thead>
                   <tr className="bg-teal-900 text-left text-xs uppercase tracking-wide text-white">
                     <th className="px-4 py-3">
-                      <SortHeader label="ID" field="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Census" field="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </th>
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Hospital No.</th>
                     <th className="px-4 py-3">
                       <SortHeader
                         label="Apt Date"
@@ -455,6 +456,7 @@ export default function Encounters() {
                   {paged.map((e) => (
                     <tr key={e.id} className="border-b border-slate-100 hover:bg-teal-50/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-teal-700 whitespace-nowrap align-top">{e.id}</td>
+                      <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{e.hospitalNo || "—"}</td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">
                         {e.appointmentDate
                           ? formatDateCreated(new Date(e.appointmentDate).toISOString())
@@ -462,7 +464,6 @@ export default function Encounters() {
                       </td>
                       <td className="px-4 py-3 align-top whitespace-nowrap">
                         <p className="font-semibold text-slate-800">{e._fullName || "—"}</p>
-                        <p className="text-xs text-slate-500">{e.hospitalNo}</p>
                         <p className="text-xs text-slate-500">{formatAge(e.patient?.dateOfBirth)}</p>
                         <p className="text-xs text-slate-500 uppercase">{e.patient?.sex || "—"}</p>
                       </td>
