@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import AddressFields, { emptyAddressValue } from "../../components/common/AddressFields";
 import { ageInYears } from "../../utils/age";
-import { loadPatients, createPatient, generateHospitalNo } from "../../utils/patients";
+import { createPatient } from "../../utils/patients";
 
 const SUFFIX_OPTIONS = ["", "Jr.", "Sr.", "II", "III", "IV"];
 
@@ -102,25 +102,6 @@ export default function CreatePatientModal({ onClose, onCreated }) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  // Generated once when the modal opens so what's shown on screen is
-  // exactly what gets saved — see generateHospitalNo() in utils/patients.js
-  // for the {seq}{year}{month} pattern and duplicate-safety guarantee.
-  // Loaded asynchronously now that patients live in Supabase instead of
-  // localStorage; re-derived fresh from the database again at submit time
-  // (see handleSubmit) in case another registration happened in the
-  // meantime, now that this is a real shared multi-user database.
-  const [hospitalNo, setHospitalNo] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    loadPatients().then((existing) => {
-      if (active) setHospitalNo(generateHospitalNo(existing));
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -241,16 +222,13 @@ export default function CreatePatientModal({ onClose, onCreated }) {
 
     setSubmitting(true);
 
-    // Re-derive the Hospital No. fresh right before saving rather than
-    // trusting the value generated when the modal opened — now that
-    // patients live in a real shared database instead of per-browser
-    // localStorage, another registration could have happened in the
-    // meantime (e.g. a teammate on another computer).
-    const latestPatients = await loadPatients();
-    const freshHospitalNo = generateHospitalNo(latestPatients);
-
+    // No Hospital No. to compute here anymore — patients.hospital_no's
+    // own DEFAULT generate_hospital_no() assigns the next "00001",
+    // "00002", ... the moment this insert happens, using a real Postgres
+    // sequence. That's also strictly race-condition-safe across multiple
+    // devices/nurses saving at the same moment, which a client-computed
+    // "highest number so far + 1" never fully was.
     const patient = {
-      hospitalNo: freshHospitalNo,
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       middleName: form.middleName.trim(),
@@ -328,10 +306,10 @@ export default function CreatePatientModal({ onClose, onCreated }) {
               <div className="space-y-3">
                 <Field label="Hospital No.">
                   <input
-                    value={hospitalNo || "Generating…"}
+                    value="Assigned automatically on save"
                     readOnly
-                    title="Auto-generated: sequence + year + month"
-                    className={`${inputClass} bg-slate-50 text-slate-600 cursor-not-allowed`}
+                    title="Auto-generated once you click Create Patient — a running count starting at 00001"
+                    className={`${inputClass} bg-slate-50 text-slate-400 italic cursor-not-allowed`}
                   />
                 </Field>
 

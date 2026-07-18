@@ -187,8 +187,7 @@ function patientPatchToRow(updates) {
 // for INSERTS ONLY, where every column needs a real value/default — see
 // patientPatchToRow above for updates.
 function patientToRow(p) {
-  return {
-    hospital_no: p.hospitalNo || null,
+  const row = {
     first_name: p.firstName,
     last_name: p.lastName,
     middle_name: p.middleName || "",
@@ -231,6 +230,19 @@ function patientToRow(p) {
     // decided per-registration (encounters.patient_type), not once at
     // patient creation. See PATIENT_TYPE_BY_ROLE in utils/encounters.js.
   };
+
+  // hospital_no is intentionally OMITTED unless the caller explicitly
+  // supplied one (e.g. an import/migration script backfilling old data).
+  // Leaving the key out entirely — rather than sending `null` — lets
+  // Postgres fall back to the column's own DEFAULT generate_hospital_no(),
+  // which is what actually assigns the next "00001", "00002", ... number
+  // at the moment of insert. That's also why CreatePatientModal.jsx no
+  // longer pre-computes a hospitalNo before the user clicks Save: there's
+  // nothing left for it to compute — the database is the only source of
+  // truth for the next number now, so two nurses registering a patient at
+  // the same moment can never collide.
+  if (p.hospitalNo) row.hospital_no = p.hospitalNo;
+  return row;
 }
 
 // Fetches every patient. Returns [] on failure (network hiccup, RLS
@@ -239,7 +251,7 @@ function patientToRow(p) {
 // the old localStorage version had.
 // Every other table (encounters, lab_orders, medicine_prescriptions) FKs to
 // patients.id (the internal uuid), but the rest of the app only ever deals
-// in hospitalNo (the human-readable Hospital No., e.g. "001202607") — this
+// in hospitalNo (the human-readable Hospital No., e.g. "00001") — this
 // is the one place that bridges the two, so every other data-layer file
 // can resolve "which patient row do I attach this to" without duplicating
 // the query.
@@ -278,8 +290,11 @@ export async function findPatientById(hospitalNo) {
   return rowToPatient(data);
 }
 
-// Inserts a brand-new patient record. `patient` must already include
-// hospitalNo (see generateHospitalNo() below).
+// Inserts a brand-new patient record. hospitalNo is intentionally NOT
+// expected on `patient` — the database assigns it automatically (see
+// patients.hospital_no's DEFAULT generate_hospital_no() in
+// supabase_schema.sql), simply "00001", "00002", "00003", ... climbing
+// forever. The assigned value comes back on the returned row below.
 export async function createPatient(patient) {
   const { data, error } = await supabase
     .from("patients")
@@ -339,39 +354,4 @@ export async function savePatientPhoto(hospitalNo, photoDataUrl) {
     .single();
   if (error) return null;
   return rowToPatient(data);
-}
-
-// Auto-generates the next Hospital No., in the pattern:
-//   {3-digit sequence}{4-digit year}{2-digit month}
-// e.g. the 1st patient registered in July 2026 -> "001202607"
-//
-// The sequence keeps climbing (001, 002, 003, ...) across the whole patient
-// list — it does NOT reset each month/year — so two patients registered in
-// the same month can never collide. It's derived from the highest sequence
-// number already in use rather than just `patients.length`, so it stays
-// correct (no duplicates, no reused numbers) even if a patient record is
-// ever deleted.
-//
-// Needs the current patient list already loaded (pass the array you just
-// fetched with loadPatients()) rather than fetching it itself, since every
-// caller already has that list in hand right before generating the next
-// number and a second round-trip would just be wasted latency.
-export function generateHospitalNo(existingPatients) {
-  const patients = existingPatients || [];
-  const pattern = /^(\d{3})\d{4}\d{2}$/;
-
-  let maxSeq = 0;
-  patients.forEach((p) => {
-    const match = pattern.exec(p.hospitalNo || "");
-    if (match) {
-      const seq = parseInt(match[1], 10);
-      if (seq > maxSeq) maxSeq = seq;
-    }
-  });
-
-  const nextSeq = String(maxSeq + 1).padStart(3, "0");
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  return `${nextSeq}${year}${month}`;
 }
