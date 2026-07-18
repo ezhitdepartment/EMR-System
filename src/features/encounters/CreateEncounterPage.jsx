@@ -120,6 +120,7 @@ export default function CreateEncounterPage() {
   const [cameraStream, setCameraStream] = useState(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -346,6 +347,7 @@ export default function CreateEncounterPage() {
   }
 
   async function handleCreateEncounter() {
+    if (submitting) return; // already in flight — ignore a second click
     if (!reasonForVisiting.trim()) {
       setError("Please fill in the reason for visiting.");
       return;
@@ -359,6 +361,8 @@ export default function CreateEncounterPage() {
       return;
     }
 
+    setSubmitting(true);
+    setError("");
     try {
       const created = await createEncounter({
         hospitalNo: selectedPatient.hospitalNo,
@@ -390,6 +394,8 @@ export default function CreateEncounterPage() {
       setStep(3);
     } catch (err) {
       setError("Could not create the registration: " + err.message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -835,10 +841,11 @@ export default function CreateEncounterPage() {
               <button
                 type="button"
                 onClick={handleCreateEncounter}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
+                disabled={submitting}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
               >
-                Next
-                <ArrowRight size={14} />
+                {submitting ? "Creating…" : "Next"}
+                {!submitting && <ArrowRight size={14} />}
               </button>
             </div>
           </div>
