@@ -31,6 +31,7 @@ import {
   PCU_STATUS_OPTIONS,
   loadEncounters,
   updateEncounter,
+  transferPatientType,
   formatDateCreated,
 } from "../../utils/encounters";
 import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
@@ -175,21 +176,24 @@ export default function Encounters() {
     setRowMenuId(null);
   }
 
-  // Flips OPD Patient <-> ER Patient on this registration. Only the
-  // patient_type column changes — everything else about the encounter
-  // (doctor, fee, triage, consultation progress) is untouched. Guarded by
-  // a confirmation since it changes which nurse role can subsequently see
+  // Flips OPD Patient <-> ER Patient on this registration. Guarded by a
+  // confirmation since it changes which nurse role can subsequently see
   // and manage this encounter (RLS scopes ER Nurse to ER Patient rows and
   // OPD Nurse to OPD Patient rows — see current_user_can_access_patient_type
-  // in the schema), and — if this encounter's Census No. was already
-  // assigned (nurse consultation already saved) — that number stays
-  // stamped under whichever type it was generated under, so transferring
-  // afterward is still allowed but is called out explicitly in the prompt
-  // rather than silently left inconsistent.
+  // in the schema).
+  //
+  // A Census No. is tied to the patient type it was generated under (its
+  // own per-type running count — see the schema's Census No. addenda), so
+  // it has no meaning once the encounter becomes the other type. If this
+  // encounter's Census No. was already assigned (nurse consultation
+  // already saved), transferring it discards that number and the DB
+  // immediately stamps a brand-new one under the new type's own counter —
+  // transferPatientType() (utils/encounters.js) handles both the discard
+  // and the reissue in a single update, not a plain updateEncounter().
   async function handleTransferPatient(encounter) {
     const nextType = encounter.patientType === "ER Patient" ? "OPD Patient" : "ER Patient";
     const censusWarning = encounter.censusNo
-      ? ` This encounter's Census No. (${encounter.censusNo}) was assigned as ${encounter.patientType} and will NOT change.`
+      ? ` This encounter's Census No. (${encounter.censusNo}) was assigned as ${encounter.patientType} and will be discarded — a new Census No. will be assigned under ${nextType}.`
       : "";
     if (
       !window.confirm(
@@ -197,7 +201,10 @@ export default function Encounters() {
       )
     )
       return;
-    await updateEncounter(encounter.id, (e) => ({ ...e, patientType: nextType }));
+    const result = await transferPatientType(encounter.id, nextType);
+    if (!result) {
+      window.alert("Transfer failed. Please try again or contact your administrator.");
+    }
     refresh();
     setRowMenuId(null);
   }

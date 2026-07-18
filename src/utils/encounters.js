@@ -326,6 +326,55 @@ export async function updateEncounter(encounterId, updater) {
   return findEncounterById(encounterId);
 }
 
+// Flips OPD Patient <-> ER Patient on a registration (Encounters.jsx's
+// "Transfer Patient" action). Deliberately NOT built on top of
+// updateEncounter()/encounterToRow(), because encounterToRow() intentionally
+// never sends census_no (see its comment) — that's correct for every other
+// kind of save, but a transfer is the one case where census_no is supposed
+// to move.
+//
+// A Census No. is scoped to the patient_type it was generated under
+// (encounters_census_no_patient_type_key is a UNIQUE (patient_type,
+// census_no) constraint, and set_encounter_census_no() calls
+// generate_next_census_no(patient_type) — see the schema's Census No.
+// addenda). So a census number stamped as, say, "2026-07-3" under OPD
+// Patient has no meaning once the encounter becomes an ER Patient case —
+// leaving it in place would just be a stale OPD-series number sitting on
+// an ER row. This function clears census_no back to null in the same
+// update that changes patient_type, which lets the DB trigger
+// (encounters_set_census_no, BEFORE UPDATE) do its normal job: since
+// nurse_consultation_done is unchanged (still true, if a census number had
+// already been assigned) and census_no is now null again, the trigger
+// fires and stamps a brand-new number under the new patient_type's own
+// counter — so the discard-and-reissue happens atomically, in the same
+// round trip, with no window where the row has no census number at all.
+//
+// If the encounter never had a census number yet (nurse consultation
+// hasn't been saved), there's nothing to discard — patient_type just
+// changes, and whichever type is current at the time nurse consultation is
+// eventually saved is the one census_no gets generated under.
+export async function transferPatientType(encounterId, nextType) {
+  const current = await findEncounterById(encounterId);
+  if (!current) return null;
+
+  const hadCensusNo = !!current.censusNo;
+
+  const { error } = await supabase
+    .from("encounters")
+    .update({
+      patient_type: nextType,
+      ...(hadCensusNo ? { census_no: null } : {}),
+    })
+    .eq("id", encounterId);
+
+  if (error) {
+    console.error("transferPatientType failed:", error.message);
+    return null;
+  }
+
+  return findEncounterById(encounterId);
+}
+
 // "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the reference screen).
 export function formatDateCreated(iso) {
   if (!iso) return "—";
