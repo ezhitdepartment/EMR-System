@@ -16,6 +16,7 @@ import {
   Folder,
   FileSignature,
   Pill,
+  Repeat,
 } from "lucide-react";
 import ReassignPhysicianModal from "./ReassignPhysicianModal";
 import WaiverModal from "./WaiverModal";
@@ -170,6 +171,33 @@ export default function Encounters() {
   async function handleCancel(encounter) {
     if (!window.confirm(`Cancel encounter ${encounter.id}? This can't be undone.`)) return;
     await updateEncounter(encounter.id, (e) => ({ ...e, status: STATUS.CANCELLED }));
+    refresh();
+    setRowMenuId(null);
+  }
+
+  // Flips OPD Patient <-> ER Patient on this registration. Only the
+  // patient_type column changes — everything else about the encounter
+  // (doctor, fee, triage, consultation progress) is untouched. Guarded by
+  // a confirmation since it changes which nurse role can subsequently see
+  // and manage this encounter (RLS scopes ER Nurse to ER Patient rows and
+  // OPD Nurse to OPD Patient rows — see current_user_can_access_patient_type
+  // in the schema), and — if this encounter's Census No. was already
+  // assigned (nurse consultation already saved) — that number stays
+  // stamped under whichever type it was generated under, so transferring
+  // afterward is still allowed but is called out explicitly in the prompt
+  // rather than silently left inconsistent.
+  async function handleTransferPatient(encounter) {
+    const nextType = encounter.patientType === "ER Patient" ? "OPD Patient" : "ER Patient";
+    const censusWarning = encounter.censusNo
+      ? ` This encounter's Census No. (${encounter.censusNo}) was assigned as ${encounter.patientType} and will NOT change.`
+      : "";
+    if (
+      !window.confirm(
+        `Transfer this patient from ${encounter.patientType} to ${nextType}?${censusWarning}`
+      )
+    )
+      return;
+    await updateEncounter(encounter.id, (e) => ({ ...e, patientType: nextType }));
     refresh();
     setRowMenuId(null);
   }
@@ -602,6 +630,16 @@ export default function Encounters() {
                                 >
                                   <FileSignature size={13} />
                                   Waiver
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleTransferPatient(e)}
+                                  disabled={e.status === STATUS.CANCELLED}
+                                  title={`Transfer to ${e.patientType === "ER Patient" ? "OPD Patient" : "ER Patient"}`}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                >
+                                  <Repeat size={13} />
+                                  Transfer Patient
                                 </button>
                               </div>
                             )}
