@@ -471,7 +471,7 @@ export default function CreateEncounterPage() {
             <div className="flex-1" />
             <button
               type="button"
-              disabled={!selectedPatientId}
+              disabled={!selectedHospitalNo}
               onClick={() => setStep(2)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors whitespace-nowrap"
             >
