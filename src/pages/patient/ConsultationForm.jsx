@@ -70,6 +70,152 @@ function nextId() {
   return `row-${Date.now()}-${uidCounter}`;
 }
 
+// PhilHealth CF4 (Claim Form 4), item 3 — Pertinent Signs and Symptoms on
+// Admission. Transcribed from the hospital's paper CF4; double-check
+// against a physical copy before relying on this list for PhilHealth
+// claim compliance, since a couple of the checkbox labels were faint on
+// the scan this was taken from.
+const SIGNS_AND_SYMPTOMS_OPTIONS = [
+  "Altered mental sensorium",
+  "Abdominal cramp/pain",
+  "Anorexia",
+  "Bleeding gums",
+  "Body weakness",
+  "Blurring of vision",
+  "Chest pain/discomfort",
+  "Constipation",
+  "Cough",
+  "Delirium",
+  "Diarrhea",
+  "Dizziness",
+  "Dysphagia",
+  "Dyspnea",
+  "Dysuria",
+  "Epistaxis",
+  "Fever",
+  "Frequency of urination",
+  "Headache",
+  "Hematemesis",
+  "Hematuria",
+  "Hemoptysis",
+  "Irritability",
+  "Jaundice",
+  "Lower extremity edema",
+  "Myalgia",
+  "Orthopnea",
+  "Pain",
+  "Palpitations",
+  "Skin rashes",
+  "Skin bleeding/black tarry/bloody stool",
+  "Sweating",
+  "Urgency",
+  "Vomiting",
+  "Weight loss",
+  "Others",
+];
+
+// PhilHealth CF4, item 5 — Physical Examination on Admission (pertinent
+// findings per system). Same caveat as SIGNS_AND_SYMPTOMS_OPTIONS above —
+// this is a best-effort transcription from a photographed form; please
+// proofread against the physical CF4 before treating it as authoritative.
+const PE_SYSTEMS = [
+  {
+    key: "peChestLungs",
+    othersKey: "peChestLungsOthers",
+    label: "Chest / Lungs",
+    options: [
+      "Essentially normal",
+      "Asymmetrical chest expansion",
+      "Decreased breath sounds",
+      "Wheezes",
+      "Coarse crackles/rales",
+      "Intercostal/subclavicular retraction",
+    ],
+  },
+  {
+    key: "peCvs",
+    othersKey: "peCvsOthers",
+    label: "CVS",
+    options: ["Essentially normal", "Displaced apex beat", "Muffled heart sounds", "Murmur", "Irregular rhythm"],
+  },
+  {
+    key: "peAbdomen",
+    othersKey: "peAbdomenOthers",
+    label: "Abdomen",
+    options: [
+      "Essentially normal",
+      "Abdominal tenderness",
+      "Hyperactive bowel sounds",
+      "Palpable mass(es)",
+      "Tympanitic/dull abdomen",
+      "Uterine contraction",
+    ],
+  },
+  {
+    key: "peGuOb",
+    othersKey: "peGuObOthers",
+    label: "GU / OB",
+    options: [
+      "Essentially normal",
+      "Vulvar bleeding/discharge",
+      "Cervical dilatation",
+      "Presence of abnormal discharge",
+    ],
+  },
+  {
+    key: "peSkinExtremities",
+    othersKey: "peSkinExtremitiesOthers",
+    label: "Skin / Extremities",
+    options: [
+      "Essentially normal",
+      "Clubbing",
+      "Cold clammy skin",
+      "Cyanosis/mottled skin",
+      "Decreased mobility",
+      "Pale sole/skin",
+      "Poor skin turgor",
+      "Weak pulses",
+    ],
+  },
+  {
+    key: "peNeuroExam",
+    othersKey: "peNeuroExamOthers",
+    label: "Neuro Exam",
+    options: [
+      "Essentially normal",
+      "Abnormal gait",
+      "Abnormal position sense",
+      "Abnormal/decreased sensation",
+      "Abnormal reflex(es)",
+      "Poor muscle tone/strength",
+      "Poor coordination",
+    ],
+  },
+];
+
+// Simple multi-select checkbox grid — used for the CF4 Signs & Symptoms
+// and Physical Examination checklists below. `selected` is the plain
+// array of checked option labels; toggling just adds/removes from it,
+// same shape diagnosticsSelected already uses for the Diagnostics
+// checklist elsewhere in this form.
+function CheckboxGroup({ options, selected, onToggle, columns = "sm:grid-cols-2 lg:grid-cols-3" }) {
+  return (
+    <div className={`grid grid-cols-1 ${columns} gap-2`}>
+      {options.map((opt) => (
+        <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={selected.includes(opt)}
+            onChange={() => onToggle(opt)}
+            className="rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+          />
+          {opt}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 // A "Required" accordion section — Past Medical History, Family Medical
 // History, Social History. Always reachable, just collapsible.
 function RequiredSection({ title, children, defaultOpen = true }) {
@@ -278,7 +424,17 @@ const DOCTOR_SECTIONS = new Set([
   "medicinePrescription",
   "diagnostics",
   "subjectiveComplaints",
+  "signsAndSymptoms",
+  "physicalExamination",
+  "certification",
 ]);
+
+// Course in the Ward (Doctor's Order/Action) and Surgical Procedure/RVS
+// Code — per hospital workflow these are logged by the ER Nurse
+// specifically, not OPD Nurse and not Doctor, so they get their own
+// section set rather than joining NURSE_SECTIONS (shared by both nurse
+// roles) or DOCTOR_SECTIONS.
+const ER_NURSE_ONLY_SECTIONS = new Set(["courseInWard", "surgicalProcedure"]);
 
 export const initialConsultationForm = {
   // Identity — pre-filled from the patient record
@@ -349,6 +505,24 @@ export const initialConsultationForm = {
   diagnosis: "",
   icdDiagnoses: [],
 
+  // PhilHealth CF4 (Claim Form 4) — Admitting/Discharge Diagnosis and case
+  // rate codes are distinct from "Diagnosis" above (that's this visit's
+  // clinical diagnosis in the doctor's own words; these are the specific
+  // fields CF4 asks for on ER/admitted cases for PhilHealth claims).
+  admittingDiagnosis: "",
+  dischargeDiagnosis: "",
+  caseRateCode1: "",
+  caseRateCode2: "",
+
+  // PhilHealth CF4 — admission/discharge date & time, and whether this
+  // patient was referred in from another health care institution.
+  dateAdmitted: "",
+  timeAdmitted: "",
+  dateDischarged: "",
+  timeDischarged: "",
+  referredFromOtherHCI: "",
+  referringHCIName: "",
+
   // Medication — the doctor's new orders for this visit (distinct from
   // Active Medication, which is the patient's existing home medication
   // taken during nurse intake).
@@ -357,6 +531,14 @@ export const initialConsultationForm = {
   // Disposition
   disposition: "",
   dispositionNotes: "",
+
+  // PhilHealth CF4 — Outcome of Treatment. Distinct from Disposition
+  // above: Disposition is the administrative next step (discharged,
+  // admitted, transferred...); this is CF4's specific clinical-outcome
+  // field (Improved / Cured / Absconded / Transferred / Died), with a
+  // reason required for the last three.
+  outcomeOfTreatment: "",
+  outcomeOfTreatmentReason: "",
 
   // Diagnostics ordered for this visit — same selectable checklist as
   // Lab Orders (utils/labOrders.js DIAGNOSTIC_GROUPS), plus free-text notes
@@ -379,6 +561,48 @@ export const initialConsultationForm = {
   // Subjective
   chiefComplaint: "",
   historyOfPresentIllness: "",
+
+  // PhilHealth CF4 — Pertinent Signs and Symptoms on Admission (checklist,
+  // item 3 on the form). "Pain" and "Others" are also selectable options
+  // in the list itself; these two fields hold the accompanying free text
+  // ("specify site" / "specify") when they're checked.
+  admissionSigns: [],
+  admissionSignsPainSite: "",
+  admissionSignsOthers: "",
+
+  // PhilHealth CF4 — Physical Examination on Admission (pertinent findings
+  // per system, item 5 on the form). General Survey / HEENT are short
+  // free-text fields; the other six systems are each a checklist ("Essentially
+  // normal" or one/more specific findings) plus a free-text "Others"
+  // catch-all, same shape as the admission signs/symptoms checklist above.
+  peGeneralSurvey: "",
+  peHeent: "",
+  peChestLungs: [],
+  peChestLungsOthers: "",
+  peCvs: [],
+  peCvsOthers: "",
+  peAbdomen: [],
+  peAbdomenOthers: "",
+  peGuOb: [],
+  peGuObOthers: "",
+  peSkinExtremities: [],
+  peSkinExtremitiesOthers: "",
+  peNeuroExam: [],
+  peNeuroExamOthers: "",
+
+  // PhilHealth CF4 — Certification of Attending Health Care Professional.
+  attendingCertifiedDate: "",
+  attendingPrintedName: "",
+  attendingLicenseNumber: "",
+  attendingSignature: "",
+
+  // PhilHealth CF4 — Course in the Ward (Doctor's Order/Action, a running
+  // dated log) and Surgical Procedure/RVS Code. Per hospital workflow
+  // these two are captured by the ER Nurse role rather than the doctor —
+  // see ER_NURSE_ONLY_SECTIONS below.
+  courseInWardEntries: [],
+  surgicalProcedureRvsCode: "",
+  surgicalProcedureNotes: "",
 
   // Past / Family Medical History — dynamic condition lists
   pastMedicalHistory: [],
@@ -945,6 +1169,7 @@ export default function ConsultationForm({
   // view-only sections stop rendering at all.
   function canEdit(section) {
     if (user?.role === "admin") return true;
+    if (ER_NURSE_ONLY_SECTIONS.has(section)) return user?.role === "er_nurse";
     if (isNurse) return NURSE_SECTIONS.has(section);
     if (isDoctor) return DOCTOR_SECTIONS.has(section);
     return false;
@@ -977,6 +1202,17 @@ export default function ConsultationForm({
     }));
   }
 
+  // Generic version of the toggle above, for any field that's a plain
+  // array of selected strings — the CF4 Signs & Symptoms checklist and
+  // each of the six Physical Examination system checklists all use this
+  // instead of a one-off toggler each.
+  function toggleListValue(field, value) {
+    setForm((f) => ({
+      ...f,
+      [field]: f[field].includes(value) ? f[field].filter((v) => v !== value) : [...f[field], value],
+    }));
+  }
+
   function setDiagnosticTestDetail(name, value) {
     setForm((f) => ({
       ...f,
@@ -988,7 +1224,7 @@ export default function ConsultationForm({
     uidCounter += 1;
     set("prescriptionItems", [
       ...form.prescriptionItems,
-      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "" },
+      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "", totalCost: "" },
     ]);
   }
 
@@ -1003,6 +1239,27 @@ export default function ConsultationForm({
     set(
       "prescriptionItems",
       form.prescriptionItems.filter((item) => item.id !== id)
+    );
+  }
+
+  // PhilHealth CF4 — Course in the Ward: a running, dated log of the
+  // Doctor's Order/Action (ER Nurse role — see ER_NURSE_ONLY_SECTIONS).
+  // Same add/update/remove shape as the prescription items above.
+  function addCourseInWardEntry() {
+    set("courseInWardEntries", [...form.courseInWardEntries, { id: nextId(), date: "", orderAction: "" }]);
+  }
+
+  function updateCourseInWardEntry(id, patch) {
+    set(
+      "courseInWardEntries",
+      form.courseInWardEntries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry))
+    );
+  }
+
+  function removeCourseInWardEntry(id) {
+    set(
+      "courseInWardEntries",
+      form.courseInWardEntries.filter((entry) => entry.id !== id)
     );
   }
 
@@ -1277,6 +1534,87 @@ export default function ConsultationForm({
                 className={textareaClass}
               />
             </Field>
+            <div className="mt-4">
+              <Field label="History of Present Illness">
+                <textarea
+                  name="historyOfPresentIllness"
+                  value={form.historyOfPresentIllness}
+                  onChange={handle}
+                  rows={4}
+                  placeholder="Onset, duration, character, associated symptoms..."
+                  className={textareaClass}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* ── PHILHEALTH CF4: SIGNS AND SYMPTOMS ON ADMISSION (doctor) ── */}
+        {canEdit("signsAndSymptoms") && (
+        <div>
+          <SectionHeader title="Pertinent Signs and Symptoms on Admission" />
+          <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
+            <CheckboxGroup
+              options={SIGNS_AND_SYMPTOMS_OPTIONS}
+              selected={form.admissionSigns}
+              onToggle={(opt) => toggleListValue("admissionSigns", opt)}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
+              <Field label="Pain — specify site">
+                <input
+                  name="admissionSignsPainSite"
+                  value={form.admissionSignsPainSite}
+                  onChange={handle}
+                  disabled={!form.admissionSigns.includes("Pain")}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+                />
+              </Field>
+              <Field label="Others — specify">
+                <input
+                  name="admissionSignsOthers"
+                  value={form.admissionSignsOthers}
+                  onChange={handle}
+                  disabled={!form.admissionSigns.includes("Others")}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* ── PHILHEALTH CF4: PHYSICAL EXAMINATION ON ADMISSION (doctor) ── */}
+        {canEdit("physicalExamination") && (
+        <div>
+          <SectionHeader title="Physical Examination on Admission" />
+          <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="General Survey">
+                <input name="peGeneralSurvey" value={form.peGeneralSurvey} onChange={handle} className={inputClass} />
+              </Field>
+              <Field label="HEENT">
+                <input name="peHeent" value={form.peHeent} onChange={handle} className={inputClass} />
+              </Field>
+            </div>
+
+            {PE_SYSTEMS.map((system) => (
+              <div key={system.key} className="pt-4 border-t border-slate-200">
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">{system.label}</p>
+                <CheckboxGroup
+                  options={system.options}
+                  selected={form[system.key]}
+                  onToggle={(opt) => toggleListValue(system.key, opt)}
+                />
+                <Field label="Others" className="mt-3">
+                  <input
+                    value={form[system.othersKey]}
+                    onChange={(e) => set(system.othersKey, e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+            ))}
           </div>
         </div>
         )}
@@ -1710,6 +2048,75 @@ export default function ConsultationForm({
               />
             </Field>
           </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-200 space-y-4">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">PhilHealth CF4</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Admitting Diagnosis">
+                <textarea
+                  name="admittingDiagnosis"
+                  value={form.admittingDiagnosis}
+                  onChange={handle}
+                  rows={2}
+                  className={textareaClass}
+                />
+              </Field>
+              <Field label="Discharge Diagnosis">
+                <textarea
+                  name="dischargeDiagnosis"
+                  value={form.dischargeDiagnosis}
+                  onChange={handle}
+                  rows={2}
+                  className={textareaClass}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="1st Case Rate Code">
+                <input name="caseRateCode1" value={form.caseRateCode1} onChange={handle} className={inputClass} />
+              </Field>
+              <Field label="2nd Case Rate Code">
+                <input name="caseRateCode2" value={form.caseRateCode2} onChange={handle} className={inputClass} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Field label="Date Admitted">
+                <input name="dateAdmitted" value={form.dateAdmitted} onChange={handle} type="date" className={inputClass} />
+              </Field>
+              <Field label="Time Admitted">
+                <input name="timeAdmitted" value={form.timeAdmitted} onChange={handle} type="time" className={inputClass} />
+              </Field>
+              <Field label="Date Discharged">
+                <input name="dateDischarged" value={form.dateDischarged} onChange={handle} type="date" className={inputClass} />
+              </Field>
+              <Field label="Time Discharged">
+                <input name="timeDischarged" value={form.timeDischarged} onChange={handle} type="time" className={inputClass} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Referred from another Health Care Institution?">
+                <select
+                  name="referredFromOtherHCI"
+                  value={form.referredFromOtherHCI}
+                  onChange={handle}
+                  className={inputClass}
+                >
+                  <option value="">Select</option>
+                  <option value="YES">Yes</option>
+                  <option value="NO">No</option>
+                </select>
+              </Field>
+              <Field label="Name of Originating HCI">
+                <input
+                  name="referringHCIName"
+                  value={form.referringHCIName}
+                  onChange={handle}
+                  disabled={form.referredFromOtherHCI !== "YES"}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+                />
+              </Field>
+            </div>
+          </div>
         </div>
         )}
 
@@ -1731,6 +2138,35 @@ export default function ConsultationForm({
             </Field>
             <Field label="Notes">
               <input name="dispositionNotes" value={form.dispositionNotes} onChange={handle} className={inputClass} />
+            </Field>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-200 space-y-4">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+              PhilHealth CF4 — Outcome of Treatment
+            </p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {["Improved", "Cured", "Absconded", "Transferred", "Died"].map((opt) => (
+                <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="outcomeOfTreatment"
+                    checked={form.outcomeOfTreatment === opt}
+                    onChange={() => set("outcomeOfTreatment", opt)}
+                    className="text-teal-700 focus:ring-teal-600"
+                  />
+                  {opt}
+                </label>
+              ))}
+            </div>
+            <Field label="Specify reason (required for Absconded / Transferred / Died)">
+              <input
+                name="outcomeOfTreatmentReason"
+                value={form.outcomeOfTreatmentReason}
+                onChange={handle}
+                disabled={!["Absconded", "Transferred", "Died"].includes(form.outcomeOfTreatment)}
+                className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+              />
             </Field>
           </div>
         </div>
@@ -1782,7 +2218,7 @@ export default function ConsultationForm({
 
             <div className="flex flex-col gap-3">
               {form.prescriptionItems.map((item) => (
-                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_90px_1fr_32px] gap-3 items-start">
+                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_90px_1fr_110px_32px] gap-3 items-start">
                   <div>
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
                       Medicine
@@ -1823,6 +2259,21 @@ export default function ConsultationForm({
                       value={item.instructions}
                       onChange={(e) => updatePrescriptionItem(item.id, { instructions: e.target.value })}
                       placeholder="e.g. 1 tablet 3x a day after meals for 7 days"
+                      className={`${inputClass} w-full`}
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Total Cost
+                    </p>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.totalCost ?? ""}
+                      onChange={(e) => updatePrescriptionItem(item.id, { totalCost: e.target.value })}
+                      placeholder="0.00"
                       className={`${inputClass} w-full`}
                     />
                   </div>
@@ -2007,6 +2458,134 @@ export default function ConsultationForm({
             </div>
           </QuestionTable>
         </ToggleSection>
+        )}
+
+        {/* ── PHILHEALTH CF4: CERTIFICATION OF ATTENDING HEALTH CARE PROFESSIONAL (doctor) ── */}
+        {canEdit("certification") && (
+        <div>
+          <SectionHeader title="Certification of Attending Health Care Professional" />
+          <div className="border border-slate-200 rounded-lg p-4 space-y-4">
+            <p className="text-xs text-slate-700 leading-relaxed italic">
+              I certify that the above information given in this form, including all attachments, are true and
+              correct.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Printed Name of Attending Health Care Professional">
+                <input
+                  name="attendingPrintedName"
+                  value={form.attendingPrintedName}
+                  onChange={handle}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="License Number / PTR">
+                <input
+                  name="attendingLicenseNumber"
+                  value={form.attendingLicenseNumber}
+                  onChange={handle}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Signature">
+                <input
+                  name="attendingSignature"
+                  value={form.attendingSignature}
+                  onChange={handle}
+                  placeholder="Typed signature"
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Date">
+                <input
+                  name="attendingCertifiedDate"
+                  value={form.attendingCertifiedDate}
+                  onChange={handle}
+                  type="date"
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* ── PHILHEALTH CF4: COURSE IN THE WARD (ER Nurse only) ── */}
+        {canEdit("courseInWard") && (
+        <div>
+          <SectionHeader title="Course in the Ward" />
+          <div className="border border-slate-200 rounded-lg p-4 bg-white">
+            <p className="text-sm font-bold text-slate-800 mb-3">Doctor's Order/Action</p>
+            <div className="flex flex-col gap-3">
+              {form.courseInWardEntries.map((entry) => (
+                <div key={entry.id} className="grid grid-cols-1 md:grid-cols-[160px_1fr_32px] gap-3 items-start">
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Date</p>
+                    <input
+                      type="date"
+                      value={entry.date}
+                      onChange={(e) => updateCourseInWardEntry(entry.id, { date: e.target.value })}
+                      className={`${inputClass} w-full`}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Doctor's Order/Action
+                    </p>
+                    <textarea
+                      value={entry.orderAction}
+                      onChange={(e) => updateCourseInWardEntry(entry.id, { orderAction: e.target.value })}
+                      rows={2}
+                      className={`${textareaClass} w-full`}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCourseInWardEntry(entry.id)}
+                    className="mt-6 inline-flex items-center justify-center w-8 h-8 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addCourseInWardEntry}
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-teal-700 hover:text-teal-800"
+            >
+              <Plus size={14} />
+              Add entry
+            </button>
+          </div>
+        </div>
+        )}
+
+        {/* ── PHILHEALTH CF4: SURGICAL PROCEDURE (ER Nurse only) ── */}
+        {canEdit("surgicalProcedure") && (
+        <div>
+          <SectionHeader title="Surgical Procedure" />
+          <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
+            <Field label="RVS Code">
+              <input
+                name="surgicalProcedureRvsCode"
+                value={form.surgicalProcedureRvsCode}
+                onChange={handle}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Notes (attach photocopy of OR technique separately)">
+              <textarea
+                name="surgicalProcedureNotes"
+                value={form.surgicalProcedureNotes}
+                onChange={handle}
+                rows={3}
+                className={textareaClass}
+              />
+            </Field>
+          </div>
+        </div>
         )}
 
         {/* ── CONSENT ── */}
