@@ -105,6 +105,7 @@ const SIGNS_AND_SYMPTOMS_OPTIONS = [
   "Orthopnea",
   "Pain",
   "Palpitations",
+  "Seizures",
   "Skin rashes",
   "Skin bleeding/black tarry/bloody stool",
   "Sweating",
@@ -112,6 +113,24 @@ const SIGNS_AND_SYMPTOMS_OPTIONS = [
   "Vomiting",
   "Weight loss",
   "Others",
+];
+
+// PhilHealth CF4, item 5 — Physical Examination on Admission: General
+// Survey and HEENT. Rendered as their own checklists (not part of
+// PE_SYSTEMS below) since General Survey's "Altered sensorium" pairs with
+// a dedicated specify field rather than the generic "Others" catch-all
+// every other system uses.
+const GENERAL_SURVEY_OPTIONS = ["Awake and alert", "Altered sensorium"];
+
+const HEENT_OPTIONS = [
+  "Essentially normal",
+  "Icteric sclerae",
+  "Abnormal pupillary reaction",
+  "Pale conjunctivae",
+  "Cervical lymphadenopathy",
+  "Sunken eyeballs",
+  "Dry mucous membrane",
+  "Sunken fontanelle",
 ];
 
 // PhilHealth CF4, item 5 — Physical Examination on Admission (pertinent
@@ -128,15 +147,24 @@ const PE_SYSTEMS = [
       "Asymmetrical chest expansion",
       "Decreased breath sounds",
       "Wheezes",
-      "Coarse crackles/rales",
+      "Rales/crackles/rhonchi",
       "Intercostal/subclavicular retraction",
+      "Lump/s over Breast(s)",
     ],
   },
   {
     key: "peCvs",
     othersKey: "peCvsOthers",
     label: "CVS",
-    options: ["Essentially normal", "Displaced apex beat", "Muffled heart sounds", "Murmur", "Irregular rhythm"],
+    options: [
+      "Essentially normal",
+      "Displaced apex beat",
+      "Muffled heart sounds",
+      "Murmur",
+      "Irregular rhythm",
+      "Heaves and/or thrills",
+      "Pericardial bulge",
+    ],
   },
   {
     key: "peAbdomen",
@@ -145,6 +173,7 @@ const PE_SYSTEMS = [
     options: [
       "Essentially normal",
       "Abdominal tenderness",
+      "Abdominal rigidity",
       "Hyperactive bowel sounds",
       "Palpable mass(es)",
       "Tympanitic/dull abdomen",
@@ -157,7 +186,7 @@ const PE_SYSTEMS = [
     label: "GU / OB",
     options: [
       "Essentially normal",
-      "Vulvar bleeding/discharge",
+      "Blood stained in exam finger",
       "Cervical dilatation",
       "Presence of abnormal discharge",
     ],
@@ -172,8 +201,10 @@ const PE_SYSTEMS = [
       "Cold clammy skin",
       "Cyanosis/mottled skin",
       "Decreased mobility",
-      "Pale sole/skin",
+      "Edema/swelling",
+      "Pale nailbeds",
       "Poor skin turgor",
+      "Rashes/petechiae",
       "Weak pulses",
     ],
   },
@@ -189,6 +220,7 @@ const PE_SYSTEMS = [
       "Abnormal reflex(es)",
       "Poor muscle tone/strength",
       "Poor coordination",
+      "Poor/altered memory",
     ],
   },
 ];
@@ -535,7 +567,7 @@ export const initialConsultationForm = {
   // PhilHealth CF4 — Outcome of Treatment. Distinct from Disposition
   // above: Disposition is the administrative next step (discharged,
   // admitted, transferred...); this is CF4's specific clinical-outcome
-  // field (Improved / Cured / Absconded / Transferred / Died), with a
+  // field (Improved / HAMA / Absconded / Transferred / Expired), with a
   // reason required for the last three.
   outcomeOfTreatment: "",
   outcomeOfTreatmentReason: "",
@@ -571,12 +603,14 @@ export const initialConsultationForm = {
   admissionSignsOthers: "",
 
   // PhilHealth CF4 — Physical Examination on Admission (pertinent findings
-  // per system, item 5 on the form). General Survey / HEENT are short
-  // free-text fields; the other six systems are each a checklist ("Essentially
-  // normal" or one/more specific findings) plus a free-text "Others"
-  // catch-all, same shape as the admission signs/symptoms checklist above.
-  peGeneralSurvey: "",
-  peHeent: "",
+  // per system, item 5 on the form). General Survey and HEENT are
+  // checklists too, same shape as the other six systems below —
+  // "Altered sensorium" pairs with a free-text specify field the same way
+  // "Pain"/"Others" do in the admission signs/symptoms checklist above.
+  peGeneralSurvey: [],
+  peGeneralSurveyAlteredSensoriumSpecify: "",
+  peHeent: [],
+  peHeentOthers: "",
   peChestLungs: [],
   peChestLungsOthers: "",
   peCvs: [],
@@ -1589,12 +1623,39 @@ export default function ConsultationForm({
         <div>
           <SectionHeader title="Physical Examination on Admission" />
           <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="General Survey">
-                <input name="peGeneralSurvey" value={form.peGeneralSurvey} onChange={handle} className={inputClass} />
+            <div>
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">General Survey</p>
+              <CheckboxGroup
+                options={GENERAL_SURVEY_OPTIONS}
+                selected={form.peGeneralSurvey}
+                onToggle={(opt) => toggleListValue("peGeneralSurvey", opt)}
+                columns="sm:grid-cols-2"
+              />
+              <Field label="Altered sensorium — specify" className="mt-3">
+                <input
+                  name="peGeneralSurveyAlteredSensoriumSpecify"
+                  value={form.peGeneralSurveyAlteredSensoriumSpecify}
+                  onChange={handle}
+                  disabled={!form.peGeneralSurvey.includes("Altered sensorium")}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+                />
               </Field>
-              <Field label="HEENT">
-                <input name="peHeent" value={form.peHeent} onChange={handle} className={inputClass} />
+            </div>
+
+            <div className="pt-4 border-t border-slate-200">
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">HEENT</p>
+              <CheckboxGroup
+                options={HEENT_OPTIONS}
+                selected={form.peHeent}
+                onToggle={(opt) => toggleListValue("peHeent", opt)}
+              />
+              <Field label="Others" className="mt-3">
+                <input
+                  name="peHeentOthers"
+                  value={form.peHeentOthers}
+                  onChange={handle}
+                  className={inputClass}
+                />
               </Field>
             </div>
 
@@ -2146,7 +2207,7 @@ export default function ConsultationForm({
               PhilHealth CF4 — Outcome of Treatment
             </p>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {["Improved", "Cured", "Absconded", "Transferred", "Died"].map((opt) => (
+              {["Improved", "HAMA", "Absconded", "Transferred", "Expired"].map((opt) => (
                 <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="radio"
@@ -2159,12 +2220,12 @@ export default function ConsultationForm({
                 </label>
               ))}
             </div>
-            <Field label="Specify reason (required for Absconded / Transferred / Died)">
+            <Field label="Specify reason (required for Absconded / Transferred / Expired)">
               <input
                 name="outcomeOfTreatmentReason"
                 value={form.outcomeOfTreatmentReason}
                 onChange={handle}
-                disabled={!["Absconded", "Transferred", "Died"].includes(form.outcomeOfTreatment)}
+                disabled={!["Absconded", "Transferred", "Expired"].includes(form.outcomeOfTreatment)}
                 className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
               />
             </Field>

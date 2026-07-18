@@ -40,6 +40,16 @@ const PROMOTED_FIELDS = {
   dispositionNotes: "disposition_notes",
   allergies: "allergies",
   bloodType: "blood_type",
+
+  // PhilHealth CF4 — see cf4-fields-addendum.sql for why these seven (and
+  // only these seven) of the new CF4 fields are promoted out of `details`.
+  admittingDiagnosis: "admitting_diagnosis",
+  dischargeDiagnosis: "discharge_diagnosis",
+  caseRateCode1: "case_rate_code_1",
+  caseRateCode2: "case_rate_code_2",
+  dateAdmitted: "date_admitted",
+  dateDischarged: "date_discharged",
+  outcomeOfTreatment: "outcome_of_treatment",
 };
 
 function rowToEntry(row) {
