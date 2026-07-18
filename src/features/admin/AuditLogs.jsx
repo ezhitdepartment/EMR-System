@@ -90,7 +90,7 @@ export default function AuditLogs() {
   return (
     <div className="max-w-6xl">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-teal-700 mb-1">Admin</p>
           <h1 className="text-2xl font-semibold text-slate-800">Audit Logs</h1>

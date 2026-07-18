@@ -180,7 +180,7 @@ export default function EncounterFilesPage() {
                 <p className="font-semibold text-slate-800">{fullName || "—"}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <p className="text-[11px] text-slate-400 uppercase tracking-wide">Age</p>
                   <p className="font-medium text-slate-700">{formatAge(patient.dateOfBirth)}</p>
@@ -201,7 +201,7 @@ export default function EncounterFilesPage() {
                 <p className="font-medium text-slate-700">{encounter.id}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <p className="text-[11px] text-slate-400 uppercase tracking-wide">Appointment Date</p>
                   <p className="font-medium text-slate-700">
@@ -235,7 +235,7 @@ export default function EncounterFilesPage() {
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
                 Proceed To
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() =>

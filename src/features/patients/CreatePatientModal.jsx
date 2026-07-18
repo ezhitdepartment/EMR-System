@@ -335,7 +335,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                   />
                 </Field>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="First Name" required>
                     <input
                       value={form.firstName}
@@ -354,7 +354,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                   </Field>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Middle Name">
                     <input
                       value={form.middleName}
@@ -377,7 +377,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                   </Field>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Sex" required>
                     <select
                       value={form.sex}
@@ -421,7 +421,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                   />
                 </Field>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Landline No.">
                     <input
                       value={form.landline}
@@ -452,7 +452,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                 disabled={!form.hasGuardian}
                 className={`space-y-3 ${!form.hasGuardian ? "opacity-50" : ""}`}
               >
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="First Name">
                     <input
                       value={form.guardian.firstName}
@@ -468,7 +468,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                     />
                   </Field>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Middle Name">
                     <input
                       value={form.guardian.middleName}
@@ -490,7 +490,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                     </select>
                   </Field>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Sex">
                     <select
                       value={form.guardian.sex}
@@ -518,7 +518,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                     className={inputClass}
                   />
                 </Field>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Landline No.">
                     <input
                       value={form.guardian.landline}
@@ -559,7 +559,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
           <div className="mt-6 pt-5 border-t border-slate-200">
             <p className="text-sm font-semibold text-slate-700 mb-3">Family Background</p>
             <div className="grid md:grid-cols-2 gap-x-8 gap-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Name of Mother">
                   <input
                     value={form.motherName}
@@ -575,7 +575,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
                   />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Name of Father">
                   <input
                     value={form.fatherName}

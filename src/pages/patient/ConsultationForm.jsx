@@ -632,7 +632,7 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
         empty={!triage ? "No triage recorded yet for this registration." : null}
       >
         {triage && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <RefRow
               label="Blood Pressure"
               value={triage.systolic && triage.diastolic ? `${triage.systolic}/${triage.diastolic} mmHg` : null}
@@ -674,7 +674,7 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
             <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">
               Fasting Blood Sugar (FBS) — from Triage
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <RefRow label="Glucose (mg/dL)" value={triage.fbsGlucoseMgDl} />
               <RefRow label="Glucose (mmol/L)" value={triage.fbsGlucoseMmolL} />
               <RefRow
@@ -872,7 +872,7 @@ function DoctorConsultationReferencePanel({ patient, form }) {
         defaultOpen
         empty={!form.disposition ? "No disposition recorded yet." : null}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <RefRow label="Disposition" value={form.disposition} />
           <RefRow label="Notes" value={form.dispositionNotes} />
         </div>
@@ -1453,7 +1453,7 @@ export default function ConsultationForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <p className="text-xs font-bold text-blue-900 mb-2">Pregnancy History</p>
-                <div className="grid grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
                   <Field label="No. of Pregnancies">
                     <input
                       name="noOfPregnancies"
@@ -1518,7 +1518,7 @@ export default function ConsultationForm({
 
               <div>
                 <p className="text-xs font-bold text-blue-900 mb-2">Menstrual History</p>
-                <div className="grid grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
                   <Field label="Age of First Menstruation">
                     <input
                       name="ageOfFirstMenstruation"

@@ -166,12 +166,12 @@ export default function AddMedicinePrescriptionModal({ onClose, onCreated }) {
                 return (
                   <div
                     key={row.rowId}
-                    className="grid grid-cols-[1fr_70px_100px_90px_28px] gap-2 items-center"
+                    className="grid grid-cols-[1fr_46px_64px_56px_24px] gap-1.5 items-center sm:grid-cols-[1fr_70px_100px_90px_28px] sm:gap-2"
                   >
                     <select
                       value={row.medicineName}
                       onChange={(e) => selectMedicine(row.rowId, e.target.value)}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                      className="min-w-0 rounded-lg border border-slate-300 px-1.5 py-2 text-xs sm:px-2 sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                     >
                       <option value="">Select medicine</option>
                       {MEDICINE_CATALOG.map((m) => (
@@ -185,7 +185,7 @@ export default function AddMedicinePrescriptionModal({ onClose, onCreated }) {
                       min="1"
                       value={row.quantity}
                       onChange={(e) => updateRow(row.rowId, { quantity: e.target.value })}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                      className="min-w-0 rounded-lg border border-slate-300 px-1 py-2 text-xs sm:px-2 sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                     />
                     <input
                       type="number"
@@ -193,16 +193,16 @@ export default function AddMedicinePrescriptionModal({ onClose, onCreated }) {
                       step="0.01"
                       value={row.unitPrice}
                       onChange={(e) => updateRow(row.rowId, { unitPrice: e.target.value })}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                      className="min-w-0 rounded-lg border border-slate-300 px-1 py-2 text-xs sm:px-2 sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                     />
-                    <p className="text-sm text-slate-600 text-right pr-1">
+                    <p className="text-xs sm:text-sm text-slate-600 text-right pr-0.5 sm:pr-1 truncate">
                       {formatCurrency(subtotal)}
                     </p>
                     <button
                       type="button"
                       onClick={() => removeRow(row.rowId)}
                       disabled={rows.length === 1}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
                     >
                       <Trash2 size={14} />
                     </button>

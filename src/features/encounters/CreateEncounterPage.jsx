@@ -652,7 +652,7 @@ export default function CreateEncounterPage() {
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-4">
             <p className="text-sm font-semibold text-teal-700">Appointment Details</p>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
                   Date of Appointment <span className="text-red-500">*</span>
@@ -706,7 +706,7 @@ export default function CreateEncounterPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
                   Attending Physician <span className="text-red-500">*</span>
@@ -859,7 +859,7 @@ export default function CreateEncounterPage() {
           </p>
 
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-4">What's next?</p>
-          <div className="grid grid-cols-2 gap-2 w-full mt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full mt-1">
             <button
               type="button"
               onClick={() => navigate(`/encounters/${createdEncounter.id}/triage`)}

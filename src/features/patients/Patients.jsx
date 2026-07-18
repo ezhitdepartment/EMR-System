@@ -321,7 +321,7 @@ export default function Patients() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-slate-200 bg-slate-50">
               <p className="text-xs text-slate-500">
                 Showing <span className="font-medium text-slate-700">{rangeStart}</span>–
                 <span className="font-medium text-slate-700">{rangeEnd}</span> of{" "}

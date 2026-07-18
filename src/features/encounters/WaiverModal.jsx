@@ -47,7 +47,7 @@ export default function WaiverModal({ encounter, onClose, onSave }) {
             Waiver signed
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
                 Signed By

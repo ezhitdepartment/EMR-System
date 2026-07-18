@@ -446,12 +446,12 @@ export default function PatientRegistration({
             {/* Patient Name */}
             <div>
               <p className="text-xs text-slate-600 uppercase tracking-wide font-medium mb-2">Patient's Name</p>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div><p className="text-xs text-slate-600">Last Name</p><p className="font-medium">{form.lastName || "—"}</p></div>
                 <div><p className="text-xs text-slate-600">First Name</p><p className="font-medium">{form.firstName || "—"}</p></div>
                 <div><p className="text-xs text-slate-600">Middle Name</p><p className="font-medium">{form.middleName || "—"}</p></div>
               </div>
-              <div className="grid grid-cols-3 gap-4 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
                 <div><p className="text-xs text-slate-600">Age</p><p className="font-medium">{form.age || "—"}</p></div>
                 <div><p className="text-xs text-slate-600">Gender</p><p className="font-medium">{form.gender || "—"}</p></div>
                 <div><p className="text-xs text-slate-600">Date of Birth</p><p className="font-medium">{form.dateOfBirth || "—"}</p></div>
