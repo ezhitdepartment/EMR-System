@@ -8,6 +8,7 @@ import {
   loadDoctors,
   STATUS,
   createEncounter,
+  PATIENT_TYPE_BY_ROLE,
 } from "../../utils/encounters";
 import { loadPatients } from "../../utils/patients";
 
@@ -69,6 +70,10 @@ export default function CreateEncounterModal({ onClose, onCreated, presetHospita
         photo: null,
         createdBy: user?.id || null,
         status: STATUS.PENDING,
+        // Same rule CreateEncounterPage.jsx uses: the registering nurse's
+        // role decides ER vs OPD for this visit; anyone else (doctor,
+        // admin, etc.) defaults to OPD Patient.
+        patientType: PATIENT_TYPE_BY_ROLE[user?.role] || "OPD Patient",
         nurseConsultationDone: false,
         doctorConsultationDone: false,
         migratedStatus: "Not Migrated",
