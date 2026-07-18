@@ -38,6 +38,7 @@ import {
   Beer,
   Syringe,
   Heart,
+  Loader2,
 } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import PatientRegistration from "./PatientRegistration";
@@ -811,6 +812,18 @@ export default function PatientProfile() {
   const [showMedicalCertificate, setShowMedicalCertificate] = useState(false);
   const [consultation, setConsultation] = useState(null);
   const [consultationHistoryList, setConsultationHistoryList] = useState([]);
+  // ConsultationForm reads its `initialValues` prop only once, at mount
+  // (see the useState(() => ...) lazy initializer there) — it does NOT
+  // re-sync if `consultation` finishes loading afterward. Since
+  // `showConsultation` can flip to true from the "openConsultation"
+  // navigation-state effect below independently of (and sometimes before)
+  // the patient/consultation fetch below finishes, that used to let the
+  // form mount with blank/seed data — which looked like "the nurse's
+  // consultation isn't showing" for whoever opened it next (most visibly
+  // across two different devices/sessions, but it could happen on one
+  // device too if the click landed before the fetch resolved). This flag
+  // gates the form's mount until the real data has actually arrived.
+  const [consultationDataReady, setConsultationDataReady] = useState(false);
   const [showConsultation, setShowConsultation] = useState(false);
   const [consultationReturnTo, setConsultationReturnTo] = useState(null);
   const [consultationReadOnly, setConsultationReadOnly] = useState(false);
@@ -888,6 +901,7 @@ export default function PatientProfile() {
   useEffect(() => {
     let active = true;
     setPatient(undefined); // "still loading" sentinel — see the render guard below
+    setConsultationDataReady(false);
     findPatientById(hospitalNo).then(async (found) => {
       if (!active) return;
       setPatient(found);
@@ -900,6 +914,7 @@ export default function PatientProfile() {
       const history = found ? await loadConsultationHistory(hospitalNo) : [];
       setConsultationHistoryList(history);
       setConsultation(history[0] || null);
+      setConsultationDataReady(true);
       setSharedClinical(found ? await loadSharedClinical(hospitalNo) : {});
       setLabOrders(found ? (await loadLabOrders()).filter((o) => o.hospitalNo === hospitalNo) : []);
       setMedicinePrescriptions(
@@ -1996,7 +2011,15 @@ export default function PatientProfile() {
           new history entry (see saveConsultationEntry) rather than
           overwriting — that's what populates the Medical Record / ER
           Consultation / OPD Consultation folders in Patient Files. */}
-      {showConsultation && (
+      {showConsultation && !consultationDataReady && (
+        <div className="fixed inset-0 z-50 bg-slate-50/90 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-slate-500 text-sm">
+            <Loader2 size={18} className="animate-spin" />
+            Loading consultation…
+          </div>
+        </div>
+      )}
+      {showConsultation && consultationDataReady && (
         <ConsultationForm
           initialValues={consultation || patientToConsultationSeed(patient, sharedClinical)}
           readOnly={consultationReadOnly}
