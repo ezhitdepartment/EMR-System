@@ -210,6 +210,7 @@ export default function Encounters() {
       if (!q) return true;
       return (
         e.id.toLowerCase().includes(q) ||
+        (e.censusNo || "").toLowerCase().includes(q) ||
         e._fullName.toLowerCase().includes(q) ||
         (e.hospitalNo || "").toLowerCase().includes(q) ||
         (e.doctor || "").toLowerCase().includes(q)
@@ -222,6 +223,13 @@ export default function Encounters() {
         case "id":
           av = a.id;
           bv = b.id;
+          break;
+        case "censusNo":
+          // Pending (null) rows sort last regardless of direction, so a
+          // freshly-created registration doesn't jump to the top of an
+          // ascending sort just because null < everything.
+          av = a.censusNo || "\uffff";
+          bv = b.censusNo || "\uffff";
           break;
         case "appointmentDate":
           av = a.appointmentDate || "";
@@ -418,7 +426,7 @@ export default function Encounters() {
                 <thead>
                   <tr className="bg-teal-900 text-left text-xs uppercase tracking-wide text-white">
                     <th className="px-4 py-3">
-                      <SortHeader label="Census" field="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortHeader label="Census" field="censusNo" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Hospital No.</th>
                     <th className="px-4 py-3">
@@ -455,7 +463,18 @@ export default function Encounters() {
                 <tbody>
                   {paged.map((e) => (
                     <tr key={e.id} className="border-b border-slate-100 hover:bg-teal-50/40 transition-colors">
-                      <td className="px-4 py-3 font-medium text-teal-700 whitespace-nowrap align-top">{e.id}</td>
+                      <td className="px-4 py-3 font-medium whitespace-nowrap align-top">
+                        {e.censusNo ? (
+                          <span className="text-teal-700">{e.censusNo}</span>
+                        ) : (
+                          <span
+                            title="Assigned automatically once the nurse saves the Consultation Form"
+                            className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500"
+                          >
+                            Pending
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{e.hospitalNo || "—"}</td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">
                         {e.appointmentDate

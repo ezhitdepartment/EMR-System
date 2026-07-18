@@ -96,6 +96,12 @@ function rowToEncounter(row) {
 
   return {
     id: row.id,
+    // Assigned by a DB trigger the moment nurse_consultation_done flips to
+    // true (see the "Census No." addendum in supabase_schema.sql) — null
+    // until then. Never set from the client; encounterToRow() below
+    // intentionally omits it so a plain updateEncounter() call can never
+    // clobber it.
+    censusNo: row.census_no || null,
     hospitalNo: p.hospital_no || row._hospitalNoFallback || "",
     patient: {
       firstName: p.first_name || "",
@@ -195,7 +201,11 @@ function waiverToRow(encounterId, w) {
 }
 
 // Only the columns that live directly on the encounters row — triage/waiver
-// are handled separately since they're their own tables.
+// are handled separately since they're their own tables. census_no is
+// deliberately NOT included here: it's DB-generated (see rowToEncounter's
+// comment), and every UPDATE call goes through this function, so leaving
+// it out guarantees the client can never overwrite what the trigger
+// assigned.
 function encounterToRow(e) {
   return {
     appointment_date: e.appointmentDate || null,
