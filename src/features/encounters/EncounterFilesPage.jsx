@@ -43,9 +43,9 @@ export default function EncounterFilesPage() {
   // record, same counts, and the folder cards below link straight into
   // that tab to actually view/edit/download.
   useEffect(() => {
-    if (!encounter?.patientId) return;
+    if (!encounter?.hospitalNo) return;
     let active = true;
-    loadAllPatientDocuments(encounter.patientId).then((docs) => {
+    loadAllPatientDocuments(encounter.hospitalNo).then((docs) => {
       if (!active) return;
       setDocuments({
         emr: docs.emr,
@@ -57,7 +57,7 @@ export default function EncounterFilesPage() {
     return () => {
       active = false;
     };
-  }, [encounter?.patientId]);
+  }, [encounter?.hospitalNo]);
 
   async function handleSaveWaiver(waiver) {
     const updated = await updateEncounter(encounterId, (e) => ({ ...e, waiver }));
@@ -120,7 +120,7 @@ export default function EncounterFilesPage() {
             <button
               type="button"
               onClick={() =>
-                navigate(`/patients/${encounter.patientId}?tab=patient-files`)
+                navigate(`/patients/${encounter.hospitalNo}?tab=patient-files`)
               }
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
             >
@@ -140,7 +140,7 @@ export default function EncounterFilesPage() {
                 key={folder.id}
                 type="button"
                 onClick={() =>
-                  navigate(`/patients/${encounter.patientId}?tab=patient-files`)
+                  navigate(`/patients/${encounter.hospitalNo}?tab=patient-files`)
                 }
                 className="flex items-center gap-3 text-left bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-xl px-4 py-3 transition-colors"
               >
@@ -192,8 +192,8 @@ export default function EncounterFilesPage() {
               </div>
 
               <div>
-                <p className="text-[11px] text-slate-400 uppercase tracking-wide">PIN</p>
-                <p className="font-medium text-slate-700">{patient.pin || "—"}</p>
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide">Hospital No.</p>
+                <p className="font-medium text-slate-700">{patient.hospitalNo || "—"}</p>
               </div>
 
               <div>
@@ -239,7 +239,7 @@ export default function EncounterFilesPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(`/patients/${encounter.patientId}`, {
+                    navigate(`/patients/${encounter.hospitalNo}`, {
                       state: {
                         openConsultation: true,
                         consultationReadOnly: encounter.status === "CANCELLED",

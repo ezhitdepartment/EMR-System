@@ -55,12 +55,12 @@ export const SHARED_FIELD_MAP = {
 // patient, so it rides along on the same row rather than its own table.
 import { supabase } from "../../lib/supabaseClient";
 
-export async function loadSharedClinical(patientId) {
-  if (!patientId) return {};
+export async function loadSharedClinical(hospitalNo) {
+  if (!hospitalNo) return {};
   const { data, error } = await supabase
     .from("patients")
     .select("shared_clinical")
-    .eq("patient_id", patientId)
+    .eq("hospital_no", hospitalNo)
     .maybeSingle();
   if (error) {
     console.error("Loading shared clinical fields failed:", error.message);
@@ -69,13 +69,13 @@ export async function loadSharedClinical(patientId) {
   return data?.shared_clinical || {};
 }
 
-export async function saveSharedClinical(patientId, patch) {
-  const current = await loadSharedClinical(patientId);
+export async function saveSharedClinical(hospitalNo, patch) {
+  const current = await loadSharedClinical(hospitalNo);
   const merged = { ...current, ...patch };
   const { error } = await supabase
     .from("patients")
     .update({ shared_clinical: merged })
-    .eq("patient_id", patientId);
+    .eq("hospital_no", hospitalNo);
   if (error) {
     console.error("Saving shared clinical fields failed:", error.message);
   }

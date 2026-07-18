@@ -139,7 +139,7 @@ function rowToOrder(row) {
 
   return {
     id: row.id,
-    patientId: p.patient_id || "",
+    hospitalNo: p.hospital_no || "",
     patient: {
       firstName: p.first_name || "",
       lastName: p.last_name || "",
@@ -158,7 +158,7 @@ function rowToOrder(row) {
 
 const SELECT_WITH_JOINS = `
   *,
-  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth ),
+  patients ( hospital_no, first_name, last_name, middle_name, sex, date_of_birth ),
   profiles!lab_orders_created_by_fkey ( username ),
   lab_order_tests ( *, lab_order_test_files ( * ) )
 `;
@@ -190,9 +190,9 @@ export async function findLabOrderById(orderId) {
 // (CreateLabOrderModal.jsx pre-generates each code via
 // generateDiagnosticCode before calling this) — everything else defaults
 // on the DB side (status PENDING, queueStatus WAITING).
-export async function createLabOrder({ patientId, diagnostics, testDetails, tests, createdBy }) {
-  const patientUuid = await getPatientUuid(patientId);
-  if (!patientUuid) throw new Error(`No patient found with patientId "${patientId}"`);
+export async function createLabOrder({ hospitalNo, diagnostics, testDetails, tests, createdBy }) {
+  const patientUuid = await getPatientUuid(hospitalNo);
+  if (!patientUuid) throw new Error(`No patient found with Hospital No. "${hospitalNo}"`);
 
   const { data: orderRow, error } = await supabase
     .from("lab_orders")

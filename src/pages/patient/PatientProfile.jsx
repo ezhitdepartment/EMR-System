@@ -56,7 +56,7 @@ import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions
 import { findEncounterById, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
 import { loadLabOrders, createLabOrder, formatDateCreated } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
-import { loadMedicinePrescriptions, createMedicinePrescription } from "../../utils/medicinePrescriptions";
+import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
 import {
   loadSharedClinical,
   saveSharedClinical,
@@ -83,7 +83,7 @@ function patientFileLabel(patient) {
   const first = (patient.firstName || "").trim().toUpperCase();
   const mi = patient.middleName ? `${patient.middleName.trim().charAt(0).toUpperCase()}.` : "";
   const firstPart = [first, mi].filter(Boolean).join(" ");
-  return [last, firstPart].filter(Boolean).join(", ") || patient.patientId;
+  return [last, firstPart].filter(Boolean).join(", ") || patient.hospitalNo;
 }
 
 function calculateAge(dob) {
@@ -794,7 +794,7 @@ function PatientFilesPanel({
 }
 
 export default function PatientProfile() {
-  const { patientId } = useParams();
+  const { hospitalNo } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -855,15 +855,16 @@ export default function PatientProfile() {
   // a page refresh doesn't reopen it.
   useEffect(() => {
     if (location.state?.openConsultation) {
+      setShowConsultation(true);
       setConsultationReadOnly(!!location.state?.consultationReadOnly);
       setConsultationReturnTo(location.state?.returnTo || null);
       const encId = location.state?.consultationEncounterId;
+      if (encId) {
+        findEncounterById(encId).then(setConsultationEncounter);
+      } else {
+        setConsultationEncounter(null);
+      }
       navigate(location.pathname, { replace: true, state: {} });
-      (async () => {
-        await refreshConsultationHistory(patientId);
-        setConsultationEncounter(encId ? await findEncounterById(encId) : null);
-        setShowConsultation(true);
-      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
@@ -877,70 +878,49 @@ export default function PatientProfile() {
   const [viewPrescribedRecord, setViewPrescribedRecord] = useState(null);
 
   async function refreshLabOrders(pid) {
-    setLabOrders((await loadLabOrders()).filter((o) => o.patientId === pid));
+    setLabOrders((await loadLabOrders()).filter((o) => o.hospitalNo === pid));
   }
 
   async function refreshMedicinePrescriptions(pid) {
-    setMedicinePrescriptions((await loadMedicinePrescriptions()).filter((r) => r.patientId === pid));
-  }
-
-  // Pulls the freshest consultation rows for this patient from Supabase and
-  // syncs both consultationHistoryList and consultation (the globally-latest
-  // entry) from them. consultationHistoryList/consultation are normally only
-  // populated once, at mount (see the effect below) — but this page can sit
-  // open on one device/tab while a different role saves their part of the
-  // same encounter's Consultation Form on another device. Without refetching
-  // right before the form opens, initialValues would be built from whatever
-  // was on file at THIS page's mount time, silently missing anything saved
-  // elsewhere since — which is what made the doctor's side panel look empty
-  // of the nurse's intake (and vice versa). Call this immediately before
-  // setShowConsultation(true) at every entry point, not just on mount.
-  async function refreshConsultationHistory(pid) {
-    const history = await loadConsultationHistory(pid);
-    setConsultationHistoryList(history);
-    setConsultation(history[0] || null);
-    return history;
+    setMedicinePrescriptions((await loadMedicinePrescriptions()).filter((r) => r.hospitalNo === pid));
   }
 
   useEffect(() => {
     let active = true;
     setPatient(undefined); // "still loading" sentinel — see the render guard below
-    findPatientById(patientId).then(async (found) => {
+    findPatientById(hospitalNo).then(async (found) => {
       if (!active) return;
       setPatient(found);
-      const docs = found ? await loadAllPatientDocuments(patientId) : { emr: null, discharge: null, konsulta: null, medcert: null };
+      const docs = found ? await loadAllPatientDocuments(hospitalNo) : { emr: null, discharge: null, konsulta: null, medcert: null };
       if (!active) return;
       setEmr(docs.emr);
       setDischarge(docs.discharge);
       setKonsultaReferral(docs.konsulta);
       setMedicalCertificate(docs.medcert);
-      if (found) {
-        await refreshConsultationHistory(patientId);
-      } else {
-        setConsultationHistoryList([]);
-        setConsultation(null);
-      }
-      setSharedClinical(found ? await loadSharedClinical(patientId) : {});
-      setLabOrders(found ? (await loadLabOrders()).filter((o) => o.patientId === patientId) : []);
+      const history = found ? await loadConsultationHistory(hospitalNo) : [];
+      setConsultationHistoryList(history);
+      setConsultation(history[0] || null);
+      setSharedClinical(found ? await loadSharedClinical(hospitalNo) : {});
+      setLabOrders(found ? (await loadLabOrders()).filter((o) => o.hospitalNo === hospitalNo) : []);
       setMedicinePrescriptions(
-        found ? (await loadMedicinePrescriptions()).filter((r) => r.patientId === patientId) : []
+        found ? (await loadMedicinePrescriptions()).filter((r) => r.hospitalNo === hospitalNo) : []
       );
     });
     return () => {
       active = false;
     };
-  }, [patientId]);
+  }, [hospitalNo]);
 
   // "Add Prescription" navigates to the standalone add-prescription page
   // (unlike Lab Orders, which uses an in-page modal) — so pick up any new
   // records when the person returns to this tab/window.
   useEffect(() => {
     function onFocus() {
-      refreshMedicinePrescriptions(patientId);
+      refreshMedicinePrescriptions(hospitalNo);
     }
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [patientId]);
+  }, [hospitalNo]);
 
   useEffect(() => {
     if (!cameraStream || !videoRef.current) return;
@@ -963,7 +943,7 @@ export default function PatientProfile() {
   async function syncSharedClinical(formKey, formData) {
     const contributed = extractSharedFields(formData, formKey);
     if (Object.keys(contributed).length === 0) return;
-    const merged = await saveSharedClinical(patientId, contributed);
+    const merged = await saveSharedClinical(hospitalNo, contributed);
     setSharedClinical(merged);
 
     const siblings = [
@@ -976,13 +956,13 @@ export default function PatientProfile() {
       if (key === formKey || !record) continue;
       const { patched, changed } = fillBlanksFromShared(record, key, merged);
       if (!changed) continue;
-      const saved = await saveFn(patientId, patched, user?.id ?? null);
+      const saved = await saveFn(hospitalNo, patched, user?.id ?? null);
       setter(saved);
     }
   }
 
   async function handleSaveEmr(formData) {
-    const updatedEmr = await saveEmr(patientId, formData, user?.id ?? null);
+    const updatedEmr = await saveEmr(hospitalNo, formData, user?.id ?? null);
     setEmr(updatedEmr);
     syncSharedClinical("emr", formData);
   }
@@ -998,7 +978,7 @@ export default function PatientProfile() {
     let entry;
     try {
       entry = await saveConsultationEntry(
-        patientId,
+        hospitalNo,
         formData,
         user?.role,
         consultationEncounter?.id ?? null,
@@ -1006,10 +986,7 @@ export default function PatientProfile() {
       );
     } catch (err) {
       alert(`Couldn't save the consultation: ${err.message || "unknown error"}`);
-      // Re-throw so ConsultationForm's handleSubmit (which now awaits this)
-      // knows the save failed and keeps the form open with the data intact,
-      // instead of closing it as if nothing went wrong.
-      throw err;
+      return;
     }
 
     // Auto-create a Lab Order for whatever the doctor checked off in the
@@ -1027,7 +1004,7 @@ export default function PatientProfile() {
     if (user?.role === "doctor" && formData.diagnosticsSelected?.length > 0) {
       try {
         await createLabOrder({
-          patientId,
+          hospitalNo,
           diagnostics: formData.diagnosticsSelected,
           testDetails: formData.diagnosticsTestDetails || {},
         });
@@ -1037,41 +1014,6 @@ export default function PatientProfile() {
         // surface it so the doctor knows to place the order manually.
         alert(
           `The consultation was saved, but the lab order couldn't be created automatically: ${
-            err.message || "unknown error"
-          }`
-        );
-      }
-    }
-
-    // Same idea for the Medicine Prescription section: the Rx pad on the
-    // Consultation Form used to only ever save into consultations.details
-    // (fine for redisplaying it on this same consultation, but invisible
-    // to the standalone Medicine Prescriptions module, Pharmacist role, and
-    // reports — all of which read the real medicine_prescriptions /
-    // prescription_items tables). Mirror the auto-lab-order block above so
-    // a real prescription record is created too.
-    const rxItems = (formData.prescriptionItems || []).filter((it) => (it.medicineName || "").trim());
-    if (user?.role === "doctor" && rxItems.length > 0) {
-      try {
-        const prescribedBy =
-          [user?.prefix, user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
-          user?.username ||
-          "";
-        await createMedicinePrescription({
-          patientId,
-          encounterId: consultationEncounter?.id ?? null,
-          prescribedBy,
-          createdBy: user?.id ?? null,
-          items: rxItems.map((it) => ({
-            medicineName: it.medicineName,
-            quantity: Number(it.quantity) || 1,
-            instructions: it.instructions || "",
-          })),
-        });
-        refreshMedicinePrescriptions(patientId);
-      } catch (err) {
-        alert(
-          `The consultation was saved, but the medicine prescription couldn't be recorded automatically: ${
             err.message || "unknown error"
           }`
         );
@@ -1107,7 +1049,7 @@ export default function PatientProfile() {
         emergencyPhoneCell: formData.emergencyPhoneCell,
       };
       try {
-        updatedPatient = await updatePatient(patientId, patch);
+        updatedPatient = await updatePatient(hospitalNo, patch);
       } catch {
         // Consultation record still saved above even if this sync fails —
         // surface it quietly rather than losing the consultation save.
@@ -1151,19 +1093,19 @@ export default function PatientProfile() {
   }
 
   async function handleSaveDischarge(formData) {
-    const updated = await saveDischarge(patientId, formData, user?.id ?? null);
+    const updated = await saveDischarge(hospitalNo, formData, user?.id ?? null);
     setDischarge(updated);
     syncSharedClinical("discharge", formData);
   }
 
   async function handleSaveKonsultaReferral(formData) {
-    const updated = await saveKonsultaReferral(patientId, formData, user?.id ?? null);
+    const updated = await saveKonsultaReferral(hospitalNo, formData, user?.id ?? null);
     setKonsultaReferral(updated);
     syncSharedClinical("konsulta", formData);
   }
 
   async function handleSaveMedicalCertificate(formData) {
-    const updated = await saveMedicalCertificate(patientId, formData, user?.id ?? null);
+    const updated = await saveMedicalCertificate(hospitalNo, formData, user?.id ?? null);
     setMedicalCertificate(updated);
     syncSharedClinical("medcert", formData);
   }
@@ -1230,7 +1172,7 @@ export default function PatientProfile() {
         return;
       }
 
-      const updatedPatient = await savePatientPhoto(patientId, photoDataUrl);
+      const updatedPatient = await savePatientPhoto(hospitalNo, photoDataUrl);
       if (updatedPatient) {
         setPatient(updatedPatient);
       }
@@ -1303,7 +1245,7 @@ export default function PatientProfile() {
         return;
       }
 
-      const updatedPatient = await savePatientPhoto(patientId, photoDataUrl);
+      const updatedPatient = await savePatientPhoto(hospitalNo, photoDataUrl);
       if (updatedPatient) {
         setPatient(updatedPatient);
       }
@@ -1412,7 +1354,7 @@ export default function PatientProfile() {
       const photoDataUrl = reader.result;
       if (!photoDataUrl) return;
 
-      const updatedPatient = await savePatientPhoto(patientId, photoDataUrl);
+      const updatedPatient = await savePatientPhoto(hospitalNo, photoDataUrl);
       if (updatedPatient) {
         setPatient(updatedPatient);
       }
@@ -1432,7 +1374,7 @@ export default function PatientProfile() {
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-8 text-center max-w-sm">
           <p className="text-sm font-semibold text-slate-800 mb-1">Patient not found</p>
           <p className="text-xs text-slate-500 mb-4">
-            We couldn't find a patient with ID "{patientId}". It may have been removed.
+            We couldn't find a patient with Hospital No. "{hospitalNo}". It may have been removed.
           </p>
           <button
             type="button"
@@ -1463,7 +1405,7 @@ export default function PatientProfile() {
         </div>
         <div className="text-right">
           <p className="text-sm font-semibold leading-tight">{fullName || "Unnamed Patient"}</p>
-          <p className="text-teal-200 text-[11px]">{patient.patientId}</p>
+          <p className="text-teal-200 text-[11px]">{patient.hospitalNo}</p>
         </div>
       </div>
 
@@ -1488,7 +1430,7 @@ export default function PatientProfile() {
                   </p>
                   <p className="text-[11px] text-teal-200 mt-1.5">{detailedAge || "—"}</p>
                   <p className="text-[11px] text-teal-200 uppercase">{patient.sex || "—"}</p>
-                  <p className="text-[11px] text-teal-200">PIN: {patient.hospitalNo || patient.pin || "—"}</p>
+                  <p className="text-[11px] text-teal-200">Hospital No.: {patient.hospitalNo || "—"}</p>
                 </>
               )}
               <button
@@ -1614,16 +1556,16 @@ export default function PatientProfile() {
                     <div>
                       <p className="text-[11px] text-slate-400 uppercase tracking-wide">Hospital No.</p>
                       <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{patient.pin || "—"}</p>
+                        <p className="text-sm font-semibold text-slate-800 truncate">{patient.hospitalNo || "—"}</p>
                         <button
                           type="button"
-                          onClick={() => handleCopy("pin", patient.pin)}
+                          onClick={() => handleCopy("hospitalNo", patient.hospitalNo)}
                           title="Copy Hospital No."
                           className="text-slate-300 hover:text-teal-700 shrink-0"
                         >
                           <Copy size={12} />
                         </button>
-                        {copiedField === "pin" && <span className="text-[10px] text-teal-600">Copied</span>}
+                        {copiedField === "hospitalNo" && <span className="text-[10px] text-teal-600">Copied</span>}
                       </div>
                     </div>
 
@@ -1682,24 +1624,6 @@ export default function PatientProfile() {
                         ))}
                       </div>
                     </div>
-                    <div>
-                      <p className="text-[11px] text-slate-400 uppercase tracking-wide">PIN</p>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-semibold text-slate-800 truncate">
-                          {patient.hospitalNo || patient.pin || "—"}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy("pin", patient.hospitalNo || patient.pin)}
-                          title="Copy PIN"
-                          className="text-slate-300 hover:text-teal-700 shrink-0"
-                        >
-                          <Copy size={12} />
-                        </button>
-                        {copiedField === "pin" && <span className="text-[10px] text-teal-600">Copied</span>}
-                      </div>
-                    </div>
-
                     <div className="col-span-2 sm:col-span-4">
                       <p className="text-[11px] text-slate-400 uppercase tracking-wide">Address</p>
                       <p className="text-sm font-semibold text-slate-800">
@@ -1738,11 +1662,10 @@ export default function PatientProfile() {
                 </div>
                 <button
                   type="button"
-                  onClick={async () => {
+                  onClick={() => {
                     setConsultationReadOnly(false);
                     setConsultationReturnTo(null);
                     setConsultationEncounter(null);
-                    await refreshConsultationHistory(patientId);
                     setShowConsultation(true);
                   }}
                   title="Add consultation"
@@ -1867,11 +1790,10 @@ export default function PatientProfile() {
                           <p className="text-xs text-slate-400">No {emptyCopy} recorded.</p>
                           <button
                             type="button"
-                            onClick={async () => {
+                            onClick={() => {
                               setConsultationReadOnly(false);
                               setConsultationReturnTo(null);
                               setConsultationEncounter(null);
-                              await refreshConsultationHistory(patientId);
                               setShowConsultation(true);
                             }}
                             className="text-xs font-semibold text-teal-700 hover:text-teal-800"
@@ -2021,7 +1943,7 @@ export default function PatientProfile() {
           ) : activeTab === "registration" ? (
             <div className="h-full min-h-0 overflow-y-auto pr-0.5">
               <PatientEncountersPanel
-                patientId={patientId}
+                hospitalNo={hospitalNo}
                 onOpenPatientFiles={() => setActiveTab("patient-files")}
               />
             </div>
@@ -2039,7 +1961,7 @@ export default function PatientProfile() {
               <PatientMedicinePrescriptionsPanel
                 records={medicinePrescriptions}
                 onCreate={() =>
-                  navigate("/medicine-prescriptions/create", { state: { presetPatientId: patientId } })
+                  navigate("/medicine-prescriptions/create", { state: { presetHospitalNo: hospitalNo } })
                 }
                 onOpenRecord={(record) => setViewPrescribedRecord(record)}
               />
@@ -2076,22 +1998,7 @@ export default function PatientProfile() {
           Consultation / OPD Consultation folders in Patient Files. */}
       {showConsultation && (
         <ConsultationForm
-          initialValues={
-            // When opened for a specific registration (consultationEncounter
-            // set — e.g. the doctor's "Start Consultation" for the same
-            // encounter the nurse already saved a note against), pre-fill
-            // from THAT encounter's most recent entry, not just whichever
-            // consultation is globally newest for the patient — a patient
-            // with more than one visit on file would otherwise show the
-            // wrong visit's notes. Falls back to the patient-wide latest
-            // (or a blank seed) when there's no encounter-specific entry
-            // yet, or when opened generally (no encounter in play).
-            (consultationEncounter
-              ? consultationHistoryList.find((e) => e.encounterId === consultationEncounter.id)
-              : consultation) ||
-            consultation ||
-            patientToConsultationSeed(patient, sharedClinical)
-          }
+          initialValues={consultation || patientToConsultationSeed(patient, sharedClinical)}
           readOnly={consultationReadOnly}
           onSave={handleSaveConsultation}
           onClose={() => {
@@ -2109,11 +2016,11 @@ export default function PatientProfile() {
           with the patient locked in since we're already on their profile. */}
       {showCreateLabOrder && (
         <CreateLabOrderModal
-          presetPatientId={patientId}
+          presetHospitalNo={hospitalNo}
           onClose={() => setShowCreateLabOrder(false)}
           onCreated={() => {
             setShowCreateLabOrder(false);
-            refreshLabOrders(patientId);
+            refreshLabOrders(hospitalNo);
           }}
         />
       )}

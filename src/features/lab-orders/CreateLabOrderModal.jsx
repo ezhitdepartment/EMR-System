@@ -9,14 +9,14 @@ import { useAuth } from "../../context/AuthContext";
 
 function patientLabel(p) {
   const name = [p.lastName, p.firstName].filter(Boolean).join(", ");
-  const idLine = p.hospitalNo || p.pin || p.patientId || "";
-  return idLine ? `${name} — ${idLine}` : name || p.patientId;
+  const idLine = p.hospitalNo || "";
+  return idLine ? `${name} — ${idLine}` : name || p.hospitalNo;
 }
 
-export default function CreateLabOrderModal({ onClose, onCreated, presetPatientId = null }) {
+export default function CreateLabOrderModal({ onClose, onCreated, presetHospitalNo = null }) {
   const { user } = useAuth();
   const [patients, setPatients] = useState([]);
-  const [patientId, setPatientId] = useState(presetPatientId || "");
+  const [hospitalNo, setHospitalNo] = useState(presetHospitalNo || "");
   const [diagnostics, setDiagnostics] = useState([]);
   const [testDetails, setTestDetails] = useState({});
   const [error, setError] = useState("");
@@ -26,8 +26,8 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
     loadPatients().then(setPatients);
   }, []);
 
-  const selectedPatient = patients.find((p) => p.patientId === patientId) || null;
-  const patientLocked = Boolean(presetPatientId);
+  const selectedPatient = patients.find((p) => p.hospitalNo === hospitalNo) || null;
+  const patientLocked = Boolean(presetHospitalNo);
 
   function toggleDiagnostic(name) {
     setDiagnostics((prev) =>
@@ -41,7 +41,7 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!patientId) {
+    if (!hospitalNo) {
       setError("Please select a patient.");
       return;
     }
@@ -64,7 +64,7 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
       }
 
       const order = await createLabOrder({
-        patientId,
+        hospitalNo,
         diagnostics,
         testDetails,
         tests,
@@ -105,14 +105,14 @@ export default function CreateLabOrderModal({ onClose, onCreated, presetPatientI
             </span>
             {patientLocked ? (
               <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                {selectedPatient ? patientLabel(selectedPatient) : patientId}
+                {selectedPatient ? patientLabel(selectedPatient) : hospitalNo}
               </div>
             ) : (
               <SearchableSelect
-                value={patientId}
-                onChange={setPatientId}
+                value={hospitalNo}
+                onChange={setHospitalNo}
                 options={patients}
-                getValue={(p) => p.patientId}
+                getValue={(p) => p.hospitalNo}
                 getLabel={patientLabel}
                 placeholder={
                   patients.length === 0 ? "No patients yet — create one first" : "Select patient"

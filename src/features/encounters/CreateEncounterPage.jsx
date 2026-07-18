@@ -89,7 +89,7 @@ export default function CreateEncounterPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const presetPatientId = location.state?.presetPatientId || "";
+  const presetHospitalNo = location.state?.presetHospitalNo || "";
 
   const [step, setStep] = useState(1);
   const [patientTab, setPatientTab] = useState("patients"); // "patients" | "masterlist"
@@ -100,7 +100,7 @@ export default function CreateEncounterPage() {
   const [dobMonth, setDobMonth] = useState("");
   const [sortField, setSortField] = useState("lastName");
   const [sortDir, setSortDir] = useState("asc");
-  const [selectedPatientId, setSelectedPatientId] = useState(presetPatientId);
+  const [selectedHospitalNo, setSelectedHospitalNo] = useState(presetHospitalNo);
   const [showCreatePatient, setShowCreatePatient] = useState(false);
   const [doctors, setDoctors] = useState([]);
 
@@ -128,10 +128,10 @@ export default function CreateEncounterPage() {
   const [activeAction, setActiveAction] = useState(null); // "triage" | "reassign" | "waiver"
 
   useEffect(() => {
-    if (presetPatientId && patients.some((p) => p.patientId === presetPatientId)) {
+    if (presetHospitalNo && patients.some((p) => p.hospitalNo === presetHospitalNo)) {
       setStep(2);
     }
-  }, [presetPatientId, patients]);
+  }, [presetHospitalNo, patients]);
 
   // Pick up patient records changed elsewhere (e.g. a photo updated from
   // Patient Profile) so this stays in sync without needing a manual
@@ -173,11 +173,11 @@ export default function CreateEncounterPage() {
   // to take a new one every time. They can still retake/upload to replace
   // it. Also re-syncs if the record's photo changes underneath us (e.g. the
   // storage/focus refresh above picks up an update made in another tab).
-  const selectedPatient = patients.find((p) => p.patientId === selectedPatientId) || null;
+  const selectedPatient = patients.find((p) => p.hospitalNo === selectedHospitalNo) || null;
 
   useEffect(() => {
     setPhoto(selectedPatient?.photo || null);
-  }, [selectedPatientId, selectedPatient?.photo]);
+  }, [selectedHospitalNo, selectedPatient?.photo]);
 
   const availableYears = useMemo(() => {
     const s = new Set();
@@ -205,7 +205,7 @@ export default function CreateEncounterPage() {
         if (!m || m !== Number(dobMonth)) return false;
       }
       if (!q) return true;
-      const haystack = [p.patientId, p.pin, p.firstName, p.lastName, p.middleName]
+      const haystack = [p.hospitalNo, p.firstName, p.lastName, p.middleName]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -240,7 +240,7 @@ export default function CreateEncounterPage() {
 
   function handlePatientCreated(patient) {
     setPatients((prev) => [patient, ...prev]);
-    setSelectedPatientId(patient.patientId);
+    setSelectedHospitalNo(patient.hospitalNo);
     setShowCreatePatient(false);
   }
 
@@ -285,9 +285,9 @@ export default function CreateEncounterPage() {
   async function applyPhoto(photoDataUrl) {
     setPhoto(photoDataUrl);
     if (selectedPatient) {
-      const updated = await savePatientPhoto(selectedPatient.patientId, photoDataUrl);
+      const updated = await savePatientPhoto(selectedPatient.hospitalNo, photoDataUrl);
       if (updated) {
-        setPatients((prev) => prev.map((p) => (p.patientId === updated.patientId ? updated : p)));
+        setPatients((prev) => prev.map((p) => (p.hospitalNo === updated.hospitalNo ? updated : p)));
       }
     }
   }
@@ -361,7 +361,7 @@ export default function CreateEncounterPage() {
 
     try {
       const created = await createEncounter({
-        patientId: selectedPatient.patientId,
+        hospitalNo: selectedPatient.hospitalNo,
         appointmentDate,
         consultationType: consultationTypeLabel,
         reasonForVisiting,
@@ -432,7 +432,7 @@ export default function CreateEncounterPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by Name, Patient ID or PIN"
+                placeholder="Search by Name or Hospital No."
                 className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
               />
             </div>
@@ -551,7 +551,7 @@ export default function CreateEncounterPage() {
                       <tr className="bg-teal-900 text-left text-xs uppercase tracking-wide text-white">
                         <th className="px-4 py-3 w-10" />
                         <th className="px-4 py-3">
-                          <SortHeader label="PIN" field="pin" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                          <SortHeader label="Hospital No." field="hospitalNo" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                         </th>
                         <th className="px-4 py-3">
                           <SortHeader label="Last Name" field="lastName" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -572,20 +572,20 @@ export default function CreateEncounterPage() {
                     <tbody>
                       {filteredPatients.map((p) => (
                         <tr
-                          key={p.patientId}
-                          onClick={() => setSelectedPatientId(p.patientId)}
+                          key={p.hospitalNo}
+                          onClick={() => setSelectedHospitalNo(p.hospitalNo)}
                           className="border-b border-slate-100 hover:bg-teal-50/60 cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3 align-top">
                             <input
                               type="radio"
                               name="selectedPatient"
-                              checked={selectedPatientId === p.patientId}
-                              onChange={() => setSelectedPatientId(p.patientId)}
+                              checked={selectedHospitalNo === p.hospitalNo}
+                              onChange={() => setSelectedHospitalNo(p.hospitalNo)}
                               className="w-4 h-4 text-teal-700 focus:ring-teal-600"
                             />
                           </td>
-                          <td className="px-4 py-3 align-top whitespace-nowrap text-slate-600">{p.pin || "—"}</td>
+                          <td className="px-4 py-3 align-top whitespace-nowrap text-slate-600">{p.hospitalNo || "—"}</td>
                           <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{p.lastName}</td>
                           <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{p.firstName}</td>
                           <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">{p.middleName || "—"}</td>
@@ -630,7 +630,7 @@ export default function CreateEncounterPage() {
               </div>
               <div>
                 <p className="text-[11px] text-slate-400 uppercase tracking-wide">Hospital No.</p>
-                <p className="font-medium text-slate-800">{selectedPatient.pin || "—"}</p>
+                <p className="font-medium text-slate-800">{selectedPatient.hospitalNo || "—"}</p>
               </div>
               <div>
                 <p className="text-[11px] text-slate-400 uppercase tracking-wide">Contact Number</p>
@@ -870,11 +870,7 @@ export default function CreateEncounterPage() {
             </button>
             <button
               type="button"
-              onClick={() =>
-                navigate(`/patients/${createdEncounter.patientId}`, {
-                  state: { openConsultation: true, consultationEncounterId: createdEncounter.id },
-                })
-              }
+              onClick={() => navigate(`/patients/${createdEncounter.hospitalNo}`, { state: { openConsultation: true } })}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-800 hover:opacity-90 text-white text-sm font-medium px-3 py-2.5 transition-opacity"
             >
               <PlayCircle size={15} />

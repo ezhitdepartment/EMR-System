@@ -241,7 +241,7 @@ export default function ConsultationRecordPDF({ patient = {}, form = {}, generat
             <Text style={s.patientName}>{fullName || "—"}</Text>
             <Text style={s.patientSub}>
               {(patient.sex || form.gender || "—").toUpperCase()} · {formatAge(patient.dateOfBirth || form.dateOfBirth)} ·{" "}
-              DOB {patient.dateOfBirth || form.dateOfBirth || "—"} · Hospital No. {patient.hospitalNo || patient.pin || "—"}
+              DOB {patient.dateOfBirth || form.dateOfBirth || "—"} · Hospital No. {patient.hospitalNo || "—"}
             </Text>
             {form.bloodTypeEnabled && form.bloodType && (
               <Text style={s.bloodTypeBadge}>Blood Type: {form.bloodType}</Text>

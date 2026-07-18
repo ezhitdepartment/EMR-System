@@ -5,7 +5,7 @@
 // if the schema changes.
 //
 // Column names in Postgres are snake_case (see supabase_schema.sql); the
-// rest of the app expects camelCase (patientId, firstName, hospitalNo,
+// rest of the app expects camelCase (hospitalNo, firstName, lastName,
 // etc.), matching how CreatePatientModal.jsx's `emptyForm` is shaped. The
 // map functions below are the ONLY place that translates between the two,
 // so every component that reads/writes a patient object keeps working
@@ -76,9 +76,7 @@ function rowToPatient(row) {
   if (!row) return null;
   const guardianRow = Array.isArray(row.patient_guardians) ? row.patient_guardians[0] : row.patient_guardians;
   return {
-    patientId: row.patient_id,
     hospitalNo: row.hospital_no || "",
-    pin: row.pin || "",
     firstName: row.first_name || "",
     lastName: row.last_name || "",
     middleName: row.middle_name || "",
@@ -127,7 +125,6 @@ function rowToPatient(row) {
 // column name, for every column a caller might patch.
 const PATIENT_FIELD_COLUMNS = {
   hospitalNo: "hospital_no",
-  pin: "pin",
   firstName: "first_name",
   lastName: "last_name",
   middleName: "middle_name",
@@ -191,9 +188,7 @@ function patientPatchToRow(updates) {
 // patientPatchToRow above for updates.
 function patientToRow(p) {
   return {
-    patient_id: p.patientId,
     hospital_no: p.hospitalNo || null,
-    pin: p.pin || "",
     first_name: p.firstName,
     last_name: p.lastName,
     middle_name: p.middleName || "",
@@ -244,14 +239,15 @@ function patientToRow(p) {
 // the old localStorage version had.
 // Every other table (encounters, lab_orders, medicine_prescriptions) FKs to
 // patients.id (the internal uuid), but the rest of the app only ever deals
-// in patientId (the human-readable "P-2026671587" code) — this is the one
-// place that bridges the two, so every other data-layer file can resolve
-// "which patient row do I attach this to" without duplicating the query.
-export async function getPatientUuid(patientId) {
+// in hospitalNo (the human-readable Hospital No., e.g. "001202607") — this
+// is the one place that bridges the two, so every other data-layer file
+// can resolve "which patient row do I attach this to" without duplicating
+// the query.
+export async function getPatientUuid(hospitalNo) {
   const { data, error } = await supabase
     .from("patients")
     .select("id")
-    .eq("patient_id", patientId)
+    .eq("hospital_no", hospitalNo)
     .single();
   if (error) return null;
   return data.id;
@@ -269,18 +265,20 @@ export async function loadPatients() {
   return (data || []).map(rowToPatient);
 }
 
-export async function findPatientById(patientId) {
+// "By id" here means by Hospital No. — the sole patient identifier the
+// app uses (routes, search, lookups). Kept the name findPatientById since
+// every screen already calls it that; only what counts as "the id" changed.
+export async function findPatientById(hospitalNo) {
   const { data, error } = await supabase
     .from("patients")
     .select("*, patient_guardians(*)")
-    .eq("patient_id", patientId)
+    .eq("hospital_no", hospitalNo)
     .single();
   if (error) return null;
   return rowToPatient(data);
 }
 
 // Inserts a brand-new patient record. `patient` must already include
-// patientId (see generatePatientId() in CreatePatientModal.jsx) and
 // hospitalNo (see generateHospitalNo() below).
 export async function createPatient(patient) {
   const { data, error } = await supabase
@@ -303,11 +301,11 @@ export async function createPatient(patient) {
 // Read-modify-write a single patient by id. `updater` receives the current
 // patient (camelCase) and returns the patch to apply — same pattern as
 // updateEncounter()/updateLabOrder() elsewhere in the app.
-export async function updatePatient(patientId, updates) {
+export async function updatePatient(hospitalNo, updates) {
   const { data, error } = await supabase
     .from("patients")
     .update(patientPatchToRow(updates))
-    .eq("patient_id", patientId)
+    .eq("hospital_no", hospitalNo)
     .select("*, patient_guardians(*)")
     .single();
   if (error) throw new Error(error.message);
@@ -332,11 +330,11 @@ export async function updatePatient(patientId, updates) {
 // since Create Registration and the Patient Profile page both call this
 // directly whenever a photo is captured, and neither has the rest of the
 // patient record loaded at that point.
-export async function savePatientPhoto(patientId, photoDataUrl) {
+export async function savePatientPhoto(hospitalNo, photoDataUrl) {
   const { data, error } = await supabase
     .from("patients")
     .update({ photo: photoDataUrl })
-    .eq("patient_id", patientId)
+    .eq("hospital_no", hospitalNo)
     .select()
     .single();
   if (error) return null;

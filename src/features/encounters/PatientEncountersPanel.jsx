@@ -43,7 +43,7 @@ function ActionButton({ title, icon: Icon, colorClass, onClick, disabled }) {
 // records (no Patient column, no cross-patient filters). "Registration
 // Files" jumps to the Patient Files tab on this same page instead of
 // navigating away, since we're already on that patient's profile.
-export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }) {
+export default function PatientEncountersPanel({ hospitalNo, onOpenPatientFiles }) {
   const navigate = useNavigate();
   const [encounters, setEncounters] = useState([]);
   const [tab, setTab] = useState("ALL");
@@ -52,7 +52,7 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
   const [activeEncounter, setActiveEncounter] = useState(null);
 
   async function refresh() {
-    setEncounters((await loadEncounters()).filter((e) => e.patientId === patientId));
+    setEncounters((await loadEncounters()).filter((e) => e.hospitalNo === hospitalNo));
   }
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
       window.removeEventListener("focus", refresh);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId]);
+  }, [hospitalNo]);
 
   function openAction(action, encounter) {
     setActiveEncounter(encounter);
@@ -85,10 +85,9 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
   }
 
   function handleStartConsultation(encounter) {
-    navigate(`/patients/${encounter.patientId}`, {
+    navigate(`/patients/${encounter.hospitalNo}`, {
       state: {
         openConsultation: true,
-        consultationEncounterId: encounter.id,
         consultationReadOnly: encounter.status === STATUS.CANCELLED,
       },
     });
@@ -119,7 +118,7 @@ export default function PatientEncountersPanel({ patientId, onOpenPatientFiles }
           </button>
           <button
             type="button"
-            onClick={() => navigate("/encounters/create", { state: { presetPatientId: patientId } })}
+            onClick={() => navigate("/encounters/create", { state: { presetHospitalNo: hospitalNo } })}
             className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors whitespace-nowrap"
           >
             <Plus size={14} />

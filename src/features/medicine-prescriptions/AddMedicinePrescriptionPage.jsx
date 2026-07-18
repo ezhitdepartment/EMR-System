@@ -90,7 +90,7 @@ export default function AddMedicinePrescriptionPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const presetPatientId = location.state?.presetPatientId || "";
+  const presetHospitalNo = location.state?.presetHospitalNo || "";
   const presetEncounterId = location.state?.presetEncounterId || "";
 
   const [step, setStep] = useState(1);
@@ -100,7 +100,7 @@ export default function AddMedicinePrescriptionPage() {
   const [dobMonth, setDobMonth] = useState("");
   const [sortField, setSortField] = useState("lastName");
   const [sortDir, setSortDir] = useState("asc");
-  const [selectedPatientId, setSelectedPatientId] = useState(presetPatientId);
+  const [selectedHospitalNo, setSelectedHospitalNo] = useState(presetHospitalNo);
   const [showCreatePatient, setShowCreatePatient] = useState(false);
 
   const [prescribedBy, setPrescribedBy] = useState("");
@@ -116,10 +116,10 @@ export default function AddMedicinePrescriptionPage() {
   // tab) with a patient already chosen — skip straight to medicine
   // selection instead of making them search/pick the same patient again.
   useEffect(() => {
-    if (presetPatientId && patients.some((p) => p.patientId === presetPatientId)) {
+    if (presetHospitalNo && patients.some((p) => p.hospitalNo === presetHospitalNo)) {
       setStep(2);
     }
-  }, [presetPatientId, patients]);
+  }, [presetHospitalNo, patients]);
 
   const availableYears = useMemo(() => {
     const s = new Set();
@@ -132,7 +132,7 @@ export default function AddMedicinePrescriptionPage() {
     return Array.from(s).sort((a, b) => b - a);
   }, [patients]);
 
-  const selectedPatient = patients.find((p) => p.patientId === selectedPatientId) || null;
+  const selectedPatient = patients.find((p) => p.hospitalNo === selectedHospitalNo) || null;
 
   const filteredPatients = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -146,7 +146,7 @@ export default function AddMedicinePrescriptionPage() {
         if (!m || m !== Number(dobMonth)) return false;
       }
       if (!q) return true;
-      const haystack = [p.patientId, p.pin, p.firstName, p.lastName, p.middleName]
+      const haystack = [p.hospitalNo, p.firstName, p.lastName, p.middleName]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -181,7 +181,7 @@ export default function AddMedicinePrescriptionPage() {
 
   function handlePatientCreated(patient) {
     setPatients((prev) => [patient, ...prev]);
-    setSelectedPatientId(patient.patientId);
+    setSelectedHospitalNo(patient.hospitalNo);
     setShowCreatePatient(false);
   }
 
@@ -217,7 +217,7 @@ export default function AddMedicinePrescriptionPage() {
     setError("");
     try {
       await createMedicinePrescription({
-        patientId: selectedPatient.patientId,
+        hospitalNo: selectedPatient.hospitalNo,
         encounterId: presetEncounterId || null,
         prescribedBy: prescribedBy.trim(),
         createdBy: user?.id || null,
@@ -230,8 +230,8 @@ export default function AddMedicinePrescriptionPage() {
       navigate(
         presetEncounterId
           ? "/encounters"
-          : presetPatientId
-          ? `/patients/${presetPatientId}`
+          : presetHospitalNo
+          ? `/patients/${presetHospitalNo}`
           : "/medicine-prescriptions"
       );
     } catch (err) {
@@ -272,7 +272,7 @@ export default function AddMedicinePrescriptionPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by Name, Patient ID or PIN"
+                placeholder="Search by Name or Hospital No."
                 className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
               />
             </div>
@@ -341,8 +341,8 @@ export default function AddMedicinePrescriptionPage() {
                       <th className="px-4 py-3 w-10" />
                       <th className="px-4 py-3">
                         <SortHeader
-                          label="PIN"
-                          field="pin"
+                          label="Hospital No."
+                          field="hospitalNo"
                           sortField={sortField}
                           sortDir={sortDir}
                           onSort={handleSort}
@@ -389,21 +389,21 @@ export default function AddMedicinePrescriptionPage() {
                   <tbody>
                     {filteredPatients.map((p) => (
                       <tr
-                        key={p.patientId}
-                        onClick={() => setSelectedPatientId(p.patientId)}
+                        key={p.hospitalNo}
+                        onClick={() => setSelectedHospitalNo(p.hospitalNo)}
                         className="border-b border-slate-100 hover:bg-teal-50/60 cursor-pointer transition-colors"
                       >
                         <td className="px-4 py-3 align-top">
                           <input
                             type="radio"
                             name="selectedPatient"
-                            checked={selectedPatientId === p.patientId}
-                            onChange={() => setSelectedPatientId(p.patientId)}
+                            checked={selectedHospitalNo === p.hospitalNo}
+                            onChange={() => setSelectedHospitalNo(p.hospitalNo)}
                             className="w-4 h-4 text-teal-700 focus:ring-teal-600"
                           />
                         </td>
                         <td className="px-4 py-3 align-top whitespace-nowrap text-slate-600">
-                          {p.pin || "—"}
+                          {p.hospitalNo || "—"}
                         </td>
                         <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">
                           {p.lastName}
@@ -438,7 +438,7 @@ export default function AddMedicinePrescriptionPage() {
                   .join(", ")}
               </p>
               <p className="text-xs text-slate-500">
-                Hospital No. {selectedPatient.pin || "—"}
+                Hospital No. {selectedPatient.hospitalNo || "—"}
               </p>
             </div>
             <button

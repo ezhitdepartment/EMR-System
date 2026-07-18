@@ -22,8 +22,8 @@ function loadPatients() {
 
 function patientLabel(p) {
   const name = [p.lastName, p.firstName].filter(Boolean).join(", ");
-  const idLine = p.hospitalNo || p.pin || p.patientId || "";
-  return idLine ? `${name} — ${idLine}` : name || p.patientId;
+  const idLine = p.hospitalNo || "";
+  return idLine ? `${name} — ${idLine}` : name || p.hospitalNo;
 }
 
 let rowSeq = 0;
@@ -34,12 +34,12 @@ function newRow() {
 
 export default function AddMedicinePrescriptionModal({ onClose, onCreated }) {
   const patients = useMemo(loadPatients, []);
-  const [patientId, setPatientId] = useState("");
+  const [hospitalNo, setHospitalNo] = useState("");
   const [status, setStatus] = useState(STATUS_OPTIONS[0]);
   const [rows, setRows] = useState([newRow()]);
   const [error, setError] = useState("");
 
-  const selectedPatient = patients.find((p) => p.patientId === patientId) || null;
+  const selectedPatient = patients.find((p) => p.hospitalNo === hospitalNo) || null;
 
   const total = rows.reduce(
     (sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.unitPrice) || 0),
@@ -64,7 +64,7 @@ export default function AddMedicinePrescriptionModal({ onClose, onCreated }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!patientId) {
+    if (!hospitalNo) {
       setError("Please select a patient.");
       return;
     }
@@ -77,7 +77,7 @@ export default function AddMedicinePrescriptionModal({ onClose, onCreated }) {
     const existing = loadMedicinePrescriptions();
     const record = {
       id: generateMedicinePrescriptionId(existing),
-      patientId,
+      hospitalNo,
       patient: {
         firstName: selectedPatient?.firstName || "",
         lastName: selectedPatient?.lastName || "",
@@ -125,10 +125,10 @@ export default function AddMedicinePrescriptionModal({ onClose, onCreated }) {
                 Patient <span className="text-red-500">*</span>
               </span>
               <SearchableSelect
-                value={patientId}
-                onChange={setPatientId}
+                value={hospitalNo}
+                onChange={setHospitalNo}
                 options={patients}
-                getValue={(p) => p.patientId}
+                getValue={(p) => p.hospitalNo}
                 getLabel={patientLabel}
                 placeholder={
                   patients.length === 0 ? "No patients yet — create one first" : "Select patient"

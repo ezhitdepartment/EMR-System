@@ -20,12 +20,12 @@ export const DOC_TYPES = {
 
 // Loads a single document for a patient, or null if it hasn't been saved
 // yet (brand-new patient, or this particular form was never opened).
-export async function loadPatientDocument(patientId, docType) {
-  if (!patientId) return null;
+export async function loadPatientDocument(hospitalNo, docType) {
+  if (!hospitalNo) return null;
   const { data, error } = await supabase
     .from("patient_documents")
     .select("data")
-    .eq("patient_id", patientId)
+    .eq("hospital_no", hospitalNo)
     .eq("doc_type", docType)
     .maybeSingle();
   if (error) {
@@ -38,14 +38,14 @@ export async function loadPatientDocument(patientId, docType) {
 // Loads all four documents for a patient in a single round trip — used by
 // the Patient Profile's initial load and by Encounter Files, which both
 // need every document at once rather than one at a time.
-export async function loadAllPatientDocuments(patientId) {
+export async function loadAllPatientDocuments(hospitalNo) {
   const empty = { emr: null, discharge: null, konsulta: null, medcert: null };
-  if (!patientId) return empty;
+  if (!hospitalNo) return empty;
 
   const { data, error } = await supabase
     .from("patient_documents")
     .select("doc_type, data")
-    .eq("patient_id", patientId);
+    .eq("hospital_no", hospitalNo);
   if (error) {
     console.error("Loading patient documents failed:", error.message);
     return empty;
@@ -60,18 +60,18 @@ export async function loadAllPatientDocuments(patientId) {
 
 // Upserts one document for a patient and returns the saved value (with
 // updatedAt stamped in, same shape the old localStorage version returned).
-export async function savePatientDocument(patientId, docType, formData, userId = null) {
+export async function savePatientDocument(hospitalNo, docType, formData, userId = null) {
   const updated = { ...formData, updatedAt: new Date().toISOString() };
   const { data, error } = await supabase
     .from("patient_documents")
     .upsert(
       {
-        patient_id: patientId,
+        hospital_no: hospitalNo,
         doc_type: docType,
         data: updated,
         updated_by: userId,
       },
-      { onConflict: "patient_id,doc_type" }
+      { onConflict: "hospital_no,doc_type" }
     )
     .select("data")
     .single();
@@ -85,16 +85,16 @@ export async function savePatientDocument(patientId, docType, formData, userId =
 // Thin, named wrappers — kept so callers (Patient Profile, Encounter
 // Files) can import the same familiar loadEmr/loadDischarge/... names
 // they used against localStorage, just async now.
-export const loadEmr = (patientId) => loadPatientDocument(patientId, DOC_TYPES.EMR);
-export const loadDischarge = (patientId) => loadPatientDocument(patientId, DOC_TYPES.DISCHARGE);
-export const loadKonsultaReferral = (patientId) => loadPatientDocument(patientId, DOC_TYPES.KONSULTA);
-export const loadMedicalCertificate = (patientId) => loadPatientDocument(patientId, DOC_TYPES.MEDCERT);
+export const loadEmr = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.EMR);
+export const loadDischarge = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.DISCHARGE);
+export const loadKonsultaReferral = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.KONSULTA);
+export const loadMedicalCertificate = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.MEDCERT);
 
-export const saveEmr = (patientId, formData, userId) =>
-  savePatientDocument(patientId, DOC_TYPES.EMR, formData, userId);
-export const saveDischarge = (patientId, formData, userId) =>
-  savePatientDocument(patientId, DOC_TYPES.DISCHARGE, formData, userId);
-export const saveKonsultaReferral = (patientId, formData, userId) =>
-  savePatientDocument(patientId, DOC_TYPES.KONSULTA, formData, userId);
-export const saveMedicalCertificate = (patientId, formData, userId) =>
-  savePatientDocument(patientId, DOC_TYPES.MEDCERT, formData, userId);
+export const saveEmr = (hospitalNo, formData, userId) =>
+  savePatientDocument(hospitalNo, DOC_TYPES.EMR, formData, userId);
+export const saveDischarge = (hospitalNo, formData, userId) =>
+  savePatientDocument(hospitalNo, DOC_TYPES.DISCHARGE, formData, userId);
+export const saveKonsultaReferral = (hospitalNo, formData, userId) =>
+  savePatientDocument(hospitalNo, DOC_TYPES.KONSULTA, formData, userId);
+export const saveMedicalCertificate = (hospitalNo, formData, userId) =>
+  savePatientDocument(hospitalNo, DOC_TYPES.MEDCERT, formData, userId);

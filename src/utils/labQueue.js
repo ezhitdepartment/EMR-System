@@ -68,7 +68,7 @@ export async function getQueueEntries(group) {
         code: test?.code || null,
         queueStatus: test?.queueStatus || "WAITING",
         patient: order.patient,
-        patientId: order.patientId,
+        hospitalNo: order.hospitalNo,
         dateCreated: order.dateCreated,
       });
     });

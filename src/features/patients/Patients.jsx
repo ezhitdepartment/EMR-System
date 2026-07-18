@@ -73,7 +73,7 @@ export default function Patients() {
   const filteredPatients = useMemo(() => {
     const withNames = records.map((r, idx) => ({
       ...r,
-      _id: r.patientId || idx,
+      _id: r.hospitalNo || idx,
       _fullName: [r.lastName, r.firstName, r.middleName].filter(Boolean).join(" "),
       // Not captured at creation yet — default to "Alive" until it is.
       _mortalityStatus: r.mortalityStatus || "Alive",
@@ -95,8 +95,7 @@ export default function Patients() {
       if (!q) return true;
       return (
         p._fullName.toLowerCase().includes(q) ||
-        (p.patientId || "").toLowerCase().includes(q) ||
-        (p.hospitalNo || p.pin || "").toLowerCase().includes(q)
+        (p.hospitalNo || "").toLowerCase().includes(q)
       );
     });
 
@@ -281,11 +280,11 @@ export default function Patients() {
                   {pagedPatients.map((p) => (
                     <tr
                       key={p._id}
-                      onClick={() => navigate(`/patients/${p.patientId}`)}
+                      onClick={() => navigate(`/patients/${p.hospitalNo}`)}
                       className="border-b border-slate-100 hover:bg-teal-50/60 cursor-pointer transition-colors"
                     >
                       <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                        {p.hospitalNo || p.pin || "—"}
+                        {p.hospitalNo || "—"}
                       </td>
                       <td className="px-4 py-3 text-slate-800 whitespace-nowrap">
                         {p.lastName || "—"}
@@ -365,7 +364,7 @@ export default function Patients() {
           onCreated={(patient) => {
             setShowCreate(false);
             refresh();
-            navigate(`/patients/${patient.patientId}`);
+            navigate(`/patients/${patient.hospitalNo}`);
           }}
         />
       )}

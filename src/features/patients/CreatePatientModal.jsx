@@ -6,12 +6,6 @@ import { loadPatients, createPatient, generateHospitalNo } from "../../utils/pat
 
 const SUFFIX_OPTIONS = ["", "Jr.", "Sr.", "II", "III", "IV"];
 
-function generatePatientId() {
-  const year = new Date().getFullYear();
-  const rand = Math.floor(100000 + Math.random() * 900000);
-  return `P-${year}${rand}`;
-}
-
 const emptyGuardian = {
   firstName: "",
   lastName: "",
@@ -256,9 +250,7 @@ export default function CreatePatientModal({ onClose, onCreated }) {
     const freshHospitalNo = generateHospitalNo(latestPatients);
 
     const patient = {
-      patientId: generatePatientId(),
       hospitalNo: freshHospitalNo,
-      pin: freshHospitalNo,
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       middleName: form.middleName.trim(),

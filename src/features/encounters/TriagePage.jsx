@@ -405,8 +405,8 @@ export default function TriagePage() {
               </div>
 
               <div>
-                <p className="text-[11px] text-slate-400 uppercase tracking-wide">PIN</p>
-                <p className="font-medium text-slate-700">{patient.pin || "—"}</p>
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide">Hospital No.</p>
+                <p className="font-medium text-slate-700">{patient.hospitalNo || "—"}</p>
               </div>
 
               <div>

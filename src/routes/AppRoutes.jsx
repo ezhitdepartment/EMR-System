@@ -49,7 +49,7 @@ export default function AppRoutes() {
       {/* Patient Profile - standalone, no dashboard chrome. The only way
           back is the "Back to Patients" button inside the page itself. */}
       <Route
-        path="/patients/:patientId"
+        path="/patients/:hospitalNo"
         element={
           STAFF_ROLES.includes(user?.role) || user?.role === "admin" ? (
             <PatientProfile />

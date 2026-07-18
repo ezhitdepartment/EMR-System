@@ -13,18 +13,18 @@ import { loadPatients } from "../../utils/patients";
 
 function patientLabel(p) {
   const name = [p.lastName, p.firstName].filter(Boolean).join(", ");
-  const idLine = p.hospitalNo || p.pin || p.patientId || "";
-  return idLine ? `${name} — ${idLine}` : name || p.patientId;
+  const idLine = p.hospitalNo || "";
+  return idLine ? `${name} — ${idLine}` : name || p.hospitalNo;
 }
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600";
 
-export default function CreateEncounterModal({ onClose, onCreated, presetPatientId = null }) {
+export default function CreateEncounterModal({ onClose, onCreated, presetHospitalNo = null }) {
   const { user } = useAuth();
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
-  const [patientId, setPatientId] = useState(presetPatientId || "");
+  const [hospitalNo, setHospitalNo] = useState(presetHospitalNo || "");
   const [doctor, setDoctor] = useState("");
   const [consultationType, setConsultationType] = useState("");
   const [paymentType, setPaymentType] = useState("");
@@ -37,12 +37,12 @@ export default function CreateEncounterModal({ onClose, onCreated, presetPatient
     loadDoctors().then(setDoctors);
   }, []);
 
-  const selectedPatient = patients.find((p) => p.patientId === patientId) || null;
-  const patientLocked = Boolean(presetPatientId);
+  const selectedPatient = patients.find((p) => p.hospitalNo === hospitalNo) || null;
+  const patientLocked = Boolean(presetHospitalNo);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!patientId) {
+    if (!hospitalNo) {
       setError("Please select a patient.");
       return;
     }
@@ -59,7 +59,7 @@ export default function CreateEncounterModal({ onClose, onCreated, presetPatient
     setError("");
     try {
       const encounter = await createEncounter({
-        patientId,
+        hospitalNo,
         appointmentDate,
         doctor,
         paymentType,
@@ -100,10 +100,10 @@ export default function CreateEncounterModal({ onClose, onCreated, presetPatient
               Patient
             </label>
             <SearchableSelect
-              value={patientId}
-              onChange={setPatientId}
+              value={hospitalNo}
+              onChange={setHospitalNo}
               options={patients}
-              getValue={(p) => p.patientId}
+              getValue={(p) => p.hospitalNo}
               getLabel={patientLabel}
               placeholder="Select a patient"
               disabled={patientLocked}

@@ -83,7 +83,7 @@ export default function Dashboard() {
     const q = search.trim().toLowerCase();
     const filtered = q
       ? sorted.filter((p) =>
-          [p.patientId, p.hospitalNo, p.firstName, p.lastName, p.middleName]
+          [p.hospitalNo, p.firstName, p.lastName, p.middleName]
             .filter(Boolean)
             .join(" ")
             .toLowerCase()
@@ -215,8 +215,8 @@ export default function Dashboard() {
                     : "—";
                   return (
                     <tr
-                      key={p.patientId}
-                      onClick={() => navigate(`/patients/${p.patientId}`)}
+                      key={p.hospitalNo}
+                      onClick={() => navigate(`/patients/${p.hospitalNo}`)}
                       className="border-b border-slate-50 last:border-0 hover:bg-teal-50/60 cursor-pointer transition-colors"
                     >
                       <td className="px-4 py-3 whitespace-nowrap text-slate-500">{p.hospitalNo || "—"}</td>
@@ -227,7 +227,7 @@ export default function Dashboard() {
                           ) : (
                             <span
                               className={`flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold shrink-0 ${avatarColor(
-                                p.patientId
+                                p.hospitalNo
                               )}`}
                             >
                               {initials(p.firstName, p.lastName)}

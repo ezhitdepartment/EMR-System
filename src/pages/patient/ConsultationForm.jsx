@@ -511,12 +511,12 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
 
   useEffect(() => {
     let active = true;
-    if (encounter?.patientId) {
+    if (encounter?.hospitalNo) {
       loadEncounters().then((all) => {
         if (!active) return;
         setRegistrations(
           all
-            .filter((e) => e.patientId === encounter.patientId)
+            .filter((e) => e.hospitalNo === encounter.hospitalNo)
             .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
         );
       });
@@ -526,7 +526,7 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
     return () => {
       active = false;
     };
-  }, [encounter?.patientId]);
+  }, [encounter?.hospitalNo]);
 
   // Every uploaded result file across this patient's lab orders — flattened
   // out of order.tests[testName].files so the doctor doesn't have to leave
@@ -534,12 +534,12 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
   // doesn't have direct access to anyway).
   useEffect(() => {
     let active = true;
-    if (patient.patientId) {
+    if (patient.hospitalNo) {
       loadLabOrders().then((all) => {
         if (!active) return;
         setLabResultFiles(
           all
-            .filter((order) => order.patientId === patient.patientId)
+            .filter((order) => order.hospitalNo === patient.hospitalNo)
             .flatMap((order) =>
               Object.entries(order.tests || {}).flatMap(([testName, test]) =>
                 (test.files || []).map((f) => ({ ...f, testName, orderId: order.id }))
@@ -553,7 +553,7 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
     return () => {
       active = false;
     };
-  }, [patient.patientId]);
+  }, [patient.hospitalNo]);
 
   async function viewPdf(docElement, filename, key) {
     setDownloadingDoc(key);
@@ -592,7 +592,7 @@ function ConsultationReferencePanel({ patient, encounter, form }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-slate-800 truncate">{fullName || "—"}</p>
             <p className="text-xs text-slate-500">
-              {patient.hospitalNo || patient.pin || "—"} · {formatAge(patient.dateOfBirth)} ·{" "}
+              {patient.hospitalNo || "—"} · {formatAge(patient.dateOfBirth)} ·{" "}
               {(patient.sex || "—").toUpperCase()}
             </p>
           </div>
@@ -823,7 +823,7 @@ function DoctorConsultationReferencePanel({ patient, form }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-slate-800 truncate">{fullName || "—"}</p>
             <p className="text-xs text-slate-500">
-              {patient.hospitalNo || patient.pin || "—"} · {formatAge(patient.dateOfBirth)} ·{" "}
+              {patient.hospitalNo || "—"} · {formatAge(patient.dateOfBirth)} ·{" "}
               {(patient.sex || "—").toUpperCase()}
             </p>
           </div>

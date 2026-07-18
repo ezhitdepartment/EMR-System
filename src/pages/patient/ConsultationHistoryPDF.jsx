@@ -143,7 +143,7 @@ export default function ConsultationHistoryPDF({ patient = {}, form = {}, genera
           {"  ·  "}
           {formatAge(patient.dateOfBirth || form.dateOfBirth)}
           {"  ·  "}
-          {patient.hospitalNo || patient.pin || "—"}
+          {patient.hospitalNo || "—"}
         </Text>
 
         <ListSection title="Past Medical History" items={form.pastMedicalHistory || []} />

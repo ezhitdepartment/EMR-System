@@ -5,7 +5,7 @@
 // utils/patients.js.
 //
 // Column names in Postgres are snake_case; the rest of the app expects
-// camelCase (patientId, appointmentDate, nurseConsultationDone, etc.). The
+// camelCase (hospitalNo, appointmentDate, nurseConsultationDone, etc.). The
 // map functions below are the only place that translates between the two,
 // so every component that reads/writes an encounter object keeps working
 // exactly as it did against localStorage.
@@ -96,14 +96,14 @@ function rowToEncounter(row) {
 
   return {
     id: row.id,
-    patientId: p.patient_id || row._patientIdFallback || "",
+    hospitalNo: p.hospital_no || row._hospitalNoFallback || "",
     patient: {
       firstName: p.first_name || "",
       lastName: p.last_name || "",
       middleName: p.middle_name || "",
       sex: p.sex || "",
       dateOfBirth: p.date_of_birth || "",
-      pin: p.pin || "",
+      hospitalNo: p.hospital_no || "",
     },
     patientType: row.patient_type || "OPD Patient",
     appointmentDate: row.appointment_date,
@@ -216,7 +216,7 @@ function encounterToRow(e) {
 
 const SELECT_WITH_JOINS = `
   *,
-  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth, pin ),
+  patients ( hospital_no, first_name, last_name, middle_name, sex, date_of_birth ),
   profiles!encounters_created_by_fkey ( username ),
   encounter_triage ( *, profiles ( username ) ),
   encounter_waivers ( * )
@@ -255,13 +255,13 @@ export async function findEncounterById(encounterId) {
 // "where does E-20260706-0018 come from" finds the answer.
 
 // Creates a brand-new encounter. `encounter` is shaped exactly like
-// CreateEncounterPage.jsx already builds it (patientId, patient snapshot,
+// CreateEncounterPage.jsx already builds it (hospitalNo, patient snapshot,
 // appointmentDate, ..., createdBy = the current user's uuid). Resolves
-// patientId -> the internal uuid FK, lets the DB generate the id, and
+// hospitalNo -> the internal uuid FK, lets the DB generate the id, and
 // returns the fully-joined encounter the rest of the app expects.
 export async function createEncounter(encounter) {
-  const patientUuid = await getPatientUuid(encounter.patientId);
-  if (!patientUuid) throw new Error(`No patient found with patientId "${encounter.patientId}"`);
+  const patientUuid = await getPatientUuid(encounter.hospitalNo);
+  if (!patientUuid) throw new Error(`No patient found with Hospital No. "${encounter.hospitalNo}"`);
 
   const { data, error } = await supabase
     .from("encounters")

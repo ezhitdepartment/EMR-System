@@ -80,8 +80,8 @@ function formDataToRow({ patientUuid, encounterId, authorRole, authorId, formDat
 // just its own kind, and with encounterId so a specific registration can
 // be matched back to the diagnosis recorded against it (see
 // loadDiagnosesByEncounter below).
-export async function loadConsultationHistory(patientId) {
-  const patientUuid = await getPatientUuid(patientId);
+export async function loadConsultationHistory(hospitalNo) {
+  const patientUuid = await getPatientUuid(hospitalNo);
   if (!patientUuid) return [];
 
   const { data, error } = await supabase
@@ -96,7 +96,7 @@ export async function loadConsultationHistory(patientId) {
   return (data || []).map(rowToEntry);
 }
 
-export async function saveConsultationEntry(patientId, formData, authorRole, encounterId = null, authorId = null) {
+export async function saveConsultationEntry(hospitalNo, formData, authorRole, encounterId = null, authorId = null) {
   if (!VALID_AUTHOR_ROLES.includes(authorRole)) {
     throw new Error(
       `Can't save a consultation authored by role "${authorRole}" — only ${VALID_AUTHOR_ROLES.join(
@@ -105,8 +105,8 @@ export async function saveConsultationEntry(patientId, formData, authorRole, enc
     );
   }
 
-  const patientUuid = await getPatientUuid(patientId);
-  if (!patientUuid) throw new Error(`No patient found with patientId "${patientId}"`);
+  const patientUuid = await getPatientUuid(hospitalNo);
+  if (!patientUuid) throw new Error(`No patient found with Hospital No. "${hospitalNo}"`);
 
   const row = formDataToRow({ patientUuid, encounterId, authorRole, authorId, formData });
   const { data, error } = await supabase.from("consultations").insert(row).select().single();
@@ -146,7 +146,7 @@ export function formatDiagnosisText(entry) {
 export async function loadAllConsultations() {
   const { data, error } = await supabase
     .from("consultations")
-    .select("*, patients ( patient_id, first_name, last_name, date_of_birth )")
+    .select("*, patients ( hospital_no, first_name, last_name, date_of_birth )")
     .order("created_at", { ascending: false });
   if (error) {
     console.error("loadAllConsultations failed:", error.message);
@@ -155,7 +155,7 @@ export async function loadAllConsultations() {
   return (data || []).map((row) => {
     const entry = rowToEntry(row);
     const p = row.patients || {};
-    entry.patientId = p.patient_id || null;
+    entry.hospitalNo = p.hospital_no || null;
     entry.patient = {
       firstName: p.first_name || "",
       lastName: p.last_name || "",

@@ -175,7 +175,7 @@ export default function Encounters() {
   }
 
   function handleStartConsultation(encounter) {
-    navigate(`/patients/${encounter.patientId}`, {
+    navigate(`/patients/${encounter.hospitalNo}`, {
       state: {
         openConsultation: true,
         consultationReadOnly: encounter.status === STATUS.CANCELLED,
@@ -211,7 +211,7 @@ export default function Encounters() {
       return (
         e.id.toLowerCase().includes(q) ||
         e._fullName.toLowerCase().includes(q) ||
-        (e.patient?.pin || "").toLowerCase().includes(q) ||
+        (e.hospitalNo || "").toLowerCase().includes(q) ||
         (e.doctor || "").toLowerCase().includes(q)
       );
     });
@@ -462,7 +462,7 @@ export default function Encounters() {
                       </td>
                       <td className="px-4 py-3 align-top whitespace-nowrap">
                         <p className="font-semibold text-slate-800">{e._fullName || "—"}</p>
-                        <p className="text-xs text-slate-500">{e.patient?.pin || e.patientId}</p>
+                        <p className="text-xs text-slate-500">{e.hospitalNo}</p>
                         <p className="text-xs text-slate-500">{formatAge(e.patient?.dateOfBirth)}</p>
                         <p className="text-xs text-slate-500 uppercase">{e.patient?.sex || "—"}</p>
                       </td>
@@ -567,7 +567,7 @@ export default function Encounters() {
                                   onClick={() => {
                                     setRowMenuId(null);
                                     navigate("/medicine-prescriptions/create", {
-                                      state: { presetPatientId: e.patientId, presetEncounterId: e.id },
+                                      state: { presetHospitalNo: e.hospitalNo, presetEncounterId: e.id },
                                     });
                                   }}
                                   className="flex w-full items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors"

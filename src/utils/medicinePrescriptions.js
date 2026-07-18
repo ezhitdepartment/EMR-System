@@ -714,7 +714,7 @@ function rowToRecord(row) {
   const p = row.patients || {};
   return {
     id: row.id,
-    patientId: p.patient_id || "",
+    hospitalNo: p.hospital_no || "",
     encounterId: row.encounter_id || null,
     patient: {
       firstName: p.first_name || "",
@@ -736,7 +736,7 @@ function rowToRecord(row) {
 
 const SELECT_WITH_JOINS = `
   *,
-  patients ( patient_id, first_name, last_name, middle_name, sex, date_of_birth, address ),
+  patients ( hospital_no, first_name, last_name, middle_name, sex, date_of_birth, address ),
   prescription_items ( * )
 `;
 
@@ -780,11 +780,11 @@ export async function getMedicineNamesForEncounter(encounterId) {
 }
 
 // Creates a new prescription + its line items in one go. `record` is shaped
-// exactly like AddMedicinePrescriptionPage.jsx already builds it (patientId,
+// exactly like AddMedicinePrescriptionPage.jsx already builds it (hospitalNo,
 // encounterId, prescribedBy, items: [{medicineName, quantity, instructions}]).
 export async function createMedicinePrescription(record) {
-  const patientUuid = await getPatientUuid(record.patientId);
-  if (!patientUuid) throw new Error(`No patient found with patientId "${record.patientId}"`);
+  const patientUuid = await getPatientUuid(record.hospitalNo);
+  if (!patientUuid) throw new Error(`No patient found with Hospital No. "${record.hospitalNo}"`);
 
   const { data: rxRow, error } = await supabase
     .from("medicine_prescriptions")

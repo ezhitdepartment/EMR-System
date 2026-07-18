@@ -170,7 +170,7 @@ export default function ConsultationPatientInfoPDF({ patient = {}, form = {}, ge
           <Text style={s.barText}>Identification</Text>
         </View>
         <View style={s.row}>
-          <Field label="Hospital No." value={patient.hospitalNo || patient.pin} />
+          <Field label="Hospital No." value={patient.hospitalNo} />
           <Field label="PhilHealth PIN" value={form.philhealthPin} />
           <Field label="PhilHealth Member" value={form.philhealthMember} />
         </View>

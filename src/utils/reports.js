@@ -150,8 +150,8 @@ export function getDiagnosisBreakdown(consultations, year) {
 
 export function getEncounterReportRows(consultations, year) {
   return getEncountersForYear(consultations, year).map((c) => ({
-    patientId: c.patientId,
-    patientName: patientName(c.patient, c.patientId),
+    hospitalNo: c.hospitalNo,
+    patientName: patientName(c.patient, c.hospitalNo),
     date: c.createdAt ? c.createdAt.slice(0, 10) : "",
     chiefComplaint: c.chiefComplaint || "",
     diagnosis: c.activeDiagnoses || "",
@@ -170,8 +170,8 @@ export function getYakapReportRows(consultations, year) {
       );
     })
     .map((c) => ({
-      patientId: c.patientId,
-      patientName: patientName(c.patient, c.patientId),
+      hospitalNo: c.hospitalNo,
+      patientName: patientName(c.patient, c.hospitalNo),
       date: c.createdAt ? c.createdAt.slice(0, 10) : "",
       age: ageOf(c.patient?.dateOfBirth) ?? "",
       riskLevel: c.riskLevel || "",
@@ -185,18 +185,18 @@ export function getYakapReportRows(consultations, year) {
 // how many distinct patients carry it — "how many patients have that
 // disease", not a raw count of every time it was picked.
 export function getIcd10DiagnosisReportRows(consultations, year) {
-  const byCode = new Map(); // code -> { code, name, patientIds: Set }
+  const byCode = new Map(); // code -> { code, name, hospitalNos: Set }
   getEncountersForYear(consultations, year).forEach((c) => {
     (c.icdDiagnoses || []).forEach((dx) => {
       if (!dx?.code) return;
-      const entry = byCode.get(dx.code) || { code: dx.code, name: dx.name || "", patientIds: new Set() };
+      const entry = byCode.get(dx.code) || { code: dx.code, name: dx.name || "", hospitalNos: new Set() };
       if (!entry.name && dx.name) entry.name = dx.name;
-      entry.patientIds.add(c.patientId);
+      entry.hospitalNos.add(c.hospitalNo);
       byCode.set(dx.code, entry);
     });
   });
   return Array.from(byCode.values())
-    .map((e) => ({ code: e.code, name: e.name, patientCount: e.patientIds.size }))
+    .map((e) => ({ code: e.code, name: e.name, patientCount: e.hospitalNos.size }))
     .sort((a, b) => b.patientCount - a.patientCount);
 }
 

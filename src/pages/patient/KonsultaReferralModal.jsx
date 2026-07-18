@@ -45,7 +45,7 @@ function buildAutoFilled(patient, emr) {
     fullName,
     age: emr?.age || calcAge(patient?.dateOfBirth),
     sex: patient?.sex || emr?.gender || "",
-    pin: patient?.pin || emr?.philhealthPin || "",
+    pin: emr?.philhealthPin || "",
     chiefComplaint: emr?.chiefComplaints || "",
     physicalExamination: emr?.objectiveFindings || "",
     initialImpression: emr?.physicianImpression || "",
