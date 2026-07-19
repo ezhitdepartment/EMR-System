@@ -52,6 +52,7 @@ import MedicalCertificateForm from "./MedicalCertificateForm";
 import MedicalCertificatePDF from "./MedicalCertificatePDF";
 import ConsultationForm, { NURSE_ROLES } from "./ConsultationForm";
 import ConsultationRecordPDF from "./ConsultationRecordPDF";
+import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
 import { findEncounterById, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
@@ -536,6 +537,7 @@ function PatientFilesPanel({
   downloadingDischargePdf,
   downloadingKonsultaPdf,
   downloadingMedCertPdf,
+  downloadingCF4Pdf,
   onEditEmr,
   onEditDischarge,
   onDownloadEmr,
@@ -545,6 +547,8 @@ function PatientFilesPanel({
   onOpenMedicalCertificate,
   onDownloadMedicalCertificate,
   onViewConsultationEntry,
+  onViewCF4,
+  onDownloadCF4,
 }) {
   const [viewMode, setViewMode] = useState("grid");
   const [checkedIds, setCheckedIds] = useState([]);
@@ -640,6 +644,24 @@ function PatientFilesPanel({
             },
           ]
         : [{ label: "Create Referral", onClick: onOpenKonsultaReferral }],
+    },
+    {
+      id: "cf4",
+      label: "CF4",
+      count: doctorEntries.length > 0 ? 1 : 0,
+      description:
+        "PhilHealth Claim Form 4 — auto-filled from the doctor's and ER nurse's consultation records for this patient. Nothing to fill out here manually.",
+      actions:
+        doctorEntries.length > 0
+          ? [
+              { label: "Preview", onClick: onViewCF4 },
+              {
+                label: downloadingCF4Pdf ? "Preparing…" : "Download PDF",
+                onClick: onDownloadCF4,
+                disabled: downloadingCF4Pdf,
+              },
+            ]
+          : [{ label: "No consultation recorded yet", onClick: () => {}, disabled: true }],
     },
   ];
 
@@ -839,6 +861,7 @@ export default function PatientProfile() {
   const [downloadingDischargePdf, setDownloadingDischargePdf] = useState(false);
   const [downloadingKonsultaPdf, setDownloadingKonsultaPdf] = useState(false);
   const [downloadingMedCertPdf, setDownloadingMedCertPdf] = useState(false);
+  const [downloadingCF4Pdf, setDownloadingCF4Pdf] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -1350,6 +1373,78 @@ export default function PatientProfile() {
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
     setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  // CF4 has no form of its own — it's assembled from whatever the doctor
+  // and the ER nurse have already saved on this patient's consultation
+  // history, plus that encounter's triage vitals. This resolves those
+  // three inputs; returns null if there's nothing to build a CF4 from yet
+  // (no doctor consultation entry recorded).
+  async function resolveCF4Sources() {
+    const doctorEntries = (consultationHistoryList || []).filter((e) => e.authorRole === "doctor");
+    const erEntries = (consultationHistoryList || []).filter((e) => e.authorRole === "er_nurse");
+    const doctorEntry = doctorEntries[0];
+    if (!doctorEntry) return null;
+
+    // Prefer the ER nurse entry from the SAME registration as the
+    // doctor's entry (Course in the Ward / Surgical Procedure / Past
+    // Medical History / OB-GYN History should describe the same visit
+    // being claimed) — fall back to the most recent ER entry on file if
+    // this consultation wasn't tied to a specific registration.
+    const erEntry =
+      (doctorEntry.encounterId && erEntries.find((e) => e.encounterId === doctorEntry.encounterId)) ||
+      erEntries[0] ||
+      {};
+
+    let triage = null;
+    if (doctorEntry.encounterId) {
+      const encounter = await findEncounterById(doctorEntry.encounterId);
+      triage = encounter?.triage || null;
+    }
+
+    return { doctorEntry, erEntry, triage };
+  }
+
+  async function handleViewCF4() {
+    const sources = await resolveCF4Sources();
+    if (!sources) return;
+    const blob = await pdf(
+      <CF4PDF
+        patient={patient}
+        doctorEntry={sources.doctorEntry}
+        erEntry={sources.erEntry}
+        triage={sources.triage}
+      />
+    ).toBlob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  async function handleDownloadCF4() {
+    const sources = await resolveCF4Sources();
+    if (!sources) return;
+    setDownloadingCF4Pdf(true);
+    try {
+      const blob = await pdf(
+        <CF4PDF
+          patient={patient}
+          doctorEntry={sources.doctorEntry}
+          erEntry={sources.erEntry}
+          triage={sources.triage}
+        />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${patientFileLabel(patient)} CF4.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingCF4Pdf(false);
+    }
   }
 
   function handleCopy(field, value) {
@@ -1944,6 +2039,7 @@ export default function PatientProfile() {
                 downloadingDischargePdf={downloadingDischargePdf}
                 downloadingKonsultaPdf={downloadingKonsultaPdf}
                 downloadingMedCertPdf={downloadingMedCertPdf}
+                downloadingCF4Pdf={downloadingCF4Pdf}
                 onEditEmr={() => setShowEmr(true)}
                 onEditDischarge={() => setShowDischarge(true)}
                 onDownloadEmr={handleDownloadEmr}
@@ -1953,6 +2049,8 @@ export default function PatientProfile() {
                 onOpenMedicalCertificate={() => setShowMedicalCertificate(true)}
                 onDownloadMedicalCertificate={handleDownloadMedicalCertificate}
                 onViewConsultationEntry={handleViewConsultationEntryPdf}
+                onViewCF4={handleViewCF4}
+                onDownloadCF4={handleDownloadCF4}
               />
             </div>
           ) : activeTab === "registration" ? (

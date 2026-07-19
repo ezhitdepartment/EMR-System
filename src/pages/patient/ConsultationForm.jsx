@@ -75,7 +75,7 @@ function nextId() {
 // against a physical copy before relying on this list for PhilHealth
 // claim compliance, since a couple of the checkbox labels were faint on
 // the scan this was taken from.
-const SIGNS_AND_SYMPTOMS_OPTIONS = [
+export const SIGNS_AND_SYMPTOMS_OPTIONS = [
   "Altered mental sensorium",
   "Abdominal cramp/pain",
   "Anorexia",
@@ -120,9 +120,9 @@ const SIGNS_AND_SYMPTOMS_OPTIONS = [
 // PE_SYSTEMS below) since General Survey's "Altered sensorium" pairs with
 // a dedicated specify field rather than the generic "Others" catch-all
 // every other system uses.
-const GENERAL_SURVEY_OPTIONS = ["Awake and alert", "Altered sensorium"];
+export const GENERAL_SURVEY_OPTIONS = ["Awake and alert", "Altered sensorium"];
 
-const HEENT_OPTIONS = [
+export const HEENT_OPTIONS = [
   "Essentially normal",
   "Icteric sclerae",
   "Abnormal pupillary reaction",
@@ -137,7 +137,7 @@ const HEENT_OPTIONS = [
 // findings per system). Same caveat as SIGNS_AND_SYMPTOMS_OPTIONS above —
 // this is a best-effort transcription from a photographed form; please
 // proofread against the physical CF4 before treating it as authoritative.
-const PE_SYSTEMS = [
+export const PE_SYSTEMS = [
   {
     key: "peChestLungs",
     othersKey: "peChestLungsOthers",
