@@ -2523,8 +2523,8 @@ export default function ConsultationForm({
                 <option>Admitted</option>
                 <option>Transferred / Referred</option>
                 <option>Home Medication</option>
-                <option>Left Against Medical Advice</option>
-                <option>Deceased</option>
+                <option>Absconded</option>
+                <option>Expired</option>
               </select>
             </Field>
             <Field label="Notes">
