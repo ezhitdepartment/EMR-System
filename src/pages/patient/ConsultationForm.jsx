@@ -455,6 +455,7 @@ const NURSE_SECTIONS = new Set([
 
 const DOCTOR_SECTIONS = new Set([
   "diagnosis",
+  "medication",
   "disposition",
   "medicinePrescription",
   "diagnostics",
@@ -1059,6 +1060,7 @@ function DoctorConsultationReferencePanel({ patient, form }) {
     .join(" ");
   const hasDoctorRecord =
     form.diagnosis ||
+    form.medicationOrders ||
     form.disposition ||
     (form.icdDiagnoses || []).length > 0 ||
     (form.diagnosticsSelected || []).length > 0 ||
@@ -1124,6 +1126,15 @@ function DoctorConsultationReferencePanel({ patient, form }) {
           </div>
         )}
         {form.diagnosis && <p className="whitespace-pre-wrap">{form.diagnosis}</p>}
+      </RefCard>
+
+      {/* Medication */}
+      <RefCard
+        title="Medication"
+        icon={Pill}
+        empty={!form.medicationOrders ? "No medication recorded yet." : null}
+      >
+        {form.medicationOrders && <p className="whitespace-pre-wrap">{form.medicationOrders}</p>}
       </RefCard>
 
       {/* Disposition */}
@@ -2184,55 +2195,26 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── DISPOSITION (doctor) ── */}
-        {canEdit("disposition") && (
+        {/* ── MEDICATION (doctor) ── */}
+        {/* Wires up form.medicationOrders — this field already existed
+            (mapped to consultations.medication_orders in
+            utils/consultations.js and printed on the Consultation Record
+            PDF right after Diagnosis) but had no input anywhere in the
+            form itself, so there was no way for a doctor to actually type
+            it in. */}
+        {canEdit("medication") && (
         <div>
-          <SectionHeader title="Disposition" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Disposition">
-              <select name="disposition" value={form.disposition} onChange={handle} className={inputClass}>
-                <option value="">Select</option>
-                <option>Discharged</option>
-                <option>Admitted</option>
-                <option>Transferred / Referred</option>
-                <option>Home Medication</option>
-                <option>Left Against Medical Advice</option>
-                <option>Deceased</option>
-              </select>
-            </Field>
-            <Field label="Notes">
-              <input name="dispositionNotes" value={form.dispositionNotes} onChange={handle} className={inputClass} />
-            </Field>
-          </div>
-
-          <div className="mt-5 pt-4 border-t border-slate-200 space-y-4">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              PhilHealth CF4 — Outcome of Treatment
-            </p>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {["Improved", "HAMA", "Absconded", "Transferred", "Expired"].map((opt) => (
-                <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="radio"
-                    name="outcomeOfTreatment"
-                    checked={form.outcomeOfTreatment === opt}
-                    onChange={() => set("outcomeOfTreatment", opt)}
-                    className="text-teal-700 focus:ring-teal-600"
-                  />
-                  {opt}
-                </label>
-              ))}
-            </div>
-            <Field label="Specify reason (required for Absconded / Transferred / Expired)">
-              <input
-                name="outcomeOfTreatmentReason"
-                value={form.outcomeOfTreatmentReason}
-                onChange={handle}
-                disabled={!["Absconded", "Transferred", "Expired"].includes(form.outcomeOfTreatment)}
-                className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
-              />
-            </Field>
-          </div>
+          <SectionHeader title="Medication" />
+          <Field label="Medication">
+            <textarea
+              name="medicationOrders"
+              value={form.medicationOrders}
+              onChange={handle}
+              rows={4}
+              placeholder="Medication ordered for this visit"
+              className={textareaClass}
+            />
+          </Field>
         </div>
         )}
 
@@ -2522,6 +2504,63 @@ export default function ConsultationForm({
             </div>
           </QuestionTable>
         </ToggleSection>
+        )}
+
+        {/* ── DISPOSITION (doctor) ── */}
+        {/* Deliberately placed last among the doctor's editable sections,
+            immediately before Certification (Printed Name / License /
+            Signature / Date) — Disposition is meant to be the doctor's
+            final call on the encounter, made only once everything else
+            (diagnosis, diagnostics, prescriptions) is already recorded. */}
+        {canEdit("disposition") && (
+        <div>
+          <SectionHeader title="Disposition" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Disposition">
+              <select name="disposition" value={form.disposition} onChange={handle} className={inputClass}>
+                <option value="">Select</option>
+                <option>Discharged</option>
+                <option>Admitted</option>
+                <option>Transferred / Referred</option>
+                <option>Home Medication</option>
+                <option>Left Against Medical Advice</option>
+                <option>Deceased</option>
+              </select>
+            </Field>
+            <Field label="Notes">
+              <input name="dispositionNotes" value={form.dispositionNotes} onChange={handle} className={inputClass} />
+            </Field>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-200 space-y-4">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+              PhilHealth CF4 — Outcome of Treatment
+            </p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {["Improved", "HAMA", "Absconded", "Transferred", "Expired"].map((opt) => (
+                <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="outcomeOfTreatment"
+                    checked={form.outcomeOfTreatment === opt}
+                    onChange={() => set("outcomeOfTreatment", opt)}
+                    className="text-teal-700 focus:ring-teal-600"
+                  />
+                  {opt}
+                </label>
+              ))}
+            </div>
+            <Field label="Specify reason (required for Absconded / Transferred / Expired)">
+              <input
+                name="outcomeOfTreatmentReason"
+                value={form.outcomeOfTreatmentReason}
+                onChange={handle}
+                disabled={!["Absconded", "Transferred", "Expired"].includes(form.outcomeOfTreatment)}
+                className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+              />
+            </Field>
+          </div>
+        </div>
         )}
 
         {/* ── PHILHEALTH CF4: CERTIFICATION OF ATTENDING HEALTH CARE PROFESSIONAL (doctor) ── */}
