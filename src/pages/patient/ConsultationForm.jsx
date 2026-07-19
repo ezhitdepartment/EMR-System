@@ -444,13 +444,16 @@ const NURSE_SECTIONS = new Set([
   "bloodType",
   "activeDiagnoses",
   "activeMedication",
+  // NCD High-Risk Assessment — moved here from DOCTOR_SECTIONS so nurses
+  // capture it as part of intake/history-taking instead of doctors
+  // capturing it during the clinical assessment.
+  "ncdAssessment",
   // Last page: Date + printed name/signature (and the consent note that
   // goes with them).
   "consentSignoff",
 ]);
 
 const DOCTOR_SECTIONS = new Set([
-  "ncdAssessment",
   "diagnosis",
   "disposition",
   "medicinePrescription",
