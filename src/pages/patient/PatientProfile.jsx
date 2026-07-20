@@ -1122,20 +1122,34 @@ export default function PatientProfile() {
       const isDoctor = user?.role === "doctor";
 
       if (isNurse || isDoctor) {
-        const updatedEncounter = await updateEncounter(consultationEncounter.id, (e) => {
-          const next = { ...e };
-          if (isNurse) next.nurseConsultationDone = true;
-          if (isDoctor) next.doctorConsultationDone = true;
-          if (
-            next.nurseConsultationDone &&
-            next.doctorConsultationDone &&
-            next.status !== ENCOUNTER_STATUS.CANCELLED
-          ) {
-            next.status = ENCOUNTER_STATUS.COMPLETED;
-          }
-          return next;
-        });
-        if (updatedEncounter) setConsultationEncounter(updatedEncounter);
+        try {
+          const updatedEncounter = await updateEncounter(consultationEncounter.id, (e) => {
+            const next = { ...e };
+            if (isNurse) next.nurseConsultationDone = true;
+            if (isDoctor) next.doctorConsultationDone = true;
+            if (
+              next.nurseConsultationDone &&
+              next.doctorConsultationDone &&
+              next.status !== ENCOUNTER_STATUS.CANCELLED
+            ) {
+              next.status = ENCOUNTER_STATUS.COMPLETED;
+            }
+            return next;
+          });
+          if (updatedEncounter) setConsultationEncounter(updatedEncounter);
+        } catch (err) {
+          // The consultation itself already saved successfully above —
+          // don't let this look like the whole save failed. But this step
+          // is what flips nurse/doctorConsultationDone AND is what
+          // triggers the DB to assign a Census No., so a swallowed
+          // failure here is exactly how "Census No. doesn't work" used to
+          // show up with no visible cause. Surface it instead.
+          alert(
+            `The consultation was saved, but the registration couldn't be updated (this also affects Census No. assignment): ${
+              err.message || "unknown error"
+            }`
+          );
+        }
       }
     }
   }

@@ -400,8 +400,12 @@ export default function CreateEncounterPage() {
   }
 
   async function refreshCreatedEncounter(patch) {
-    const updated = await updateEncounter(createdEncounter.id, (e) => ({ ...e, ...patch }));
-    setCreatedEncounter(updated);
+    try {
+      const updated = await updateEncounter(createdEncounter.id, (e) => ({ ...e, ...patch }));
+      setCreatedEncounter(updated);
+    } catch (err) {
+      alert(`Couldn't update the registration: ${err.message || "unknown error"}`);
+    }
   }
 
   return (

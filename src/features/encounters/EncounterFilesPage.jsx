@@ -60,9 +60,13 @@ export default function EncounterFilesPage() {
   }, [encounter?.hospitalNo]);
 
   async function handleSaveWaiver(waiver) {
-    const updated = await updateEncounter(encounterId, (e) => ({ ...e, waiver }));
-    if (updated) setEncounter(updated);
-    setShowWaiver(false);
+    try {
+      const updated = await updateEncounter(encounterId, (e) => ({ ...e, waiver }));
+      if (updated) setEncounter(updated);
+      setShowWaiver(false);
+    } catch (err) {
+      alert(`Couldn't save the waiver: ${err.message || "unknown error"}`);
+    }
   }
 
   if (encounter === undefined) {

@@ -79,8 +79,12 @@ export default function PatientEncountersPanel({ hospitalNo, onOpenPatientFiles 
 
   async function handleCancel(encounter) {
     if (!window.confirm(`Cancel encounter ${encounter.id}? This can't be undone.`)) return;
-    await updateEncounter(encounter.id, (e) => ({ ...e, status: STATUS.CANCELLED }));
-    refresh();
+    try {
+      await updateEncounter(encounter.id, (e) => ({ ...e, status: STATUS.CANCELLED }));
+      refresh();
+    } catch (err) {
+      alert(`Couldn't cancel this registration: ${err.message || "unknown error"}`);
+    }
     setRowMenuId(null);
   }
 
@@ -262,9 +266,13 @@ export default function PatientEncountersPanel({ hospitalNo, onOpenPatientFiles 
           encounter={activeEncounter}
           onClose={closeAction}
           onSave={async (doctor) => {
-            await updateEncounter(activeEncounter.id, (e) => ({ ...e, doctor }));
-            refresh();
-            closeAction();
+            try {
+              await updateEncounter(activeEncounter.id, (e) => ({ ...e, doctor }));
+              refresh();
+              closeAction();
+            } catch (err) {
+              alert(`Couldn't reassign the physician: ${err.message || "unknown error"}`);
+            }
           }}
         />
       )}
@@ -274,9 +282,13 @@ export default function PatientEncountersPanel({ hospitalNo, onOpenPatientFiles 
           encounter={activeEncounter}
           onClose={closeAction}
           onSave={async (waiver) => {
-            await updateEncounter(activeEncounter.id, (e) => ({ ...e, waiver }));
-            refresh();
-            closeAction();
+            try {
+              await updateEncounter(activeEncounter.id, (e) => ({ ...e, waiver }));
+              refresh();
+              closeAction();
+            } catch (err) {
+              alert(`Couldn't save the waiver: ${err.message || "unknown error"}`);
+            }
           }}
         />
       )}

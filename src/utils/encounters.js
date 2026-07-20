@@ -319,8 +319,13 @@ export async function updateEncounter(encounterId, updater) {
     .update(encounterToRow(next))
     .eq("id", encounterId);
   if (rowError) {
-    console.error("updateEncounter failed:", rowError.message);
-    return null;
+    // Surface this instead of swallowing it — a silent failure here is
+    // exactly how "the Census No. trigger didn't fire" or an RLS denial
+    // ends up looking like nothing happened at all, with no error visible
+    // anywhere in the UI. Callers (e.g. handleSaveConsultation in
+    // PatientProfile.jsx) already wrap their updateEncounter() calls and
+    // can alert the user with err.message.
+    throw new Error(rowError.message);
   }
 
   return findEncounterById(encounterId);

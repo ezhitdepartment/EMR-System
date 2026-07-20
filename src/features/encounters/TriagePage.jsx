@@ -86,17 +86,21 @@ export default function TriagePage() {
   }
 
   async function handleUpdateTriage() {
-    const updated = await updateEncounter(encounterId, (e) => ({
-      ...e,
-      triage: {
-        ...form,
-        createdByUuid: e.triage?.createdByUuid || user?.id || null,
-      },
-    }));
-    if (updated) {
-      setEncounter(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+    try {
+      const updated = await updateEncounter(encounterId, (e) => ({
+        ...e,
+        triage: {
+          ...form,
+          createdByUuid: e.triage?.createdByUuid || user?.id || null,
+        },
+      }));
+      if (updated) {
+        setEncounter(updated);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch (err) {
+      alert(`Couldn't save triage: ${err.message || "unknown error"}`);
     }
   }
 
