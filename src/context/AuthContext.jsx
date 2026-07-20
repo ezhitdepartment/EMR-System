@@ -108,14 +108,24 @@ export function AuthProvider({ children }) {
     };
   }, [user?.id]);
 
-  async function login(username, password, role) {
-    // Look up the email for this username first, since Supabase Auth signs
-    // in with email/password, not username — see supabase_auth_lookup.sql.
-    const { data: email, error: lookupError } = await supabase.rpc("get_email_for_username", {
-      lookup_username: username,
-    });
-    if (lookupError || !email) {
-      return { success: false, error: "Invalid username or password." };
+  async function login(usernameOrEmail, password, role) {
+    const input = (usernameOrEmail || "").trim();
+    // Accept either — if what was typed already looks like an email, use
+    // it directly; Supabase Auth signs in with email/password either way,
+    // so a username is only ever a stand-in that needs resolving first.
+    const looksLikeEmail = /\S+@\S+\.\S+/.test(input);
+
+    let email = input;
+    if (!looksLikeEmail) {
+      // Look up the email for this username, since Supabase Auth signs
+      // in with email/password, not username — see supabase_auth_lookup.sql.
+      const { data: lookedUpEmail, error: lookupError } = await supabase.rpc("get_email_for_username", {
+        lookup_username: input,
+      });
+      if (lookupError || !lookedUpEmail) {
+        return { success: false, error: "Invalid username or password." };
+      }
+      email = lookedUpEmail;
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });

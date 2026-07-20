@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { Mail, Lock, Eye, EyeOff, Users, ChevronDown } from "lucide-react";
+import { User, Lock, Eye, EyeOff, Users, ChevronDown } from "lucide-react";
 import logoImg from "../../assets/logo.jpg";
 import hospitalBg from "../../assets/hospital-bg.avif";
 import { ROLE_OPTIONS, STAFF_ROLES } from "../../data/roles";
@@ -116,9 +116,9 @@ export default function Login() {
               />
             </div>
 
-            {/* Email / username */}
+            {/* Username or Email */}
             <div className="relative">
-              <Mail
+              <User
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
               />
@@ -127,7 +127,7 @@ export default function Login() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Email Address"
+                placeholder="Username or Email"
                 autoComplete="username"
                 required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

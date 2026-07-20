@@ -20,17 +20,12 @@
 }
 
 .sidebar__mark {
-  font-family: var(--font-display);
-  font-weight: 800;
-  background: var(--color-accent);
-  color: #1E2A2A;
   width: 36px;
   height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
 }
 
 .sidebar__brand-text {

@@ -20,6 +20,7 @@ import {
 import { navGroups } from "../../data/navigation";
 import { hasFeatureAccess } from "../../data/roles";
 import { useAuth } from "../../context/AuthContext";
+import logoImg from "../../assets/logo.jpg";
 import "./Sidebar.css";
 
 const iconMap = {
@@ -48,7 +49,7 @@ export default function Sidebar({ isOpen, onClose }) {
       {isOpen && <div className="sidebar-scrim" onClick={onClose} />}
       <aside className={`sidebar ${isOpen ? "sidebar--open" : ""}`}>
         <div className="sidebar__brand">
-          <span className="sidebar__mark">EZ</span>
+          <img src={logoImg} alt="E. Zarate Hospital seal" className="sidebar__mark" />
           <div className="sidebar__brand-text">
             <strong>E. ZARATE</strong>
             <span>HOSPITAL</span>
