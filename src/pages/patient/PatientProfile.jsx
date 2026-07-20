@@ -56,7 +56,7 @@ import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
 import { findEncounterById, loadEncounters, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
-import { loadLabOrders, upsertLabOrderForEncounter, formatDateCreated } from "../../utils/labOrders";
+import { loadLabOrders, upsertLabOrderForEncounter, getLabOrderFileUrl, formatDateCreated } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
 import { loadMedicinePrescriptions, upsertMedicinePrescriptionForEncounter } from "../../utils/medicinePrescriptions";
 import {
@@ -552,6 +552,7 @@ function PatientFilesPanel({
   konsultaReferral,
   medicalCertificate,
   consultationHistory,
+  labOrders,
   downloadingPdf,
   downloadingDischargePdf,
   downloadingKonsultaPdf,
@@ -577,6 +578,17 @@ function PatientFilesPanel({
   const erEntries = (consultationHistory || []).filter((e) => e.authorRole === "er_nurse");
   const opdEntries = (consultationHistory || []).filter((e) => e.authorRole === "opd_nurse");
   const doctorEntries = (consultationHistory || []).filter((e) => e.authorRole === "doctor");
+
+  // Every result file a Med Tech/X-ray Tech has uploaded against any of
+  // this patient's lab orders, across every order — flattened the same
+  // way ConsultationForm.jsx's doctor reference panel already does, so
+  // "one folder with every result" doesn't require opening each lab order
+  // individually to find its files.
+  const labResultFiles = (labOrders || []).flatMap((order) =>
+    Object.entries(order.tests || {}).flatMap(([testName, test]) =>
+      (test.files || []).map((f) => ({ ...f, testName, orderId: order.id }))
+    )
+  );
 
   function entryLabel(entry) {
     const dt = entry.createdAt ? new Date(entry.createdAt) : null;
@@ -615,6 +627,23 @@ function PatientFilesPanel({
       count: opdEntries.length,
       description: "Every consultation an OPD nurse recorded for this patient, newest first.",
       historyList: toHistoryList(opdEntries, "OPD consultation"),
+    },
+    {
+      id: "laboratory-results",
+      label: "Laboratory Results",
+      count: labResultFiles.length,
+      description:
+        "Every result file a Med Tech or X-ray Tech has uploaded against this patient's lab orders, across every order.",
+      emptyMessage: "No lab results uploaded yet.",
+      historyList: labResultFiles.map((f) => ({
+        id: f.id,
+        label: f.name,
+        sublabel: `${f.testName} · ${f.uploadedAt ? formatDateCreated(f.uploadedAt) : "—"}`,
+        onClick: async () => {
+          const url = await getLabOrderFileUrl(f.storagePath);
+          if (url) window.open(url, "_blank");
+        },
+      })),
     },
     {
       id: "medical-certificate",
@@ -785,7 +814,7 @@ function PatientFilesPanel({
               <div className="mt-4 w-full text-left">
                 {selectedFolder.historyList.length === 0 ? (
                   <p className="text-xs text-slate-400 italic text-center">
-                    No consultations recorded yet.
+                    {selectedFolder.emptyMessage || "No consultations recorded yet."}
                   </p>
                 ) : (
                   <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
@@ -2173,6 +2202,7 @@ export default function PatientProfile() {
                 konsultaReferral={konsultaReferral}
                 medicalCertificate={medicalCertificate}
                 consultationHistory={consultationHistoryList}
+                labOrders={labOrders}
                 downloadingPdf={downloadingPdf}
                 downloadingDischargePdf={downloadingDischargePdf}
                 downloadingKonsultaPdf={downloadingKonsultaPdf}
