@@ -56,6 +56,66 @@ const emptyForm = {
 
 const MARITAL_STATUS_OPTIONS = ["", "Single", "Married", "Widowed", "Separated", "Divorced"];
 
+// Draft persistence — so an accidental "Cancel" or a click on the backdrop
+// (both of which just unmount this component) doesn't throw away what was
+// already typed. sessionStorage rather than localStorage on purpose: this
+// form holds patient PII (names, addresses, parents' contact numbers), so
+// it should survive a reopen within the same browser tab/session, but not
+// linger indefinitely on a shared hospital workstation after the tab or
+// browser is closed — that's exactly sessionStorage's lifetime.
+//
+// The draft is only ever cleared by (a) a successful "Create and Select
+// Patient" save, since at that point the data is safely in the database,
+// or (b) the person explicitly clicking the new "Clear Form" button.
+// Simply closing/cancelling the modal never touches it.
+const DRAFT_STORAGE_KEY = "ezarateHospital:createPatientDraft";
+
+function readDraft() {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Merge over emptyForm (not the other way around) so a draft saved
+    // before an app update that added new fields still comes back with
+    // every current field present, instead of a stale shape crashing the
+    // form.
+    return {
+      ...emptyForm,
+      ...parsed,
+      guardian: { ...emptyGuardian, ...(parsed?.guardian || {}) },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(form) {
+  try {
+    sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(form));
+  } catch {
+    // Storage full/unavailable (e.g. private browsing) — the form still
+    // works for this session, it just won't survive a reopen. Not worth
+    // surfacing to the nurse mid-registration.
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // Nothing to clean up if storage was never available to begin with.
+  }
+}
+
+// True once anything meaningful has been typed — used to decide whether
+// the "Clear Form" button should ask for confirmation before wiping
+// everything out.
+function isFormBlank(form) {
+  return (
+    JSON.stringify(form) === JSON.stringify(emptyForm)
+  );
+}
+
 // Same composition used everywhere else in the app (Discharge/Medical
 // Certificate seeds) so "same as patient's address" produces an identical
 // string to what shows up on those documents.
@@ -99,9 +159,17 @@ function MobileField({ value, onChange }) {
 }
 
 export default function CreatePatientModal({ onClose, onCreated }) {
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => readDraft() || emptyForm);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Persist every change as a draft — this is what makes reopening the
+  // modal (after Cancel, a backdrop click, or even an accidental tab
+  // close/refresh within the same session) come back with what was
+  // already typed instead of a blank form.
+  useEffect(() => {
+    writeDraft(form);
+  }, [form]);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -269,12 +337,28 @@ export default function CreatePatientModal({ onClose, onCreated }) {
 
     try {
       const created = await createPatient(patient);
+      // The data is safely saved now — this is the one place the draft
+      // should actually disappear, so the next "Add Patient" opens blank
+      // instead of prefilled with the patient who was just created.
+      clearDraft();
       onCreated(created);
     } catch {
       setError("Could not save the patient. Please try again.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // "Clear Form" — the explicit, deliberate way to wipe the draft. Only
+  // asks for confirmation when there's actually something typed in, so it
+  // doesn't nag on an already-empty form.
+  function handleClear() {
+    if (!isFormBlank(form) && !window.confirm("Clear everything you've entered in this form?")) {
+      return;
+    }
+    setForm(emptyForm);
+    setError("");
+    clearDraft();
   }
 
   return (
@@ -721,21 +805,30 @@ export default function CreatePatientModal({ onClose, onCreated }) {
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-          <div className="mt-6 flex justify-end gap-2">
+          <div className="mt-6 flex items-center justify-between gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              onClick={handleClear}
+              className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-red-600 hover:border-red-200 transition-colors"
             >
-              Cancel
+              Clear Form
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-            >
-              {submitting ? "Saving…" : "Create and Select Patient"}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+              >
+                {submitting ? "Saving…" : "Create and Select Patient"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
