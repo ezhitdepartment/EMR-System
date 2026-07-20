@@ -55,7 +55,7 @@ import ConsultationRecordPDF from "./ConsultationRecordPDF";
 import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
-import { findEncounterById, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
+import { findEncounterById, loadEncounters, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
 import { loadLabOrders, createLabOrder, formatDateCreated } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
 import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
@@ -911,6 +911,13 @@ export default function PatientProfile() {
   const [labOrders, setLabOrders] = useState([]);
   const [showCreateLabOrder, setShowCreateLabOrder] = useState(false);
   const [medicinePrescriptions, setMedicinePrescriptions] = useState([]);
+  // This patient's registrations — loaded so the Vital Signs card below can
+  // pull the most recently-recorded triage (BP/HR/RR/Temp/Height/Weight/
+  // BMI/Vision), the same data Registration -> Triage actually saves. The
+  // card used to only ever read from the separate, manually-typed EMR
+  // document, so vitals captured at Registration never showed up here even
+  // though they were saved correctly on the encounter itself.
+  const [encounters, setEncounters] = useState([]);
   const [viewPrescribedRecord, setViewPrescribedRecord] = useState(null);
 
   async function refreshLabOrders(pid) {
@@ -943,6 +950,7 @@ export default function PatientProfile() {
       setMedicinePrescriptions(
         found ? (await loadMedicinePrescriptions()).filter((r) => r.hospitalNo === hospitalNo) : []
       );
+      setEncounters(found ? (await loadEncounters()).filter((e) => e.hospitalNo === hospitalNo) : []);
     });
     return () => {
       active = false;
@@ -1502,6 +1510,44 @@ export default function PatientProfile() {
   const fullName = [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
     .filter(Boolean)
     .join(" ");
+
+  // Vital Signs card, below — prefer the most recently recorded Triage
+  // (Registration -> Triage saves straight to the encounter's
+  // `encounter_triage` row) over the EMR document's own vitals fields,
+  // which are only ever filled in manually and separately. Falls back to
+  // the EMR values so nothing regresses for patients who only ever had
+  // vitals entered there.
+  const triageEncountersDesc = encounters
+    .filter(
+      (e) =>
+        e.triage &&
+        (e.triage.systolic ||
+          e.triage.diastolic ||
+          e.triage.heartRate ||
+          e.triage.respiratoryRate ||
+          e.triage.temperature ||
+          e.triage.height ||
+          e.triage.weight ||
+          e.triage.leftVision ||
+          e.triage.rightVision)
+    )
+    .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
+  const latestTriage = triageEncountersDesc[0]?.triage || null;
+
+  const vitals = {
+    bloodPressure:
+      latestTriage?.systolic && latestTriage?.diastolic
+        ? `${latestTriage.systolic}/${latestTriage.diastolic}`
+        : emr?.bloodPressure || "",
+    cardiacRate: latestTriage?.heartRate || emr?.cardiacRate || "",
+    respiratoryRate: latestTriage?.respiratoryRate || emr?.respiratoryRate || "",
+    temperature: latestTriage?.temperature || emr?.temperature || "",
+    leftVision: latestTriage?.leftVision || emr?.leftVision || "",
+    rightVision: latestTriage?.rightVision || emr?.rightVision || "",
+    height: latestTriage?.height || emr?.height || "",
+    weight: latestTriage?.weight || emr?.weight || "",
+    bmi: latestTriage?.bmi || emr?.bmi || "",
+  };
   const age = calculateAge(patient.dateOfBirth);
   const detailedAge = formatDetailedAge(patient.dateOfBirth);
 
@@ -1796,32 +1842,32 @@ export default function PatientProfile() {
                     <div className="bg-slate-50 rounded-lg p-2.5">
                       <p className="text-[10px] text-slate-400 uppercase">BP</p>
                       <p className="text-sm font-semibold text-slate-800">
-                        {emr?.bloodPressure ? `${emr.bloodPressure} mmHg` : "—"}
+                        {vitals.bloodPressure ? `${vitals.bloodPressure} mmHg` : "—"}
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-2.5">
                       <p className="text-[10px] text-slate-400 uppercase">Heart Rate</p>
                       <p className="text-sm font-semibold text-slate-800">
-                        {emr?.cardiacRate ? `${emr.cardiacRate} bpm` : "—"}
+                        {vitals.cardiacRate ? `${vitals.cardiacRate} bpm` : "—"}
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-2.5">
                       <p className="text-[10px] text-slate-400 uppercase">Resp Rate</p>
                       <p className="text-sm font-semibold text-slate-800">
-                        {emr?.respiratoryRate ? `${emr.respiratoryRate} rpm` : "—"}
+                        {vitals.respiratoryRate ? `${vitals.respiratoryRate} rpm` : "—"}
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-2.5">
                       <p className="text-[10px] text-slate-400 uppercase">Temp</p>
                       <p className="text-sm font-semibold text-slate-800">
-                        {emr?.temperature ? `${emr.temperature}°C` : "—"}
+                        {vitals.temperature ? `${vitals.temperature}°C` : "—"}
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-2.5">
                       <p className="text-[10px] text-slate-400 uppercase">Vision</p>
                       <p className="text-sm font-semibold text-slate-800">
-                        {emr?.leftVision || emr?.rightVision
-                          ? `${emr?.leftVision || "—"} / ${emr?.rightVision || "—"}`
+                        {vitals.leftVision || vitals.rightVision
+                          ? `${vitals.leftVision || "—"} / ${vitals.rightVision || "—"}`
                           : "— / —"}
                       </p>
                     </div>
@@ -1829,9 +1875,9 @@ export default function PatientProfile() {
                       <p className="text-[10px] text-slate-400 uppercase">Height / Weight / BMI</p>
                       <p className="text-sm font-semibold text-slate-800">
                         {[
-                          emr?.height ? `${emr.height} cm` : null,
-                          emr?.weight ? `${emr.weight} kg` : null,
-                          emr?.bmi || null,
+                          vitals.height ? `${vitals.height} cm` : null,
+                          vitals.weight ? `${vitals.weight} kg` : null,
+                          vitals.bmi || null,
                         ]
                           .filter(Boolean)
                           .join(" / ") || "—"}

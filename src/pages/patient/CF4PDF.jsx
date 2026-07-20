@@ -24,6 +24,25 @@
 // Nothing here is hand-typed by staff — if a field reads "—" it's because
 // neither the doctor's nor the ER nurse's consultation entry has filled
 // that field in yet, not because this form has its own blank to fill.
+//
+// LAYOUT — kept to 2 pages for a typical-length entry
+// -------------------------------------------------------------------------
+// Page 1: HCI Info, Patient's Data, Reason for Admission (HPI / PMH /
+//         OB-GYN), Signs & Symptoms, Referral.
+// Page 2: Physical Examination on Admission (General Survey, Vitals,
+//         HEENT, and every PE_SYSTEMS group — all of it, not split
+//         mid-section), Course in the Ward, Surgical Procedure, Drugs /
+//         Medicines, Outcome of Treatment, Certification.
+//
+// Every field on this form is a real doctor/nurse text field, so react-pdf
+// still auto-paginates onto extra pages if someone writes an unusually
+// long History of Present Illness, a long Course in the Ward log, etc. —
+// that's expected and correct (nothing should ever get silently
+// truncated). What was fixed here is the WASTED space: oversized margins,
+// 4-per-row checkbox grids, tall empty placeholders, and — the main
+// cause of the 3rd page — Physical Examination being split across the
+// Page 1/Page 2 boundary, which forced its own overflow page before
+// Course in the Ward / Drugs / Outcome / Certification could even start.
 
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { ageInYears } from "../../utils/age";
@@ -46,78 +65,83 @@ const C = {
 
 const s = StyleSheet.create({
   page: {
-    paddingTop: 24, paddingBottom: 30, paddingHorizontal: 30,
+    paddingTop: 20, paddingBottom: 26, paddingHorizontal: 28,
     fontSize: 7.5, fontFamily: "Helvetica", color: C.dark,
   },
 
   // Header
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 },
-  phName: { fontSize: 14, fontFamily: "Helvetica-Bold" },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 2 },
+  phName: { fontSize: 13, fontFamily: "Helvetica-Bold" },
   phSub: { fontSize: 6.5, color: C.mid, fontStyle: "italic" },
-  formTitle: { fontSize: 15, fontFamily: "Helvetica-Bold", textAlign: "right" },
+  formTitle: { fontSize: 14, fontFamily: "Helvetica-Bold", textAlign: "right" },
   formSub: { fontSize: 6.5, color: C.mid, textAlign: "right" },
-  reminders: { fontSize: 6, color: C.mid, lineHeight: 1.4, marginTop: 3, marginBottom: 3 },
+  reminders: { fontSize: 5.8, color: C.mid, lineHeight: 1.3, marginTop: 2, marginBottom: 2 },
   remindersBold: { fontFamily: "Helvetica-Bold" },
 
   // Section bars — "I. HEALTH CARE INSTITUTION (HCI) INFORMATION" etc.
-  bar: { backgroundColor: C.barBg, paddingVertical: 3, paddingHorizontal: 6, marginTop: 5, marginBottom: 4 },
-  barText: { color: C.white, fontSize: 7, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.3 },
+  bar: { backgroundColor: C.barBg, paddingVertical: 2, paddingHorizontal: 5, marginTop: 3, marginBottom: 2 },
+  barText: { color: C.white, fontSize: 6.8, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.3 },
 
   // Boxed grid — mimics the paper form's ruled boxes.
   grid: { borderWidth: 0.75, borderColor: C.border },
   gridRow: { flexDirection: "row" },
   gridRowBorder: { flexDirection: "row", borderTopWidth: 0.75, borderTopColor: C.border },
-  cell: { flex: 1, padding: 4, borderRightWidth: 0.75, borderRightColor: C.border },
-  cellLast: { flex: 1, padding: 4 },
-  cellLabel: { fontSize: 5.5, color: C.mid, textTransform: "uppercase", marginBottom: 2 },
-  cellVal: { fontSize: 8, fontFamily: "Helvetica-Bold", minHeight: 10 },
-  cellValSm: { fontSize: 7, fontFamily: "Helvetica-Bold", minHeight: 9 },
+  cell: { flex: 1, padding: 3, borderRightWidth: 0.75, borderRightColor: C.border },
+  cellLast: { flex: 1, padding: 3 },
+  cellLabel: { fontSize: 5.3, color: C.mid, textTransform: "uppercase", marginBottom: 1 },
+  cellVal: { fontSize: 7.5, fontFamily: "Helvetica-Bold", minHeight: 9 },
+  cellValSm: { fontSize: 6.8, fontFamily: "Helvetica-Bold", minHeight: 8 },
 
-  blk: { marginTop: 4, marginBottom: 2 },
-  blkLabel: { fontSize: 6, color: C.mid, textTransform: "uppercase", marginBottom: 2, fontFamily: "Helvetica-Bold" },
-  blkVal: { fontSize: 7.5, backgroundColor: C.bg, padding: 5, lineHeight: 1.45, minHeight: 24 },
+  blk: { marginTop: 2, marginBottom: 1 },
+  blkLabel: { fontSize: 5.8, color: C.mid, textTransform: "uppercase", marginBottom: 1, fontFamily: "Helvetica-Bold" },
+  blkVal: { fontSize: 7.3, backgroundColor: C.bg, padding: 4, lineHeight: 1.35, minHeight: 18 },
 
-  // Checkbox grids
-  checkGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 2, marginBottom: 3 },
-  checkItem: { flexDirection: "row", alignItems: "flex-start", width: "25%", marginBottom: 3, paddingRight: 3 },
-  checkItemWide: { flexDirection: "row", alignItems: "flex-start", width: "50%", marginBottom: 3, paddingRight: 3 },
+  // Checkbox grids — 5-per-row (was 4), tighter vertical rhythm.
+  checkGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 1, marginBottom: 2 },
+  checkItem: { flexDirection: "row", alignItems: "flex-start", width: "20%", marginBottom: 2, paddingRight: 2 },
+  checkItemWide: { flexDirection: "row", alignItems: "flex-start", width: "33.33%", marginBottom: 2, paddingRight: 2 },
   checkBox: {
-    width: 7, height: 7, borderWidth: 0.75, borderColor: C.dark,
-    marginRight: 3, alignItems: "center", justifyContent: "center", marginTop: 0.5, flexShrink: 0,
+    width: 6, height: 6, borderWidth: 0.75, borderColor: C.dark,
+    marginRight: 2, alignItems: "center", justifyContent: "center", marginTop: 0.5, flexShrink: 0,
   },
-  checkBoxMark: { fontSize: 6, fontFamily: "Helvetica-Bold" },
-  checkLabel: { fontSize: 6.5, lineHeight: 1.2 },
+  checkBoxMark: { fontSize: 5.5, fontFamily: "Helvetica-Bold" },
+  checkLabel: { fontSize: 6.2, lineHeight: 1.15 },
 
-  sectionLabel: { fontSize: 6.5, fontFamily: "Helvetica-Bold", textTransform: "uppercase", marginTop: 4, marginBottom: 2 },
+  sectionLabel: { fontSize: 6.2, fontFamily: "Helvetica-Bold", textTransform: "uppercase", marginTop: 2, marginBottom: 1 },
 
   // Tables — Course in the Ward / Drugs & Medicines
-  table: { borderWidth: 0.75, borderColor: C.border, marginTop: 2, marginBottom: 4 },
+  table: { borderWidth: 0.75, borderColor: C.border, marginTop: 1, marginBottom: 3 },
   tHeadRow: { flexDirection: "row", backgroundColor: C.bg, borderBottomWidth: 0.75, borderBottomColor: C.border },
   tRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: C.border },
   tRowLast: { flexDirection: "row" },
-  tCellDate: { width: 46, padding: 3, fontSize: 6.5, borderRightWidth: 0.5, borderRightColor: C.border },
-  tCellHeadDate: { width: 46, padding: 3, fontSize: 6, fontFamily: "Helvetica-Bold", textTransform: "uppercase", borderRightWidth: 0.5, borderRightColor: C.border },
-  tCellWide: { flex: 1, padding: 3, fontSize: 7 },
-  tCellHeadWide: { flex: 1, padding: 3, fontSize: 6, fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
-  tCell3: { flex: 1, padding: 3, fontSize: 6.5, borderRightWidth: 0.5, borderRightColor: C.border },
-  tCell3Last: { flex: 1, padding: 3, fontSize: 6.5 },
-  tCellHead3: { flex: 1, padding: 3, fontSize: 6, fontFamily: "Helvetica-Bold", textTransform: "uppercase", borderRightWidth: 0.5, borderRightColor: C.border },
-  tCellHead3Last: { flex: 1, padding: 3, fontSize: 6, fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
+  tCellDate: { width: 44, padding: 2, fontSize: 6.3, borderRightWidth: 0.5, borderRightColor: C.border },
+  tCellHeadDate: { width: 44, padding: 2, fontSize: 5.8, fontFamily: "Helvetica-Bold", textTransform: "uppercase", borderRightWidth: 0.5, borderRightColor: C.border },
+  tCellWide: { flex: 1, padding: 2, fontSize: 6.8 },
+  tCellHeadWide: { flex: 1, padding: 2, fontSize: 5.8, fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
+  tCell3: { flex: 1, padding: 2, fontSize: 6.3, borderRightWidth: 0.5, borderRightColor: C.border },
+  tCell3Last: { flex: 1, padding: 2, fontSize: 6.3 },
+  tCellHead3: { flex: 1, padding: 2, fontSize: 5.8, fontFamily: "Helvetica-Bold", textTransform: "uppercase", borderRightWidth: 0.5, borderRightColor: C.border },
+  tCellHead3Last: { flex: 1, padding: 2, fontSize: 5.8, fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
 
-  outcomeRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 3, marginBottom: 3 },
-  outcomeItem: { flexDirection: "row", alignItems: "center", marginRight: 14, marginBottom: 3 },
+  outcomeRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 2, marginBottom: 2 },
+  outcomeItem: { flexDirection: "row", alignItems: "center", marginRight: 12, marginBottom: 2 },
 
-  certifyText: { fontSize: 7, fontStyle: "italic", marginTop: 3, marginBottom: 10, lineHeight: 1.4 },
-  sigRow: { flexDirection: "row", marginTop: 4, gap: 20 },
+  certifyText: { fontSize: 6.8, fontStyle: "italic", marginTop: 2, marginBottom: 6, lineHeight: 1.3 },
+  sigRow: { flexDirection: "row", marginTop: 3, gap: 18 },
   sigBlock: { flex: 1 },
-  sigLine: { borderBottomWidth: 0.75, borderBottomColor: C.dark, height: 20, marginBottom: 2 },
-  sigCaption: { fontSize: 6, color: C.mid, textAlign: "center" },
+  sigLine: { borderBottomWidth: 0.75, borderBottomColor: C.dark, height: 16, marginBottom: 2 },
+  sigCaption: { fontSize: 5.8, color: C.mid, textAlign: "center" },
+
+  // Physical Exam system groups — one compact row per system instead of a
+  // stacked heading + its own checkGrid margins.
+  peSystem: { marginBottom: 1 },
+  peSystemLabel: { fontSize: 6.2, fontFamily: "Helvetica-Bold", textTransform: "uppercase", marginBottom: 0.5 },
 
   footer: {
-    position: "absolute", bottom: 14, left: 30, right: 30,
+    position: "absolute", bottom: 12, left: 28, right: 28,
     flexDirection: "row", justifyContent: "space-between",
-    fontSize: 6, color: C.light,
-    borderTopWidth: 0.5, borderTopColor: C.border, paddingTop: 3,
+    fontSize: 5.8, color: C.light,
+    borderTopWidth: 0.5, borderTopColor: C.border, paddingTop: 2,
   },
 });
 
@@ -144,7 +168,7 @@ function Blk({ label, value, rows = 2 }) {
   return (
     <View style={s.blk}>
       <Text style={s.blkLabel}>{label}</Text>
-      <Text style={[s.blkVal, { minHeight: rows * 10 }]}>{dash(value)}</Text>
+      <Text style={[s.blkVal, { minHeight: rows * 8 }]}>{dash(value)}</Text>
     </View>
   );
 }
@@ -202,7 +226,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
 
   return (
     <Document title={`CF4 - ${patient.hospitalNo || fullName}`} author="E. ZARATE HOSPITAL">
-      {/* ── PAGE 1 ── */}
+      {/* ── PAGE 1 — HCI Info / Patient's Data / Reason for Admission ── */}
       <Page size="LETTER" style={s.page}>
         <View style={s.headerRow}>
           <View>
@@ -270,8 +294,8 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
         </View>
 
         <Bar title="III. Reason for Admission" />
-        <Blk label="History of Present Illness" value={doctorEntry.historyOfPresentIllness} rows={5} />
-        <Blk label="Pertinent Past Medical History" value={pastMedicalHistory} rows={3} />
+        <Blk label="History of Present Illness" value={doctorEntry.historyOfPresentIllness} rows={4} />
+        <Blk label="Pertinent Past Medical History" value={pastMedicalHistory} rows={2} />
 
         <View style={s.blk}>
           <Text style={s.blkLabel}>OB/GYN History</Text>
@@ -309,32 +333,6 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
           />
         </View>
 
-        <Bar title="Physical Examination on Admission (Pertinent Findings per System)" />
-        <Text style={s.sectionLabel}>General Survey</Text>
-        <View style={s.checkGrid}>
-          {GENERAL_SURVEY_OPTIONS.map((opt) => (
-            <Check
-              key={opt}
-              checked={(doctorEntry.peGeneralSurvey || []).includes(opt)}
-              label={
-                opt === "Altered sensorium" && doctorEntry.peGeneralSurveyAlteredSensoriumSpecify
-                  ? `${opt}: ${doctorEntry.peGeneralSurveyAlteredSensoriumSpecify}`
-                  : opt
-              }
-              wide
-            />
-          ))}
-        </View>
-        {vitals && <Text style={[s.blkVal, { marginBottom: 4 }]}>{vitals}</Text>}
-
-        <Text style={s.sectionLabel}>HEENT</Text>
-        <View style={s.checkGrid}>
-          {HEENT_OPTIONS.map((opt) => (
-            <Check key={opt} checked={(doctorEntry.peHeent || []).includes(opt)} label={opt} />
-          ))}
-          {doctorEntry.peHeentOthers ? <Check checked label={`Others: ${doctorEntry.peHeentOthers}`} wide /> : null}
-        </View>
-
         <View style={s.footer} fixed>
           <Text>E. ZARATE HOSPITAL  |  PhilHealth CF4</Text>
           <Text>Generated on {generatedOn}</Text>
@@ -342,12 +340,42 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
         </View>
       </Page>
 
-      {/* ── PAGE 2 ── */}
+      {/* ── PAGE 2 — Physical Exam / Course in Ward / Drugs / Outcome / Certification ── */}
       <Page size="LETTER" style={s.page}>
-        <Text style={s.sectionLabel}>Physical Examination continued (Pertinent Findings per System)</Text>
+        <Bar title="Physical Examination on Admission (Pertinent Findings per System)" />
+
+        <View style={s.peSystem}>
+          <Text style={s.peSystemLabel}>General Survey</Text>
+          <View style={s.checkGrid}>
+            {GENERAL_SURVEY_OPTIONS.map((opt) => (
+              <Check
+                key={opt}
+                checked={(doctorEntry.peGeneralSurvey || []).includes(opt)}
+                label={
+                  opt === "Altered sensorium" && doctorEntry.peGeneralSurveyAlteredSensoriumSpecify
+                    ? `${opt}: ${doctorEntry.peGeneralSurveyAlteredSensoriumSpecify}`
+                    : opt
+                }
+                wide
+              />
+            ))}
+          </View>
+          {vitals && <Text style={[s.blkVal, { marginBottom: 2, marginTop: 0 }]}>{vitals}</Text>}
+        </View>
+
+        <View style={s.peSystem}>
+          <Text style={s.peSystemLabel}>HEENT</Text>
+          <View style={s.checkGrid}>
+            {HEENT_OPTIONS.map((opt) => (
+              <Check key={opt} checked={(doctorEntry.peHeent || []).includes(opt)} label={opt} />
+            ))}
+            {doctorEntry.peHeentOthers ? <Check checked label={`Others: ${doctorEntry.peHeentOthers}`} wide /> : null}
+          </View>
+        </View>
+
         {PE_SYSTEMS.map((system) => (
-          <View key={system.key} style={{ marginBottom: 3 }}>
-            <Text style={[s.sectionLabel, { marginBottom: 1 }]}>{system.label}</Text>
+          <View key={system.key} style={s.peSystem}>
+            <Text style={s.peSystemLabel}>{system.label}</Text>
             <View style={s.checkGrid}>
               {system.options.map((opt) => (
                 <Check key={opt} checked={(doctorEntry[system.key] || []).includes(opt)} label={opt} />
@@ -381,7 +409,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
         </View>
 
         <Text style={s.sectionLabel}>Surgical Procedure / RVS Code</Text>
-        <View style={[s.blkVal, { marginBottom: 4 }]}>
+        <View style={[s.blkVal, { marginBottom: 3 }]}>
           <Text>
             {dash(erEntry.surgicalProcedureRvsCode)}
             {erEntry.surgicalProcedureNotes ? ` — ${erEntry.surgicalProcedureNotes}` : ""}
@@ -426,7 +454,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
           ))}
         </View>
         {["Absconded", "Transferred", "Expired"].includes(doctorEntry.outcomeOfTreatment) && (
-          <Text style={s.blkVal}>Reason: {dash(doctorEntry.outcomeOfTreatmentReason)}</Text>
+          <Text style={[s.blkVal, { marginBottom: 2 }]}>Reason: {dash(doctorEntry.outcomeOfTreatmentReason)}</Text>
         )}
 
         <Bar title="VII. Certification of Health Care Professional" />
@@ -436,15 +464,15 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
         <View style={s.sigRow}>
           <View style={s.sigBlock}>
             <View style={s.sigLine} />
-            <Text style={[s.sigCaption, { fontFamily: "Helvetica-Bold", color: C.dark, fontSize: 7 }]}>
+            <Text style={[s.sigCaption, { fontFamily: "Helvetica-Bold", color: C.dark, fontSize: 6.8 }]}>
               {dash(doctorEntry.attendingPrintedName)}
             </Text>
             <Text style={s.sigCaption}>Signature over Printed Name of Attending Health Care Professional</Text>
             <Text style={s.sigCaption}>License No. / PTR: {dash(doctorEntry.attendingLicenseNumber)}</Text>
           </View>
-          <View style={{ width: 100 }}>
+          <View style={{ width: 90 }}>
             <View style={s.sigLine} />
-            <Text style={[s.sigCaption, { fontFamily: "Helvetica-Bold", color: C.dark, fontSize: 7 }]}>
+            <Text style={[s.sigCaption, { fontFamily: "Helvetica-Bold", color: C.dark, fontSize: 6.8 }]}>
               {formatDate(doctorEntry.attendingCertifiedDate) || "—"}
             </Text>
             <Text style={s.sigCaption}>Date Signed</Text>
