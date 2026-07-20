@@ -41,7 +41,9 @@ export default function ResetPasswordModal({ user, onClose, onDone }) {
         <div className="px-5 py-4 flex flex-col gap-4">
           <p className="text-sm text-slate-600">
             This will reset <span className="font-semibold text-slate-800">{user.username}</span>'s
-            password back to the original password set when this account was created. Are you sure?
+            password to the temporary password{" "}
+            <span className="font-mono font-semibold text-slate-800">Temporary123</span>. They should
+            log in with it and change it right away. Are you sure?
           </p>
 
           {error && (

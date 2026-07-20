@@ -59,8 +59,9 @@ export async function setAccountSuspension(targetUserId, suspend) {
   return data.status; // "active" | "suspended"
 }
 
-// Resets the account's password back to whatever it was set to when the
-// admin created it.
+// Resets the account's password to the fixed temporary password
+// ("Temporary123") — see supabase/functions/admin-reset-password. The
+// affected user should log in with it and change it right away.
 export async function resetToOriginalPassword(targetUserId) {
   await invoke("admin-reset-password", { targetUserId });
 }

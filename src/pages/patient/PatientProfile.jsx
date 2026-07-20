@@ -1387,9 +1387,19 @@ export default function PatientProfile() {
   // and the ER nurse have already saved on this patient's consultation
   // history, plus that encounter's triage vitals. This resolves those
   // three inputs; returns null if there's nothing to build a CF4 from yet
-  // (no doctor consultation entry recorded).
+  // (no doctor/admin consultation entry recorded).
+  //
+  // "doctor" AND "admin" both count as a doctor-section source here — this
+  // mirrors ConsultationForm.jsx's own canEdit(), which explicitly grants
+  // Admin full access to DOCTOR_SECTIONS (Signs & Symptoms, Physical Exam,
+  // Diagnosis, Certification, etc.) so an admin account can act as a
+  // stand-in doctor. Filtering this list down to authorRole === "doctor"
+  // only used to silently drop any admin-authored save — the checkboxes
+  // saved fine in the DB, CF4 just never looked at that row.
   async function resolveCF4Sources() {
-    const doctorEntries = (consultationHistoryList || []).filter((e) => e.authorRole === "doctor");
+    const doctorEntries = (consultationHistoryList || []).filter(
+      (e) => e.authorRole === "doctor" || e.authorRole === "admin"
+    );
     const erEntries = (consultationHistoryList || []).filter((e) => e.authorRole === "er_nurse");
     const doctorEntry = doctorEntries[0];
     if (!doctorEntry) return null;

@@ -279,7 +279,7 @@ export default function Roles() {
           onClose={() => setResetTarget(null)}
           onDone={() => {
             setResetTarget(null);
-            alert(`${resetTarget.username}'s password has been reset to its original value.`);
+            alert(`${resetTarget.username}'s password has been reset to "Temporary123".`);
           }}
         />
       )}

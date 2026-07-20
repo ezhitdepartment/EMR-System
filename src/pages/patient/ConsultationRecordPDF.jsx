@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { formatAge } from "../../utils/age";
+import { PE_SYSTEMS } from "./ConsultationForm";
 
 const C = {
   teal: "#0f766e",
@@ -200,6 +201,31 @@ function QRow({ q, a }) {
   );
 }
 
+// Renders a checkbox-group field (an array of checked labels, e.g.
+// form.diagnosticsSelected, form.admissionSigns, form.peHeent) as a row of
+// chips — same visual language as the ICD-10 diagnosis chips above, so a
+// checked box actually shows up on the PDF instead of silently vanishing
+// because only the free-text "Notes/Others" field next to it was ever
+// rendered.
+function ChipRow({ label, items, emptyText = "None selected." }) {
+  return (
+    <View style={{ marginBottom: 4 }}>
+      {label && <Text style={s.fLabel}>{label}</Text>}
+      {items?.length > 0 ? (
+        <View style={s.icdRow}>
+          {items.map((name) => (
+            <Text key={name} style={s.icdChip}>
+              {name}
+            </Text>
+          ))}
+        </View>
+      ) : (
+        <Text style={s.emptyText}>{emptyText}</Text>
+      )}
+    </View>
+  );
+}
+
 export default function ConsultationRecordPDF({ patient = {}, form = {}, generatedBy = "" }) {
   const fullName = [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
     .filter(Boolean)
@@ -392,8 +418,48 @@ export default function ConsultationRecordPDF({ patient = {}, form = {}, generat
         )}
 
         {/* Diagnostics */}
-        <Bar>Diagnostics</Bar>
-        <Text style={s.blk}>{form.diagnosticsNotes || "—"}</Text>
+        <Bar>Diagnostics / Tests Ordered</Bar>
+        <ChipRow items={form.diagnosticsSelected} emptyText="No diagnostic tests ordered." />
+        {form.diagnosticsNotes && <Text style={s.blk}>{form.diagnosticsNotes}</Text>}
+
+        {/* Pertinent Signs & Symptoms / Physical Examination — only shown
+            when at least one of these checklists was actually filled in
+            (plain OPD visits usually won't touch these CF4-oriented
+            fields, so there's no point printing a wall of empty sections
+            for every entry). */}
+        {(form.admissionSigns?.length > 0 ||
+          form.peGeneralSurvey?.length > 0 ||
+          form.peHeent?.length > 0 ||
+          PE_SYSTEMS.some((sys) => form[sys.key]?.length > 0)) && (
+          <>
+            <Bar>Pertinent Signs and Symptoms</Bar>
+            <ChipRow items={form.admissionSigns} />
+            {form.admissionSigns?.includes("Pain") && form.admissionSignsPainSite && (
+              <Text style={[s.blk, { marginTop: -2 }]}>Pain — site: {form.admissionSignsPainSite}</Text>
+            )}
+            {form.admissionSigns?.includes("Others") && form.admissionSignsOthers && (
+              <Text style={[s.blk, { marginTop: -2 }]}>Others: {form.admissionSignsOthers}</Text>
+            )}
+
+            <Bar>Physical Examination</Bar>
+            <ChipRow label="General Survey" items={form.peGeneralSurvey} />
+            {form.peGeneralSurvey?.includes("Altered sensorium") && form.peGeneralSurveyAlteredSensoriumSpecify && (
+              <Text style={[s.blk, { marginTop: -2 }]}>
+                Altered sensorium — specify: {form.peGeneralSurveyAlteredSensoriumSpecify}
+              </Text>
+            )}
+            <ChipRow label="HEENT" items={form.peHeent} />
+            {form.peHeentOthers && <Text style={[s.blk, { marginTop: -2 }]}>Others: {form.peHeentOthers}</Text>}
+            {PE_SYSTEMS.map((sys) => (
+              <View key={sys.key}>
+                <ChipRow label={sys.label} items={form[sys.key]} />
+                {form[sys.othersKey] && (
+                  <Text style={[s.blk, { marginTop: -2 }]}>Others: {form[sys.othersKey]}</Text>
+                )}
+              </View>
+            ))}
+          </>
+        )}
 
         {/* Disposition */}
         <Bar>Disposition</Bar>
