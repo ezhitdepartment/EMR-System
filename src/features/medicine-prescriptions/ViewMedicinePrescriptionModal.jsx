@@ -74,7 +74,10 @@ export default function ViewMedicinePrescriptionModal({ record, onClose }) {
                 <div key={idx} className="py-2.5 pl-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-xs font-semibold text-slate-400">{idx + 1}.</span>
-                    <p className="font-semibold text-sm text-slate-800">{item.medicineName}</p>
+                    <p className="font-semibold text-sm text-slate-800">
+                      {item.medicineName}
+                      {item.milligram ? ` (${item.milligram})` : ""}
+                    </p>
                     <span className="text-xs text-slate-500">Qty: {item.quantity}</span>
                   </div>
                   <p className="text-xs text-slate-600 mt-1 pl-4">

@@ -126,7 +126,10 @@ export default function MedicinePrescriptionPDF({ record }) {
                 <View key={idx} style={s.itemRow}>
                   <View style={s.itemHeaderRow}>
                     <Text style={s.itemNum}>{idx + 1}.</Text>
-                    <Text style={s.itemName}>{dash(item.medicineName)}</Text>
+                    <Text style={s.itemName}>
+                      {dash(item.medicineName)}
+                      {item.milligram ? ` (${item.milligram})` : ""}
+                    </Text>
                     <Text style={s.itemQty}>Qty: {dash(item.quantity)}</Text>
                   </View>
                   <Text style={s.itemSig}>{item.instructions?.trim() ? item.instructions : "—"}</Text>

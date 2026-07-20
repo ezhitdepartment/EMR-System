@@ -87,7 +87,7 @@ function StepIndicator({ step, onStepClick }) {
 let rowSeq = 0;
 function newRow() {
   rowSeq += 1;
-  return { rowId: `row-${rowSeq}`, medicineName: "", quantity: 1, instructions: "" };
+  return { rowId: `row-${rowSeq}`, medicineName: "", quantity: 1, milligram: "", instructions: "" };
 }
 function rowFromItem(it) {
   rowSeq += 1;
@@ -95,6 +95,7 @@ function rowFromItem(it) {
     rowId: `row-${rowSeq}`,
     medicineName: it.medicineName,
     quantity: it.quantity,
+    milligram: it.milligram || "",
     instructions: it.instructions,
   };
 }
@@ -270,6 +271,7 @@ export default function AddMedicinePrescriptionPage() {
         items: items.map((r) => ({
           medicineName: r.medicineName,
           quantity: Number(r.quantity) || 0,
+          milligram: (r.milligram || "").trim(),
           instructions: r.instructions.trim(),
         })),
       });
@@ -523,12 +525,15 @@ export default function AddMedicinePrescriptionPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[1fr_70px_1fr_28px] gap-2 mb-1">
+            <div className="grid grid-cols-[1fr_60px_90px_1fr_28px] gap-2 mb-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Medicine
               </span>
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Qty
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Milligram
               </span>
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Instructions (Sig)
@@ -540,7 +545,7 @@ export default function AddMedicinePrescriptionPage() {
               {rows.map((row) => (
                 <div
                   key={row.rowId}
-                  className="grid grid-cols-[1fr_70px_1fr_28px] gap-2 items-start"
+                  className="grid grid-cols-[1fr_60px_90px_1fr_28px] gap-2 items-start"
                 >
                   <SearchableSelect
                     value={row.medicineName}
@@ -556,6 +561,13 @@ export default function AddMedicinePrescriptionPage() {
                     min="1"
                     value={row.quantity}
                     onChange={(e) => updateRow(row.rowId, { quantity: e.target.value })}
+                    className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                  />
+                  <input
+                    type="text"
+                    value={row.milligram}
+                    onChange={(e) => updateRow(row.rowId, { milligram: e.target.value })}
+                    placeholder="e.g. 500mg"
                     className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                   />
                   <input

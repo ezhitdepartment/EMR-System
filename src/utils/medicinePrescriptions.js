@@ -729,6 +729,7 @@ function rowToRecord(row) {
       medicineName: it.medicine_name,
       quantity: it.quantity ?? 0,
       instructions: it.instructions || "",
+      milligram: it.milligram || "",
     })),
     dateCreated: row.date_created,
   };
@@ -821,6 +822,7 @@ export async function createMedicinePrescription(record) {
     medicine_name: it.medicineName,
     quantity: it.quantity || 1,
     instructions: it.instructions || "",
+    milligram: it.milligram || "",
   }));
   const { error: itemsError } = await supabase.from("prescription_items").insert(itemRows);
   if (itemsError) throw new Error(itemsError.message);
@@ -888,6 +890,7 @@ export async function upsertMedicinePrescriptionForEncounter(record) {
     medicine_name: it.medicineName,
     quantity: it.quantity || 1,
     instructions: it.instructions || "",
+    milligram: it.milligram || "",
   }));
   if (itemRows.length > 0) {
     const { error: insertError } = await supabase.from("prescription_items").insert(itemRows);

@@ -58,7 +58,7 @@ import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions
 import { findEncounterById, loadEncounters, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
 import { loadLabOrders, upsertLabOrderForEncounter, formatDateCreated } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
-import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
+import { loadMedicinePrescriptions, upsertMedicinePrescriptionForEncounter } from "../../utils/medicinePrescriptions";
 import {
   loadSharedClinical,
   saveSharedClinical,
@@ -151,6 +151,10 @@ function patientToEmrSeed(patient, shared = {}) {
 // still blank afterward gets one more pass from the shared clinical store.
 function patientToConsultationSeed(patient, shared = {}) {
   const age = calculateAge(patient.dateOfBirth);
+  const patientFullName = [patient.firstName, patient.middleName, patient.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
   const seed = {
     lastName: patient.lastName || "",
     firstName: patient.firstName || "",
@@ -159,6 +163,14 @@ function patientToConsultationSeed(patient, shared = {}) {
     gender: patient.sex || "",
     age: age !== null ? String(age) : "",
     residentialAddress: patient.address || "",
+    region: patient.region || "",
+    regionCode: patient.regionCode || "",
+    province: patient.province || "",
+    provinceCode: patient.provinceCode || "",
+    city: patient.city || "",
+    cityCode: patient.cityCode || "",
+    barangay: patient.barangay || "",
+    zipCode: patient.zipCode || "",
     email: patient.email || "",
     phoneCell: patient.mobile || "",
     phoneHome: patient.landline || "",
@@ -175,6 +187,13 @@ function patientToConsultationSeed(patient, shared = {}) {
     emergencyAddress: patient.emergencyAddress || "",
     emergencyPhoneHome: patient.emergencyPhoneHome || "",
     emergencyPhoneCell: patient.emergencyPhoneCell || "",
+    // Consent sign-off — defaulted to today and the patient's own name so
+    // the nurse/doctor doesn't have to retype it, but both stay ordinary
+    // editable inputs (see ConsultationForm.jsx) in case a guardian or
+    // authorized representative signs instead, or the visit spans more
+    // than one calendar day.
+    consentDate: new Date().toISOString().slice(0, 10),
+    consentSignature: patientFullName,
   };
   return fillBlanksFromShared(seed, "consultation", shared).patched;
 }
@@ -1062,6 +1081,53 @@ export default function PatientProfile() {
         // surface it so the doctor knows to place the order manually.
         alert(
           `The consultation was saved, but the lab order couldn't be created automatically: ${
+            err.message || "unknown error"
+          }`
+        );
+      }
+    }
+
+    // Auto-create/sync a Medicine Prescription for whatever the doctor (or
+    // admin) filled in the Consultation Form's "Medicine Prescription"
+    // section, so it shows up in the standalone Medicine Prescriptions
+    // list too instead of being stuck inside this one consultation record.
+    //
+    // Scoped to this ONE registration via consultationEncounter?.id, same
+    // "one per registration" guarantee lab_orders already has (a partial
+    // UNIQUE index on encounter_id) — the first save creates the
+    // prescription, every later save of the same consultation syncs that
+    // same prescription's line items instead of creating a duplicate. See
+    // upsertMedicinePrescriptionForEncounter() in
+    // utils/medicinePrescriptions.js — it's the exact same function the
+    // standalone Add Prescription page already uses for this.
+    const prescriptionItems = (formData.prescriptionItems || []).filter(
+      (it) => it.medicineName?.trim()
+    );
+    if ((user?.role === "doctor" || user?.role === "admin") && prescriptionItems.length > 0) {
+      const prescribedBy =
+        formData.attendingPrintedName?.trim() ||
+        [user?.prefix, user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+        "Attending Physician";
+      try {
+        await upsertMedicinePrescriptionForEncounter({
+          hospitalNo,
+          encounterId: consultationEncounter?.id ?? null,
+          prescribedBy,
+          createdBy: user?.id || null,
+          items: prescriptionItems.map((it) => ({
+            medicineName: it.medicineName,
+            quantity: Number(it.quantity) || 1,
+            instructions: it.instructions || "",
+            milligram: it.milligram || "",
+          })),
+        });
+        refreshMedicinePrescriptions(hospitalNo);
+      } catch (err) {
+        // Same as the lab order case above — the consultation itself
+        // already saved successfully, so don't let this look like the
+        // whole save failed.
+        alert(
+          `The consultation was saved, but the medicine prescription couldn't be synced automatically: ${
             err.message || "unknown error"
           }`
         );
