@@ -56,7 +56,7 @@ import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
 import { findEncounterById, loadEncounters, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
-import { loadLabOrders, createLabOrder, formatDateCreated } from "../../utils/labOrders";
+import { loadLabOrders, upsertLabOrderForEncounter, formatDateCreated } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
 import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
 import {
@@ -1035,24 +1035,26 @@ export default function PatientProfile() {
       return;
     }
 
-    // Auto-create a Lab Order for whatever the doctor checked off in the
-    // "Diagnostics / Tests Ordered" section, so the nurse/tech side of the
-    // workflow doesn't need a second manual step to place the same order
-    // the doctor already specified here. Only doctors ever see/edit this
-    // section (see DOCTOR_SECTIONS in ConsultationForm.jsx), and it fires
-    // on every save that has at least one test checked — including a
-    // second save of the same consultation, which will place a second
-    // order for the same tests. If that turns out to be a problem in
-    // practice (e.g. a doctor re-saving after fixing a typo elsewhere in
-    // the form), the fix is to only fire this when diagnosticsSelected has
-    // actually changed since the last save, not just whenever it's
-    // non-empty.
+    // Auto-create/sync a Lab Order for whatever the doctor checked off in
+    // the "Diagnostics / Tests Ordered" section, so the nurse/tech side of
+    // the workflow doesn't need a second manual step to place the same
+    // order the doctor already specified here. Only doctors ever see/edit
+    // this section (see DOCTOR_SECTIONS in ConsultationForm.jsx).
+    //
+    // Scoped to this ONE registration via consultationEncounter?.id: the
+    // first save creates the order, every later save of the same
+    // consultation updates that same order's tests (adding newly checked
+    // ones, dropping unchecked ones that haven't been worked on yet)
+    // instead of placing a duplicate order — see
+    // upsertLabOrderForEncounter() in utils/labOrders.js.
     if (user?.role === "doctor" && formData.diagnosticsSelected?.length > 0) {
       try {
-        await createLabOrder({
+        await upsertLabOrderForEncounter({
+          encounterId: consultationEncounter?.id ?? null,
           hospitalNo,
           diagnostics: formData.diagnosticsSelected,
           testDetails: formData.diagnosticsTestDetails || {},
+          createdBy: user?.id || null,
         });
       } catch (err) {
         // The consultation itself already saved successfully above — don't

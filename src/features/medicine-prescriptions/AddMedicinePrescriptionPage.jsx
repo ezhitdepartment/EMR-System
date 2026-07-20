@@ -15,7 +15,11 @@ import SearchableSelect from "../../components/common/SearchableSelect";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatDateCreated } from "../../utils/labOrders";
 import { loadPatients } from "../../utils/patients";
-import { MEDICINE_CATALOG, createMedicinePrescription } from "../../utils/medicinePrescriptions";
+import {
+  MEDICINE_CATALOG,
+  upsertMedicinePrescriptionForEncounter,
+  findMedicinePrescriptionByEncounter,
+} from "../../utils/medicinePrescriptions";
 import { useAuth } from "../../context/AuthContext";
 
 function SortHeader({ label, field, sortField, sortDir, onSort }) {
@@ -85,6 +89,15 @@ function newRow() {
   rowSeq += 1;
   return { rowId: `row-${rowSeq}`, medicineName: "", quantity: 1, instructions: "" };
 }
+function rowFromItem(it) {
+  rowSeq += 1;
+  return {
+    rowId: `row-${rowSeq}`,
+    medicineName: it.medicineName,
+    quantity: it.quantity,
+    instructions: it.instructions,
+  };
+}
 
 export default function AddMedicinePrescriptionPage() {
   const navigate = useNavigate();
@@ -107,10 +120,43 @@ export default function AddMedicinePrescriptionPage() {
   const [rows, setRows] = useState([newRow()]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(Boolean(presetEncounterId));
+  const [hasExistingPrescription, setHasExistingPrescription] = useState(false);
 
   useEffect(() => {
     loadPatients().then(setPatients);
   }, []);
+
+  // Opened from a specific registration (Encounters' "Prescribe" action) —
+  // load whatever prescription already exists for THIS encounter, if any,
+  // so re-opening the page to add/edit medicines edits that one
+  // prescription instead of the doctor unknowingly submitting a second,
+  // duplicate prescription for the same visit. See
+  // upsertMedicinePrescriptionForEncounter() in utils/medicinePrescriptions.js
+  // for the save-side half of this — same "one per registration" pattern
+  // used for Lab Orders.
+  useEffect(() => {
+    if (!presetEncounterId) {
+      setLoadingExisting(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingExisting(true);
+    findMedicinePrescriptionByEncounter(presetEncounterId).then((existing) => {
+      if (cancelled) return;
+      if (existing) {
+        setHasExistingPrescription(true);
+        setPrescribedBy(existing.prescribedBy || "");
+        setRows(
+          existing.items.length > 0 ? existing.items.map(rowFromItem) : [newRow()]
+        );
+      }
+      setLoadingExisting(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [presetEncounterId]);
 
   // Arrived from a patient's profile page (e.g. their Medicine Prescriptions
   // tab) with a patient already chosen — skip straight to medicine
@@ -216,7 +262,7 @@ export default function AddMedicinePrescriptionPage() {
     setSubmitting(true);
     setError("");
     try {
-      await createMedicinePrescription({
+      await upsertMedicinePrescriptionForEncounter({
         hospitalNo: selectedPatient.hospitalNo,
         encounterId: presetEncounterId || null,
         prescribedBy: prescribedBy.trim(),
@@ -452,6 +498,13 @@ export default function AddMedicinePrescriptionPage() {
 
           {/* Medicine line items */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
+            {presetEncounterId && (loadingExisting || hasExistingPrescription) && (
+              <p className="text-xs text-slate-500 mb-3">
+                {loadingExisting
+                  ? "Checking for an existing prescription on this registration…"
+                  : "This registration already has a prescription — editing and saving updates it, instead of creating a second one."}
+              </p>
+            )}
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-semibold text-slate-700">
                 Medicines <span className="text-red-500">*</span>

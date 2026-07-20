@@ -779,6 +779,24 @@ export async function getMedicineNamesForEncounter(encounterId) {
   return Array.from(new Set(names.filter(Boolean)));
 }
 
+// The one prescription (if any) already tied to this registration —
+// AddMedicinePrescriptionPage.jsx uses this to pre-fill the form when
+// it's reopened for a registration that already has a prescription,
+// instead of starting blank and risking a duplicate.
+export async function findMedicinePrescriptionByEncounter(encounterId) {
+  if (!encounterId) return null;
+  const { data, error } = await supabase
+    .from("medicine_prescriptions")
+    .select(SELECT_WITH_JOINS)
+    .eq("encounter_id", encounterId)
+    .maybeSingle();
+  if (error) {
+    console.error("findMedicinePrescriptionByEncounter failed:", error.message);
+    return null;
+  }
+  return rowToRecord(data);
+}
+
 // Creates a new prescription + its line items in one go. `record` is shaped
 // exactly like AddMedicinePrescriptionPage.jsx already builds it (hospitalNo,
 // encounterId, prescribedBy, items: [{medicineName, quantity, instructions}]).
@@ -808,6 +826,75 @@ export async function createMedicinePrescription(record) {
   if (itemsError) throw new Error(itemsError.message);
 
   return findMedicinePrescriptionById(rxRow.id);
+}
+
+// Same job as createMedicinePrescription(), but scoped to a single
+// registration (encounter) instead of always inserting a fresh
+// prescription: submitting the Add Prescription page for the same
+// registration multiple times only ever affects ONE prescription, syncing
+// its prescribing physician and line items to match the form rather than
+// stacking up a duplicate prescription per submit.
+//
+// `record.encounterId` is what "one prescription per registration" is
+// keyed on — medicine_prescriptions.encounter_id has a unique index (see
+// the SQL migration) so at most one prescription can ever exist per
+// encounter. When encounterId is null (the page was opened standalone,
+// not from a specific registration — see AddMedicinePrescriptionPage.jsx),
+// this just falls back to the old always-insert behavior, since there's
+// no registration to scope an upsert to.
+export async function upsertMedicinePrescriptionForEncounter(record) {
+  if (!record.encounterId) {
+    return createMedicinePrescription(record);
+  }
+
+  const { data: existingRow, error: findError } = await supabase
+    .from("medicine_prescriptions")
+    .select("id")
+    .eq("encounter_id", record.encounterId)
+    .maybeSingle();
+  if (findError) throw new Error(findError.message);
+
+  // No prescription yet for this registration -> create it, same as
+  // before, just tagged with encounter_id so the next submit finds it
+  // instead of making another one.
+  if (!existingRow) {
+    return createMedicinePrescription(record);
+  }
+
+  const prescriptionId = existingRow.id;
+
+  // Prescribing physician can be edited between saves.
+  const { error: updateError } = await supabase
+    .from("medicine_prescriptions")
+    .update({ prescribed_by: record.prescribedBy })
+    .eq("id", prescriptionId);
+  if (updateError) throw new Error(updateError.message);
+
+  // Line items don't carry any independent state the way lab_order_tests
+  // does (no per-item status/results a tech could have already acted on),
+  // so the simplest, safest sync is a full replace: clear everything
+  // currently on this prescription and insert exactly what the form has
+  // now. Nothing downstream (the PDF export, the Encounters table's
+  // Medication column) keeps its own reference to an individual
+  // prescription_items row, so this can't orphan anything.
+  const { error: deleteError } = await supabase
+    .from("prescription_items")
+    .delete()
+    .eq("prescription_id", prescriptionId);
+  if (deleteError) throw new Error(deleteError.message);
+
+  const itemRows = (record.items || []).map((it) => ({
+    prescription_id: prescriptionId,
+    medicine_name: it.medicineName,
+    quantity: it.quantity || 1,
+    instructions: it.instructions || "",
+  }));
+  if (itemRows.length > 0) {
+    const { error: insertError } = await supabase.from("prescription_items").insert(itemRows);
+    if (insertError) throw new Error(insertError.message);
+  }
+
+  return findMedicinePrescriptionById(prescriptionId);
 }
 
 // "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the reference screen).

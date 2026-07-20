@@ -139,6 +139,7 @@ function rowToOrder(row) {
 
   return {
     id: row.id,
+    encounterId: row.encounter_id || null,
     hospitalNo: p.hospital_no || "",
     patient: {
       firstName: p.first_name || "",
@@ -190,13 +191,24 @@ export async function findLabOrderById(orderId) {
 // (CreateLabOrderModal.jsx pre-generates each code via
 // generateDiagnosticCode before calling this) — everything else defaults
 // on the DB side (status PENDING, queueStatus WAITING).
-export async function createLabOrder({ hospitalNo, diagnostics, testDetails, tests, createdBy }) {
+export async function createLabOrder({
+  hospitalNo,
+  diagnostics,
+  testDetails,
+  tests,
+  createdBy,
+  encounterId = null,
+}) {
   const patientUuid = await getPatientUuid(hospitalNo);
   if (!patientUuid) throw new Error(`No patient found with Hospital No. "${hospitalNo}"`);
 
   const { data: orderRow, error } = await supabase
     .from("lab_orders")
-    .insert({ patient_id: patientUuid, created_by: createdBy || null })
+    .insert({
+      patient_id: patientUuid,
+      encounter_id: encounterId || null,
+      created_by: createdBy || null,
+    })
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -211,6 +223,106 @@ export async function createLabOrder({ hospitalNo, diagnostics, testDetails, tes
   if (testsError) throw new Error(testsError.message);
 
   return findLabOrderById(orderRow.id);
+}
+
+// Same job as createLabOrder(), but scoped to a single registration
+// (encounter) instead of always inserting a fresh order: doctors can save
+// the Consultation Form's Diagnostics/Tests Ordered section as many times
+// as they like for the same visit and it will only ever affect ONE lab
+// order, syncing that order's tests to match whatever is currently
+// checked rather than stacking up a duplicate order per save.
+//
+// `encounterId` is what "one lab order per registration" is actually keyed
+// on — `lab_orders.encounter_id` has a unique index (see the SQL schema)
+// so at most one order can ever exist per encounter. When encounterId is
+// null (the Consultation Form was opened outside of a specific
+// registration — see the `consultationEncounter` check in
+// PatientProfile.jsx), this just falls back to the old always-insert
+// behavior, since there's no registration to scope an upsert to.
+export async function upsertLabOrderForEncounter({
+  encounterId,
+  hospitalNo,
+  diagnostics,
+  testDetails,
+  createdBy,
+}) {
+  if (!encounterId) {
+    return createLabOrder({ hospitalNo, diagnostics, testDetails, createdBy });
+  }
+
+  const { data: existingRow, error: findError } = await supabase
+    .from("lab_orders")
+    .select("id")
+    .eq("encounter_id", encounterId)
+    .maybeSingle();
+  if (findError) throw new Error(findError.message);
+
+  // No order yet for this registration -> create it, same as before, just
+  // tagged with encounter_id so the next save finds it instead of making
+  // another one.
+  if (!existingRow) {
+    return createLabOrder({ hospitalNo, diagnostics, testDetails, createdBy, encounterId });
+  }
+
+  const orderId = existingRow.id;
+
+  const { data: existingTests, error: testsFetchError } = await supabase
+    .from("lab_order_tests")
+    .select("test_name, status, test_detail")
+    .eq("order_id", orderId);
+  if (testsFetchError) throw new Error(testsFetchError.message);
+
+  const existingNames = new Set((existingTests || []).map((t) => t.test_name));
+  const nextNames = new Set(diagnostics);
+
+  // Newly checked tests -> add them to the existing order.
+  const toInsert = diagnostics
+    .filter((name) => !existingNames.has(name))
+    .map((name) => ({
+      order_id: orderId,
+      test_name: name,
+      test_detail: testDetails?.[name] || null,
+    }));
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("lab_order_tests").insert(toInsert);
+    if (error) throw new Error(error.message);
+  }
+
+  // Unchecked tests -> remove them, but ONLY if no work has been done on
+  // them yet (still PENDING). A test a Med Tech/X-ray Tech already marked
+  // DONE/CANCELLED represents real clinical work already performed, so it
+  // stays on the order even if the doctor later unchecks it here.
+  const toRemove = (existingTests || [])
+    .filter((t) => !nextNames.has(t.test_name) && t.status === "PENDING")
+    .map((t) => t.test_name);
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("lab_order_tests")
+      .delete()
+      .eq("order_id", orderId)
+      .in("test_name", toRemove);
+    if (error) throw new Error(error.message);
+  }
+
+  // Tests still checked on both saves -> keep them, just refresh
+  // test_detail in case the doctor edited the free-text detail on an
+  // "Others (...)" test.
+  for (const t of existingTests || []) {
+    if (!nextNames.has(t.test_name)) continue;
+    const nextDetail = testDetails?.[t.test_name] || null;
+    if (nextDetail !== (t.test_detail || null)) {
+      const { error } = await supabase
+        .from("lab_order_tests")
+        .update({ test_detail: nextDetail })
+        .eq("order_id", orderId)
+        .eq("test_name", t.test_name);
+      if (error) {
+        console.error("upsertLabOrderForEncounter: test_detail update failed:", error.message);
+      }
+    }
+  }
+
+  return findLabOrderById(orderId);
 }
 
 // Toggles an order's billing status between "paid" and "unpaid". RLS
