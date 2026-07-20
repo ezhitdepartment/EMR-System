@@ -1186,7 +1186,9 @@ function DoctorConsultationReferencePanel({ patient, form }) {
           {(form.prescriptionItems || []).map((item) => (
             <div key={item.id} className="py-2">
               <p className="font-medium text-slate-800">
-                {item.medicineName || "—"} {item.quantity ? `× ${item.quantity}` : ""}
+                {item.medicineName || "—"}
+                {item.milligram ? ` (${item.milligram})` : ""}
+                {item.quantity ? ` × ${item.quantity}` : ""}
               </p>
               {item.instructions && <p className="text-xs text-slate-400">{item.instructions}</p>}
             </div>
@@ -1272,7 +1274,7 @@ export default function ConsultationForm({
     uidCounter += 1;
     set("prescriptionItems", [
       ...form.prescriptionItems,
-      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "", totalCost: "" },
+      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "", milligram: "" },
     ]);
   }
 
@@ -2311,15 +2313,13 @@ export default function ConsultationForm({
 
                   <div>
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                      Total Cost
+                      Milligram
                     </p>
                     <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={item.totalCost ?? ""}
-                      onChange={(e) => updatePrescriptionItem(item.id, { totalCost: e.target.value })}
-                      placeholder="0.00"
+                      type="text"
+                      value={item.milligram ?? ""}
+                      onChange={(e) => updatePrescriptionItem(item.id, { milligram: e.target.value })}
+                      placeholder="e.g. 500mg"
                       className={`${inputClass} w-full`}
                     />
                   </div>

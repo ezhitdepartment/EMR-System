@@ -404,12 +404,14 @@ export default function ConsultationRecordPDF({ patient = {}, form = {}, generat
           <View style={s.presTable}>
             <View style={s.presHeadRow}>
               <Text style={[s.presHead, { flex: 2 }]}>Medicine</Text>
+              <Text style={[s.presHead, { width: 50, textAlign: "center" }]}>Milligram</Text>
               <Text style={[s.presHead, { width: 34, textAlign: "center" }]}>Qty</Text>
               <Text style={[s.presHead, { flex: 3 }]}>Instructions (Sig)</Text>
             </View>
             {items.map((item, i) => (
               <View key={i} style={s.presRow}>
                 <Text style={s.presMed}>{item.medicineName}</Text>
+                <Text style={[s.presQty, { width: 50 }]}>{item.milligram || "—"}</Text>
                 <Text style={s.presQty}>{item.quantity}</Text>
                 <Text style={s.presInst}>{item.instructions || "—"}</Text>
               </View>

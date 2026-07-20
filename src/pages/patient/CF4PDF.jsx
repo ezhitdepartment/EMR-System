@@ -421,7 +421,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
           <View style={s.tHeadRow}>
             <Text style={s.tCellHead3}>Generic Name</Text>
             <Text style={s.tCellHead3}>Quantity / Dosage / Route</Text>
-            <Text style={s.tCellHead3Last}>Total Cost</Text>
+            <Text style={s.tCellHead3Last}>Milligram</Text>
           </View>
           {prescriptionItems.length === 0 ? (
             <View style={s.tRowLast}>
@@ -436,7 +436,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
                 <Text style={s.tCell3}>
                   {[item.quantity, item.instructions].filter(Boolean).join(" — ") || "—"}
                 </Text>
-                <Text style={s.tCell3Last}>{dash(item.totalCost)}</Text>
+                <Text style={s.tCell3Last}>{dash(item.milligram)}</Text>
               </View>
             ))
           )}
