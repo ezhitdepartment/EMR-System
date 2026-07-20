@@ -101,10 +101,10 @@ const s = StyleSheet.create({
   checkItem: { flexDirection: "row", alignItems: "flex-start", width: "20%", marginBottom: 2, paddingRight: 2 },
   checkItemWide: { flexDirection: "row", alignItems: "flex-start", width: "33.33%", marginBottom: 2, paddingRight: 2 },
   checkBox: {
-    width: 6, height: 6, borderWidth: 0.75, borderColor: C.dark,
-    marginRight: 2, alignItems: "center", justifyContent: "center", marginTop: 0.5, flexShrink: 0,
+    width: 7, height: 7, borderWidth: 0.9, borderColor: C.dark,
+    marginRight: 2.5, marginTop: 0.5, flexShrink: 0,
   },
-  checkBoxMark: { fontSize: 5.5, fontFamily: "Helvetica-Bold" },
+  checkBoxChecked: { backgroundColor: C.dark },
   checkLabel: { fontSize: 6.2, lineHeight: 1.15 },
 
   sectionLabel: { fontSize: 6.2, fontFamily: "Helvetica-Bold", textTransform: "uppercase", marginTop: 2, marginBottom: 1 },
@@ -176,7 +176,7 @@ function Blk({ label, value, rows = 2 }) {
 function Check({ checked, label, wide }) {
   return (
     <View style={wide ? s.checkItemWide : s.checkItem}>
-      <View style={s.checkBox}>{checked ? <Text style={s.checkBoxMark}>X</Text> : null}</View>
+      <View style={[s.checkBox, checked ? s.checkBoxChecked : null]} />
       <Text style={s.checkLabel}>{label}</Text>
     </View>
   );
@@ -446,9 +446,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
         <View style={s.outcomeRow}>
           {["Improved", "HAMA", "Expired", "Absconded", "Transferred"].map((opt) => (
             <View key={opt} style={s.outcomeItem}>
-              <View style={s.checkBox}>
-                {doctorEntry.outcomeOfTreatment === opt ? <Text style={s.checkBoxMark}>X</Text> : null}
-              </View>
+              <View style={[s.checkBox, doctorEntry.outcomeOfTreatment === opt ? s.checkBoxChecked : null]} />
               <Text style={s.checkLabel}>{opt.toUpperCase()}</Text>
             </View>
           ))}

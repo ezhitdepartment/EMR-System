@@ -367,6 +367,14 @@ export default function PatientRecordPDF({ form }) {
               <VBox label="Weight (kg)" value={form.weight} />
               <VBox label="O2 SAT (%)" value={form.o2sat} />
             </View>
+            <View style={[s.vitalsRow, { marginTop: 4 }]}>
+              <VBox label="Height (cm)" value={form.height} />
+              <VBox label="BMI" value={form.bmi} />
+            </View>
+            <View style={[s.vitalsRow, { marginTop: 4 }]}>
+              <VBox label="Left Vision" value={form.leftVision} />
+              <VBox label="Right Vision" value={form.rightVision} />
+            </View>
           </View>
         </View>
 
