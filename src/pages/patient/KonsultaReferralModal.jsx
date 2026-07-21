@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Send } from "lucide-react";
 import { fillBlanksFromShared } from "./sharedClinicalFields";
+import { formatDiagnosisText } from "../../utils/consultations";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600";
@@ -29,28 +30,31 @@ function calcAge(dob) {
   return String(age);
 }
 
-// Everything here already exists somewhere in the patient's record or EMR —
+// Everything here already exists somewhere in the patient's record, their
+// EMR, or (preferred, since it's the richer and more current source) the
+// Consultation Form entry + assigned doctor for this specific visit —
 // pulled in automatically so staff only have to type the handful of fields
 // that are genuinely new to this specific referral (marked NEW below).
-function buildAutoFilled(patient, emr) {
+function buildAutoFilled(patient, emr, consultation, encounter) {
   const fullName = [patient?.lastName, patient?.firstName, patient?.middleName]
     .filter(Boolean)
     .join(", ");
-  const managementAtED = [emr?.treatmentLeft, emr?.treatmentRight].filter(Boolean).join("\n");
+  const managementAtED =
+    consultation?.medicationOrders || [emr?.treatmentLeft, emr?.treatmentRight].filter(Boolean).join("\n");
 
   return {
     referringHospitalName: "E. ZARATE HOSPITAL",
     referringHospitalAddress: "16 J. Aguilar Avenue, Talon I, Las Piñas City, Metro Manila, Philippines",
-    attendingPhysician: emr?.physician || "",
+    attendingPhysician: encounter?.doctor || emr?.physician || "",
     fullName,
     age: emr?.age || calcAge(patient?.dateOfBirth),
     sex: patient?.sex || emr?.gender || "",
     pin: emr?.philhealthPin || "",
-    chiefComplaint: emr?.chiefComplaints || "",
+    chiefComplaint: consultation?.chiefComplaint || emr?.chiefComplaints || "",
     physicalExamination: emr?.objectiveFindings || "",
     initialImpression: emr?.physicianImpression || "",
     managementAtED,
-    finalDiagnosis: emr?.activeDiagnoses || "",
+    finalDiagnosis: consultation ? formatDiagnosisText(consultation) : emr?.activeDiagnoses || "",
     recommendations: emr?.followUpExamination || "",
   };
 }
@@ -64,9 +68,18 @@ const emptyNewFields = {
   dateReceived: "",
 };
 
-export default function KonsultaReferralModal({ patient, emr, shared, initialValues, onSave, onClose }) {
+export default function KonsultaReferralModal({
+  patient,
+  emr,
+  consultation,
+  encounter,
+  shared,
+  initialValues,
+  onSave,
+  onClose,
+}) {
   const [form, setForm] = useState(() => {
-    const autoFilled = buildAutoFilled(patient, emr);
+    const autoFilled = buildAutoFilled(patient, emr, consultation, encounter);
     // Anything buildAutoFilled left blank (EMR doesn't have it, or there's
     // no EMR yet) gets one more pass from the shared clinical store — a
     // value someone already typed into Discharge or the Medical

@@ -55,7 +55,13 @@ import ConsultationRecordPDF from "./ConsultationRecordPDF";
 import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
-import { findEncounterById, loadEncounters, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
+import {
+  findEncounterById,
+  loadEncounters,
+  updateEncounter,
+  matchEncounterForConsultation,
+  STATUS as ENCOUNTER_STATUS,
+} from "../../utils/encounters";
 import { loadLabOrders, createLabOrder, formatDateCreated, DIAGNOSTIC_GROUPS } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
 import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
@@ -217,21 +223,13 @@ const ANCILLARY_KEY_BY_TEST_NAME = Object.fromEntries(
 //                         | registration (see consultationEncounter in
 //                         | handleSaveConsultation) — falls back to the EMR
 //                         | otherwise.
-function buildDischargeSeed(patient, emr, consultation, encounters, shared = {}) {
-  const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
-    .filter(Boolean)
-    .join(", ");
-  const age = calculateAge(patient.dateOfBirth);
-
-  const matchedEncounter =
-    consultation?.encounterId && Array.isArray(encounters)
-      ? encounters.find((e) => e.id === consultation.encounterId)
-      : null;
-
-  // Sort whatever the doctor ordered in the Consultation Form's
-  // Diagnostics section into: a matching ancillary checkbox, an X-Ray, or
-  // "Others" (Ultrasound & Imaging, or any Laboratory test with no
-  // checkbox of its own on this printed form).
+// Sort whatever the doctor ordered in the Consultation Form's Diagnostics
+// section into: a matching ancillary checkbox, an X-Ray, or "Others"
+// (Ultrasound & Imaging, or any Laboratory test with no checkbox of its
+// own on the printed Discharge form) — shared by both the Discharge seed
+// and the Medical Certificate seed below, since they draw from the exact
+// same "what did the doctor order" data.
+function sortOrderedDiagnostics(consultation) {
   const ancillaries = {};
   const xrayTests = [];
   const otherTests = [];
@@ -246,6 +244,18 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
     }
   }
   if (consultation?.diagnosticsNotes) otherTests.push(consultation.diagnosticsNotes);
+  return { ancillaries, xrayTests, otherTests };
+}
+
+function buildDischargeSeed(patient, emr, consultation, encounters, shared = {}) {
+  const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
+    .filter(Boolean)
+    .join(", ");
+  const age = calculateAge(patient.dateOfBirth);
+
+  const matchedEncounter = matchEncounterForConsultation(consultation, encounters);
+
+  const { ancillaries, xrayTests, otherTests } = sortOrderedDiagnostics(consultation);
 
   const medications = Array.isArray(consultation?.prescriptionItems)
     ? consultation.prescriptionItems
@@ -289,16 +299,46 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
   return fillBlanksFromShared(seed, "discharge", shared).patched;
 }
 
-// Seed the Medical Certificate from the patient's profile and, if it
-// exists, their EMR — same "matched fields don't need to be retyped"
-// approach as the ER Discharge seed above, plus a shared-clinical-store
-// pass for anything still blank (Clinical Diagnosis comes from the
-// Consultation Form's Active Diagnoses via the shared store).
-function buildMedicalCertificateSeed(patient, emr, shared = {}) {
+// Seed the Medical Certificate from the patient's profile, their EMR (if
+// it exists), and — same "matched fields don't need to be retyped"
+// approach as the ER Discharge seed above — the Consultation Form entry
+// and matched registration for this visit, plus a shared-clinical-store
+// pass for anything still blank.
+//
+//   Field                         | Comes from
+//   subjectiveComplaints          | consultation.chiefComplaint, then emr
+//   clinicalDiagnosis             | consultation's Diagnosis + ICD-10 codes
+//                                 | (formatDiagnosisText), via the shared store
+//   treatmentDoneMedicationGiven  | consultation.medicationOrders, via the
+//                                 | shared store
+//   ancillaryExaminationDone      | consultation.diagnosticsSelected — the
+//                                 | same tests/x-ray/others sorting the
+//                                 | Discharge form uses, flattened to text
+//   disposition                   | consultation.disposition, then emr
+//   inclusiveDatesOfTreatment     | the matched registration's own
+//                                 | appointment date, falling back to the
+//                                 | EMR's date of visit
+//   attendingPhysician            | the matched registration's assigned
+//                                 | doctor, falling back to the EMR
+function buildMedicalCertificateSeed(patient, emr, consultation, encounters, shared = {}) {
   const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
     .filter(Boolean)
     .join(", ");
   const age = calculateAge(patient.dateOfBirth);
+
+  const matchedEncounter = matchEncounterForConsultation(consultation, encounters);
+
+  const { ancillaries, xrayTests, otherTests } = sortOrderedDiagnostics(consultation);
+  const ancillaryNames = Object.keys(ancillaries)
+    .map((key) => ANCILLARY_TEST_NAMES[key])
+    .filter(Boolean);
+  const ancillaryExaminationDone = [...ancillaryNames, ...xrayTests, ...otherTests].join(", ");
+
+  const attendedAt = matchedEncounter?.dateCreated ? new Date(matchedEncounter.dateCreated) : null;
+  const inclusiveDatesOfTreatment = attendedAt
+    ? attendedAt.toLocaleDateString("en-PH")
+    : emr?.dateOfVisit || "";
+
   const seed = {
     patientName: [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
       .filter(Boolean)
@@ -307,10 +347,13 @@ function buildMedicalCertificateSeed(patient, emr, shared = {}) {
     date: new Date().toISOString().slice(0, 10),
     address: fullAddress,
     classification: emr?.classification || "",
-    inclusiveDatesOfTreatment: emr?.dateOfVisit || "",
-    subjectiveComplaints: emr?.chiefComplaints || "",
-    disposition: emr?.disposition || "",
-    attendingPhysician: emr?.physician || "",
+    inclusiveDatesOfTreatment,
+    subjectiveComplaints: consultation?.chiefComplaint || emr?.chiefComplaints || "",
+    ancillaryExaminationDone,
+    clinicalDiagnosis: consultation ? formatDiagnosisText(consultation) : "",
+    treatmentDoneMedicationGiven: consultation?.medicationOrders || "",
+    disposition: consultation?.disposition || emr?.disposition || "",
+    attendingPhysician: matchedEncounter?.doctor || emr?.physician || "",
   };
   return fillBlanksFromShared(seed, "medcert", shared).patched;
 }
@@ -1088,7 +1131,7 @@ export default function PatientProfile() {
   async function handleSaveEmr(formData) {
     const updatedEmr = await saveEmr(hospitalNo, formData, user?.id ?? null);
     setEmr(updatedEmr);
-    syncSharedClinical("emr", formData);
+    await syncSharedClinical("emr", formData);
   }
 
   async function handleSaveConsultation(formData) {
@@ -1184,7 +1227,7 @@ export default function PatientProfile() {
     setPatient(updatedPatient);
     setConsultation(entry);
     setConsultationHistoryList((list) => [entry, ...list]);
-    syncSharedClinical("consultation", formData);
+    await syncSharedClinical("consultation", formData);
 
     // Registration auto-completion: once both a nurse and a doctor have
     // saved their part of this encounter's Consultation Form, flip its
@@ -1219,19 +1262,19 @@ export default function PatientProfile() {
   async function handleSaveDischarge(formData) {
     const updated = await saveDischarge(hospitalNo, formData, user?.id ?? null);
     setDischarge(updated);
-    syncSharedClinical("discharge", formData);
+    await syncSharedClinical("discharge", formData);
   }
 
   async function handleSaveKonsultaReferral(formData) {
     const updated = await saveKonsultaReferral(hospitalNo, formData, user?.id ?? null);
     setKonsultaReferral(updated);
-    syncSharedClinical("konsulta", formData);
+    await syncSharedClinical("konsulta", formData);
   }
 
   async function handleSaveMedicalCertificate(formData) {
     const updated = await saveMedicalCertificate(hospitalNo, formData, user?.id ?? null);
     setMedicalCertificate(updated);
-    syncSharedClinical("medcert", formData);
+    await syncSharedClinical("medcert", formData);
   }
 
   async function startCamera() {
@@ -2306,6 +2349,8 @@ export default function PatientProfile() {
         <KonsultaReferralModal
           patient={patient}
           emr={emr}
+          consultation={consultation}
+          encounter={matchEncounterForConsultation(consultation, encounters)}
           shared={sharedClinical}
           initialValues={konsultaReferral || undefined}
           onSave={handleSaveKonsultaReferral}
@@ -2316,7 +2361,9 @@ export default function PatientProfile() {
       {/* Medical Certificate editor — pre-filled from patient + EMR, save overwrites */}
       {showMedicalCertificate && (
         <MedicalCertificateForm
-          initialValues={medicalCertificate || buildMedicalCertificateSeed(patient, emr, sharedClinical)}
+          initialValues={
+            medicalCertificate || buildMedicalCertificateSeed(patient, emr, consultation, encounters, sharedClinical)
+          }
           onSave={handleSaveMedicalCertificate}
           onClose={() => setShowMedicalCertificate(false)}
         />

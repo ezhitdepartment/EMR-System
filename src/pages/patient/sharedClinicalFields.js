@@ -9,7 +9,7 @@
 // each other.
 //
 //   Shared key    | What it is                         | EMR field(s)          | Consultation field  | Discharge field     | Konsulta field      | Medical Certificate field
-//   chiefComplaint| Chief Complaint                    | chiefComplaints        | chiefComplaint      | chiefComplaints      | —                    | —
+//   chiefComplaint| Chief Complaint                    | chiefComplaints        | chiefComplaint      | chiefComplaints      | chiefComplaint       | subjectiveComplaints
 //   physicalExam  | Physical Exam / Objective Findings | objectiveFindings      | —                   | —                    | physicalExamination | pertinentPhysicalExaminationFindings
 //   impression    | Initial / Physician's Impression   | physicianImpression    | —                   | —                    | initialImpression    | —
 //   management    | Management at ED / Treatment given | treatmentLeft + treatmentRight (read-only source — split per eye, so a combined value never writes back into it) | medicationOrders | treatmentGiven | managementAtED | treatmentDoneMedicationGiven
@@ -48,6 +48,7 @@ export const SHARED_FIELD_MAP = {
     followUp: "followUpExamination",
   },
   konsulta: {
+    chiefComplaint: "chiefComplaint",
     physicalExam: "physicalExamination",
     impression: "initialImpression",
     management: "managementAtED",
@@ -55,6 +56,7 @@ export const SHARED_FIELD_MAP = {
     followUp: "recommendations",
   },
   medcert: {
+    chiefComplaint: "subjectiveComplaints",
     physicalExam: "pertinentPhysicalExaminationFindings",
     management: "treatmentDoneMedicationGiven",
     diagnosis: "clinicalDiagnosis",

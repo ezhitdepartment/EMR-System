@@ -386,6 +386,17 @@ export async function transferPatientType(encounterId, nextType) {
   return findEncounterById(encounterId);
 }
 
+// Which registration (encounter) a saved Consultation entry belongs to —
+// used by every clinical document (ER Discharge, Medical Certificate,
+// Konsulta/Yakap Referral) that needs "the doctor/date for THIS visit"
+// rather than just whatever's on the patient's general profile. Centralized
+// here so all three forms resolve it the exact same way instead of each
+// re-implementing its own `encounters.find(...)`.
+export function matchEncounterForConsultation(consultation, encounters) {
+  if (!consultation?.encounterId || !Array.isArray(encounters)) return null;
+  return encounters.find((e) => e.id === consultation.encounterId) || null;
+}
+
 // "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the reference screen).
 export function formatDateCreated(iso) {
   if (!iso) return "—";
