@@ -12,16 +12,21 @@ import {
   MoreVertical,
   Eye,
   Download,
+  CalendarX,
 } from "lucide-react";
 import ViewMedicinePrescriptionModal from "./ViewMedicinePrescriptionModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatAge } from "../../utils/age";
 import {
+  STATUS,
+  STATUS_STYLES,
   formatDateCreated,
   loadMedicinePrescriptions,
+  cancelMedicinePrescription,
 } from "../../utils/medicinePrescriptions";
 
 const PAGE_SIZE = 8;
+const TABS = ["ALL", STATUS.ACTIVE, STATUS.CANCELLED];
 
 function SortHeader({ label, field, sortField, sortDir, onSort }) {
   const active = sortField === field;
@@ -43,6 +48,7 @@ function SortHeader({ label, field, sortField, sortDir, onSort }) {
 export default function MedicinePrescriptions() {
   const navigate = useNavigate();
   const [records, setRecords] = useState([]);
+  const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [dateYear, setDateYear] = useState("");
   const [dateMonth, setDateMonth] = useState("");
@@ -51,9 +57,23 @@ export default function MedicinePrescriptions() {
   const [page, setPage] = useState(1);
   const [viewRecord, setViewRecord] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [busyCancelId, setBusyCancelId] = useState("");
 
   async function refresh() {
     setRecords(await loadMedicinePrescriptions());
+  }
+
+  async function handleCancel(record) {
+    if (!window.confirm(`Cancel prescription ${record.id}? This can't be undone.`)) return;
+    setBusyCancelId(record.id);
+    try {
+      await cancelMedicinePrescription(record.id);
+      refresh();
+    } catch (err) {
+      alert(`Couldn't cancel this prescription: ${err.message || "unknown error"}`);
+    } finally {
+      setBusyCancelId("");
+    }
   }
 
   useEffect(() => {
@@ -68,7 +88,7 @@ export default function MedicinePrescriptions() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, dateYear, dateMonth]);
+  }, [tab, search, dateYear, dateMonth]);
 
   const hasActiveFilters = search.trim() !== "" || dateYear !== "" || dateMonth !== "";
 
@@ -99,6 +119,7 @@ export default function MedicinePrescriptions() {
     const q = search.trim().toLowerCase();
 
     const result = withDerived.filter((r) => {
+      if (tab !== "ALL" && r.status !== tab) return false;
       if (dateYear || dateMonth) {
         const created = r.dateCreated ? new Date(r.dateCreated) : null;
         if (!created) return false;
@@ -130,7 +151,7 @@ export default function MedicinePrescriptions() {
     });
 
     return result;
-  }, [records, search, dateYear, dateMonth, sortField, sortDir]);
+  }, [records, tab, search, dateYear, dateMonth, sortField, sortDir]);
 
   const availableYears = useMemo(() => {
     const s = new Set();
@@ -150,12 +171,13 @@ export default function MedicinePrescriptions() {
   const rangeEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
 
   function exportCsv() {
-    const header = ["ID", "Patient", "Medicine Count", "Prescribed By", "Date Created"];
+    const header = ["ID", "Patient", "Medicine Count", "Prescribed By", "Status", "Date Created"];
     const rows = filtered.map((r) => [
       r.id,
       r._fullName,
       r.items?.length || 0,
       r.prescribedBy || "",
+      r.status || STATUS.ACTIVE,
       formatDateCreated(r.dateCreated),
     ]);
     const csv = [header, ...rows]
@@ -189,6 +211,22 @@ export default function MedicinePrescriptions() {
           <Plus size={16} />
           Add Prescription
         </button>
+      </div>
+
+      {/* Status tabs */}
+      <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden mb-3">
+        {TABS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`px-3 py-2 text-xs font-semibold whitespace-nowrap transition-colors ${
+              tab === t ? "bg-teal-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
       {/* Date Created filter */}
@@ -301,6 +339,7 @@ export default function MedicinePrescriptions() {
                       />
                     </th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Prescribed By</th>
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Status</th>
                     <th className="px-4 py-3">
                       <SortHeader
                         label="Date Created"
@@ -335,18 +374,34 @@ export default function MedicinePrescriptions() {
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-700">
                         {r.prescribedBy || "—"}
                       </td>
+                      <td className="px-4 py-3 align-top whitespace-nowrap">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLES[r.status]}`}>
+                          {r.status || STATUS.ACTIVE}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 align-top whitespace-nowrap text-slate-600">
                         {formatDateCreated(r.dateCreated)}
                       </td>
                       <td className="px-4 py-3 align-top text-center">
-                        <button
-                          type="button"
-                          onClick={() => setViewRecord(r)}
-                          title="View prescribed medicine"
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-700 hover:bg-teal-800 text-white transition-colors"
-                        >
-                          <Eye size={14} />
-                        </button>
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setViewRecord(r)}
+                            title="View prescribed medicine"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-700 hover:bg-teal-800 text-white transition-colors"
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancel(r)}
+                            disabled={r.status === STATUS.CANCELLED || busyCancelId === r.id}
+                            title="Cancel prescription"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-500 hover:opacity-90 text-white transition-opacity disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
+                          >
+                            <CalendarX size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

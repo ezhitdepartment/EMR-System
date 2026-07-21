@@ -709,6 +709,20 @@ export const MEDICINE_CATALOG = [
   "Zolpidem",
 ];
 
+// Mirrors encounters.STATUS's shape — a prescription is either still
+// ACTIVE or has been CANCELLED. See the "medicine_prescriptions gets a
+// status column" SQL addendum: the column defaults every existing/new row
+// to ACTIVE, so nothing already in the table needs a backfill.
+export const STATUS = {
+  ACTIVE: "ACTIVE",
+  CANCELLED: "CANCELLED",
+};
+
+export const STATUS_STYLES = {
+  [STATUS.ACTIVE]: "bg-emerald-100 text-emerald-700",
+  [STATUS.CANCELLED]: "bg-red-100 text-red-700",
+};
+
 function rowToRecord(row) {
   if (!row) return null;
   const p = row.patients || {};
@@ -725,6 +739,7 @@ function rowToRecord(row) {
       address: p.address || "",
     },
     prescribedBy: row.prescribed_by || "",
+    status: row.status || STATUS.ACTIVE,
     items: (row.prescription_items || []).map((it) => ({
       medicineName: it.medicine_name,
       quantity: it.quantity ?? 0,
@@ -898,6 +913,21 @@ export async function upsertMedicinePrescriptionForEncounter(record) {
   }
 
   return findMedicinePrescriptionById(prescriptionId);
+}
+
+// Flips a prescription to CANCELLED — same shape as encounters' "Cancel"
+// action (updateEncounter with status: STATUS.CANCELLED). Line items are
+// left exactly as they were; only the status flag changes, so the record
+// still shows exactly what was prescribed, just marked cancelled instead
+// of being deleted. Once cancelled, it shows up in the Archive page's
+// "Cancelled Prescriptions" tab.
+export async function cancelMedicinePrescription(id) {
+  const { error } = await supabase
+    .from("medicine_prescriptions")
+    .update({ status: STATUS.CANCELLED })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  return findMedicinePrescriptionById(id);
 }
 
 // "2026-07-06T09:15:00.000Z" -> "07/06/2026" (matches the reference screen).
