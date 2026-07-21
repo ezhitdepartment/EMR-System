@@ -10,6 +10,8 @@ import {
   Settings2,
   FileSpreadsheet,
   Users,
+  Ambulance,
+  Stethoscope,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../../context/AuthContext";
@@ -20,6 +22,8 @@ import {
   getAvailableYears,
   getMonthlyPatientCounts,
   getYearlyPatientCounts,
+  getPatientTypeCounts,
+  getMonthlyPatientTypeCounts,
   getDiagnosisBreakdown,
   getIcd10DiagnosisReportRows,
   getReportRows,
@@ -100,7 +104,7 @@ export default function Reports() {
   const [preview, setPreview] = useState(null);
 
   const [reports, setReports] = useState([]);
-  const [reportData, setReportData] = useState({ patients: [], consultations: [] });
+  const [reportData, setReportData] = useState({ patients: [], consultations: [], encounters: [] });
   const [activeTypeTab, setActiveTypeTab] = useState("All Reports");
   const [tableYear, setTableYear] = useState("All");
 
@@ -120,6 +124,18 @@ export default function Reports() {
     [graphYear, reportData]
   );
   const yearlyPatientData = useMemo(() => getYearlyPatientCounts(reportData.patients), [reportData]);
+  const patientTypeCounts = useMemo(
+    () => getPatientTypeCounts(reportData.encounters, graphYear),
+    [graphYear, reportData]
+  );
+  const monthlyErData = useMemo(
+    () => getMonthlyPatientTypeCounts(reportData.encounters, graphYear, "ER Patient"),
+    [graphYear, reportData]
+  );
+  const monthlyOpdData = useMemo(
+    () => getMonthlyPatientTypeCounts(reportData.encounters, graphYear, "OPD Patient"),
+    [graphYear, reportData]
+  );
 
   async function refresh() {
     const [data, reportsList] = await Promise.all([fetchReportSourceData(), loadReports()]);
@@ -250,6 +266,47 @@ export default function Reports() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ER vs OPD Patient stat cards — Registration's patientType, scoped
+          to the same year as the charts below (graphYear). Cancelled
+          registrations are excluded (see getPatientTypeCounts). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex items-center gap-3">
+          <span className="flex items-center justify-center w-11 h-11 rounded-full bg-red-100 text-red-600 shrink-0">
+            <Ambulance size={20} />
+          </span>
+          <div>
+            <p className="text-xs text-slate-500">Total ER Patients — {graphYear || "—"}</p>
+            <p className="text-xl font-bold text-slate-800">{patientTypeCounts.er}</p>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex items-center gap-3">
+          <span className="flex items-center justify-center w-11 h-11 rounded-full bg-blue-100 text-blue-600 shrink-0">
+            <Stethoscope size={20} />
+          </span>
+          <div>
+            <p className="text-xs text-slate-500">Total OPD Patients — {graphYear || "—"}</p>
+            <p className="text-xl font-bold text-slate-800">{patientTypeCounts.opd}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+            <Ambulance size={15} className="text-red-600" />
+            ER Patients Monthly — {graphYear || "—"}
+          </p>
+          <BarChart data={monthlyErData} color="#dc2626" emptyLabel="No ER registrations this year yet" />
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+            <Stethoscope size={15} className="text-blue-600" />
+            OPD Patients Monthly — {graphYear || "—"}
+          </p>
+          <BarChart data={monthlyOpdData} color="#2563eb" emptyLabel="No OPD registrations this year yet" />
         </div>
       </div>
 

@@ -63,6 +63,12 @@ export const MIGRATED_STATUS_OPTIONS = ["Migrated", "Not Migrated"];
 
 export const PCU_STATUS_OPTIONS = ["For PCU", "PCU Done", "N/A"];
 
+// Registration's Patient Type filter (Doctor/Admin only — see Encounters.jsx.
+// ER Nurse/OPD Nurse never need this dropdown themselves since RLS already
+// scopes each of them to just their own type — see
+// current_user_can_access_patient_type() in the schema).
+export const PATIENT_TYPE_OPTIONS = ["ER Patient", "OPD Patient"];
+
 // doctors_directory is now a live view over profiles (role = 'doctor') —
 // see ADDENDUM C in the schema — so this is fetched, not hardcoded. Kept
 // as an async function (not a constant) since it needs a round-trip; every

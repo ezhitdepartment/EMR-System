@@ -33,6 +33,7 @@
 import { supabase } from "../lib/supabaseClient";
 import { loadPatients } from "./patients";
 import { loadAllConsultations } from "./consultations";
+import { loadEncounters } from "./encounters";
 
 export const REPORT_TYPES = [
   "Encounter Report",
@@ -46,14 +47,18 @@ export const MONTH_LABELS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-// Fetches both source datasets once. Call this on mount and whenever the
+// Fetches all source datasets once. Call this on mount and whenever the
 // person hits Refresh, then pass the result into every function below
 // instead of each one re-querying Supabase on its own — same reasoning as
 // Encounters.jsx loading encounters/prescriptions once per refresh() and
 // filtering/sorting them client-side from there.
 export async function fetchReportSourceData() {
-  const [patients, consultations] = await Promise.all([loadPatients(), loadAllConsultations()]);
-  return { patients, consultations };
+  const [patients, consultations, encounters] = await Promise.all([
+    loadPatients(),
+    loadAllConsultations(),
+    loadEncounters(),
+  ]);
+  return { patients, consultations, encounters };
 }
 
 function yearOf(dateStr) {
@@ -93,7 +98,7 @@ export function parseDiagnoses(text) {
     .map((s) => s.replace(/\s+/g, " "));
 }
 
-export function getAvailableYears({ patients, consultations }) {
+export function getAvailableYears({ patients, consultations, encounters = [] }) {
   const years = new Set([new Date().getFullYear()]);
   consultations.forEach((c) => {
     const y = yearOf(c.createdAt);
@@ -101,6 +106,10 @@ export function getAvailableYears({ patients, consultations }) {
   });
   patients.forEach((p) => {
     const y = yearOf(p.createdAt);
+    if (y) years.add(y);
+  });
+  encounters.forEach((e) => {
+    const y = yearOf(e.dateCreated);
     if (y) years.add(y);
   });
   return Array.from(years).sort((a, b) => b - a);
@@ -133,6 +142,38 @@ export function getYearlyPatientCounts(patients) {
   });
   const years = Object.keys(counts).map(Number).sort((a, b) => a - b);
   return years.map((year) => ({ label: String(year), value: counts[year] }));
+}
+
+// Total ER Patient vs OPD Patient registrations for a given year — this is
+// per REGISTRATION (encounters.patientType), not per patient, since the
+// same patient can be an ER case one visit and an OPD case the next (see
+// the "Patient Type moves from Patients to Registration" schema addendum).
+// Cancelled registrations are excluded — they never actually happened as a
+// real visit, same reasoning Census No. discards them.
+export function getPatientTypeCounts(encounters, year) {
+  let er = 0;
+  let opd = 0;
+  encounters.forEach((e) => {
+    if (e.status === "CANCELLED") return;
+    if (yearOf(e.dateCreated) !== Number(year)) return;
+    if (e.patientType === "ER Patient") er += 1;
+    else if (e.patientType === "OPD Patient") opd += 1;
+  });
+  return { er, opd, total: er + opd };
+}
+
+// Same breakdown, month-by-month, for the ER vs OPD bar chart.
+export function getMonthlyPatientTypeCounts(encounters, year, patientType) {
+  const counts = Array(12).fill(0);
+  encounters.forEach((e) => {
+    if (e.status === "CANCELLED") return;
+    if (e.patientType !== patientType) return;
+    if (yearOf(e.dateCreated) === Number(year)) {
+      const m = monthOf(e.dateCreated);
+      if (m !== null) counts[m] += 1;
+    }
+  });
+  return MONTH_LABELS.map((label, i) => ({ label, value: counts[i] }));
 }
 
 export function getDiagnosisBreakdown(consultations, year) {

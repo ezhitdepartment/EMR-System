@@ -21,6 +21,7 @@ import {
 import ReassignPhysicianModal from "./ReassignPhysicianModal";
 import WaiverModal from "./WaiverModal";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
+import { useAuth } from "../../context/AuthContext";
 import { formatAge } from "../../utils/age";
 import {
   STATUS,
@@ -29,6 +30,7 @@ import {
   PAYMENT_TYPE_OPTIONS,
   MIGRATED_STATUS_OPTIONS,
   PCU_STATUS_OPTIONS,
+  PATIENT_TYPE_OPTIONS,
   loadEncounters,
   updateEncounter,
   transferPatientType,
@@ -73,6 +75,11 @@ function ActionButton({ title, icon: Icon, colorClass, onClick, disabled }) {
 
 export default function Encounters() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Only Doctor and Admin ever see both patient types on this page at
+  // once — ER Nurse/OPD Nurse are already scoped server-side (RLS) to
+  // just their own type, so the dropdown would be a no-op filter for them.
+  const canFilterPatientType = user?.role === "doctor" || user?.role === "admin";
   const [encounters, setEncounters] = useState([]);
   const [medicationsByEncounter, setMedicationsByEncounter] = useState({});
   const [diagnosesByEncounter, setDiagnosesByEncounter] = useState({});
@@ -84,6 +91,7 @@ export default function Encounters() {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("All");
   const [consultationTypeFilter, setConsultationTypeFilter] = useState("All");
   const [pcuStatusFilter, setPcuStatusFilter] = useState("All");
+  const [patientTypeFilter, setPatientTypeFilter] = useState("All");
   const [sortField, setSortField] = useState("dateCreated");
   const [sortDir, setSortDir] = useState("desc");
   const [page, setPage] = useState(1);
@@ -127,7 +135,7 @@ export default function Encounters() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, tab, migratedFilter, apptYear, apptMonth, paymentTypeFilter, consultationTypeFilter, pcuStatusFilter]);
+  }, [search, tab, migratedFilter, apptYear, apptMonth, paymentTypeFilter, consultationTypeFilter, pcuStatusFilter, patientTypeFilter]);
 
   const hasActiveFilters =
     search.trim() !== "" ||
@@ -136,7 +144,8 @@ export default function Encounters() {
     apptMonth !== "" ||
     paymentTypeFilter !== "All" ||
     consultationTypeFilter !== "All" ||
-    pcuStatusFilter !== "All";
+    pcuStatusFilter !== "All" ||
+    patientTypeFilter !== "All";
 
   function clearFilters() {
     setSearch("");
@@ -146,6 +155,7 @@ export default function Encounters() {
     setPaymentTypeFilter("All");
     setConsultationTypeFilter("All");
     setPcuStatusFilter("All");
+    setPatientTypeFilter("All");
     setPage(1);
   }
 
@@ -240,6 +250,7 @@ export default function Encounters() {
       if (paymentTypeFilter !== "All" && e.paymentType !== paymentTypeFilter) return false;
       if (consultationTypeFilter !== "All" && e.consultationType !== consultationTypeFilter) return false;
       if (pcuStatusFilter !== "All" && e.pcuStatus !== pcuStatusFilter) return false;
+      if (patientTypeFilter !== "All" && e.patientType !== patientTypeFilter) return false;
       if (apptYear || apptMonth) {
         const dt = e.appointmentDate ? new Date(e.appointmentDate) : null;
         if (!dt) return false;
@@ -298,6 +309,7 @@ export default function Encounters() {
     paymentTypeFilter,
     consultationTypeFilter,
     pcuStatusFilter,
+    patientTypeFilter,
     sortField,
     sortDir,
   ]);
@@ -395,6 +407,20 @@ export default function Encounters() {
             </option>
           ))}
         </select>
+        {canFilterPatientType && (
+          <select
+            value={patientTypeFilter}
+            onChange={(e) => setPatientTypeFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+          >
+            <option value="All">Patient Type (ER/OPD)</option>
+            {PATIENT_TYPE_OPTIONS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Status tabs + search + toolbar */}
