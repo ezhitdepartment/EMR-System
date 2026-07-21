@@ -25,8 +25,9 @@ import { pdf } from "@react-pdf/renderer";
 import AddressFields from "../../components/common/AddressFields";
 import Icd10Autocomplete from "../../components/common/Icd10Autocomplete";
 import DiagnosticTestChecklist from "../../components/common/DiagnosticTestChecklist";
+import SearchableSelect from "../../components/common/SearchableSelect";
 import { useAuth } from "../../context/AuthContext";
-import { loadEncounters, formatDateCreated } from "../../utils/encounters";
+import { loadEncounters, formatDateCreated, loadDoctors } from "../../utils/encounters";
 import { loadLabOrders, getLabOrderFileUrl } from "../../utils/labOrders";
 import { MEDICINE_CATALOG } from "../../utils/medicinePrescriptions";
 import { formatAge } from "../../utils/age";
@@ -1229,6 +1230,24 @@ export default function ConsultationForm({
     ...initialConsultationForm,
     ...(initialValues || {}),
   }));
+
+  // Attending Physician (Certification section) — a picker over the same
+  // doctors_directory every other "assign a doctor" dropdown in the app
+  // already uses (Create Registration, Reassign Physician), instead of a
+  // free-text field a doctor has to type their own name into every time.
+  // Uppercased here, not just on selection, so the option list and
+  // whatever's already saved in form.attendingPrintedName always match —
+  // see the SearchableSelect field below.
+  const [doctors, setDoctors] = useState([]);
+  useEffect(() => {
+    let active = true;
+    loadDoctors().then((names) => {
+      if (active) setDoctors(names.map((n) => n.toUpperCase()));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function handle(e) {
     const { name, value } = e.target;
@@ -2574,11 +2593,14 @@ export default function ConsultationForm({
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Printed Name of Attending Health Care Professional">
-                <input
-                  name="attendingPrintedName"
+                <SearchableSelect
                   value={form.attendingPrintedName}
-                  onChange={handle}
-                  className={inputClass}
+                  onChange={(name) => set("attendingPrintedName", name)}
+                  options={doctors}
+                  getValue={(d) => d}
+                  getLabel={(d) => d}
+                  placeholder="Select attending physician"
+                  inputClass={inputClass}
                 />
               </Field>
               <Field label="License Number / PTR">
