@@ -23,7 +23,6 @@ import WaiverModal from "./WaiverModal";
 import { formatAge } from "../../utils/age";
 import {
   CONSULTATION_TYPES,
-  PAYMENT_TYPE_OPTIONS,
   loadDoctors,
   STATUS,
   createEncounter,
@@ -113,8 +112,6 @@ export default function CreateEncounterPage() {
   const [consultationTypeLabel, setConsultationTypeLabel] = useState(CONSULTATION_TYPES[0].label);
   const [reasonForVisiting, setReasonForVisiting] = useState("");
   const [doctor, setDoctor] = useState("");
-  const [fee, setFee] = useState(CONSULTATION_TYPES[0].defaultFee);
-  const [paymentType, setPaymentType] = useState("");
   const [photo, setPhoto] = useState(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
@@ -247,8 +244,6 @@ export default function CreateEncounterPage() {
 
   function handleConsultationTypeChange(label) {
     setConsultationTypeLabel(label);
-    const type = CONSULTATION_TYPES.find((c) => c.label === label);
-    if (type) setFee(type.defaultFee);
   }
 
   // --- Photo capture ---
@@ -356,10 +351,6 @@ export default function CreateEncounterPage() {
       setError("Please select an attending physician.");
       return;
     }
-    if (!paymentType) {
-      setError("Please select a payment type.");
-      return;
-    }
 
     setSubmitting(true);
     setError("");
@@ -370,8 +361,6 @@ export default function CreateEncounterPage() {
         consultationType: consultationTypeLabel,
         reasonForVisiting,
         doctor,
-        fee: Number(fee) || 0,
-        paymentType,
         photo,
         createdBy: user?.id || null,
         status: STATUS.PENDING,
@@ -400,12 +389,8 @@ export default function CreateEncounterPage() {
   }
 
   async function refreshCreatedEncounter(patch) {
-    try {
-      const updated = await updateEncounter(createdEncounter.id, (e) => ({ ...e, ...patch }));
-      setCreatedEncounter(updated);
-    } catch (err) {
-      alert(`Couldn't update the registration: ${err.message || "unknown error"}`);
-    }
+    const updated = await updateEncounter(createdEncounter.id, (e) => ({ ...e, ...patch }));
+    setCreatedEncounter(updated);
   }
 
   return (
@@ -716,47 +701,15 @@ export default function CreateEncounterPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
-                  Attending Physician <span className="text-red-500">*</span>
-                </label>
-                <select value={doctor} onChange={(e) => setDoctor(e.target.value)} className={inputClass}>
-                  <option value="">Select</option>
-                  {doctors.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
-                  Consultation Fee <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">₱</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={fee}
-                    onChange={(e) => setFee(e.target.value)}
-                    className={`${inputClass} pl-7`}
-                  />
-                </div>
-              </div>
-            </div>
-
             <div>
               <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
-                Payment Type <span className="text-red-500">*</span>
+                Attending Physician <span className="text-red-500">*</span>
               </label>
-              <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className={inputClass}>
+              <select value={doctor} onChange={(e) => setDoctor(e.target.value)} className={inputClass}>
                 <option value="">Select</option>
-                {PAYMENT_TYPE_OPTIONS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
+                {doctors.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
                   </option>
                 ))}
               </select>

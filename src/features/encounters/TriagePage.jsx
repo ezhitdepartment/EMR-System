@@ -36,13 +36,47 @@ function computeBmi(heightCm, weightKg) {
   return (w / (meters * meters)).toFixed(2);
 }
 
+// Height is stored (and saved to Supabase) in cm only — `heightFt` is a
+// purely client-side convenience mirror of the same value, converted live
+// in both directions, same "never drifts out of sync" idea as BMI above.
+// 1 ft = 30.48 cm exactly.
+const CM_PER_FT = 30.48;
+
+function cmToFt(cm) {
+  const v = parseFloat(cm);
+  if (!v && v !== 0) return "";
+  return (v / CM_PER_FT).toFixed(2);
+}
+
+function ftToCm(ft) {
+  const v = parseFloat(ft);
+  if (!v && v !== 0) return "";
+  return (v * CM_PER_FT).toFixed(1);
+}
+
+// Same idea for temperature — `temperature` (stored/saved to Supabase) is
+// Celsius; `temperatureF` is a client-side-only Fahrenheit mirror.
+function cToF(c) {
+  const v = parseFloat(c);
+  if (!v && v !== 0) return "";
+  return (v * 9/5 + 32).toFixed(1);
+}
+
+function fToC(f) {
+  const v = parseFloat(f);
+  if (!v && v !== 0) return "";
+  return ((v - 32) * 5/9).toFixed(1);
+}
+
 const emptyTriage = {
   systolic: "",
   diastolic: "",
   heartRate: "",
   respiratoryRate: "",
   temperature: "",
+  temperatureF: "",
   height: "",
+  heightFt: "",
   weight: "",
   bmi: "",
   leftVision: "",
@@ -69,7 +103,13 @@ export default function TriagePage() {
       const found = await findEncounterById(encounterId);
       setEncounter(found);
       if (found?.triage) {
-        setForm({ ...emptyTriage, ...found.triage });
+        const merged = { ...emptyTriage, ...found.triage };
+        // heightFt / temperatureF are never persisted (only `height` in cm
+        // and `temperature` in °C are saved to Supabase) — always
+        // (re)derive them from the canonical values on load.
+        merged.heightFt = cmToFt(merged.height);
+        merged.temperatureF = cToF(merged.temperature);
+        setForm(merged);
       }
     }
     load();
@@ -78,7 +118,20 @@ export default function TriagePage() {
   function set(field, value) {
     setForm((f) => {
       const next = { ...f, [field]: value };
-      if (field === "height" || field === "weight") {
+      if (field === "height") {
+        // cm entered -> mirror into ft
+        next.heightFt = cmToFt(value);
+      } else if (field === "heightFt") {
+        // ft entered -> mirror into cm (the value actually saved)
+        next.height = ftToCm(value);
+      } else if (field === "temperature") {
+        // °C entered -> mirror into °F
+        next.temperatureF = cToF(value);
+      } else if (field === "temperatureF") {
+        // °F entered -> mirror into °C (the value actually saved)
+        next.temperature = fToC(value);
+      }
+      if (field === "height" || field === "heightFt" || field === "weight") {
         next.bmi = computeBmi(next.height, next.weight);
       }
       return next;
@@ -225,12 +278,21 @@ export default function TriagePage() {
                         className={inputClass}
                       />
                     </Field>
-                    <Field label="Temperature" required>
+                    <Field label="Temperature (°C)" required>
                       <input
                         type="number"
                         step="0.1"
                         value={form.temperature}
                         onChange={(e) => set("temperature", e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Temperature (°F)" required>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={form.temperatureF}
+                        onChange={(e) => set("temperatureF", e.target.value)}
                         className={inputClass}
                       />
                     </Field>
@@ -240,6 +302,15 @@ export default function TriagePage() {
                         step="0.1"
                         value={form.height}
                         onChange={(e) => set("height", e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Height (ft)" required>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={form.heightFt}
+                        onChange={(e) => set("heightFt", e.target.value)}
                         className={inputClass}
                       />
                     </Field>

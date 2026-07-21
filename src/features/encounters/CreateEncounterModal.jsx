@@ -4,7 +4,6 @@ import SearchableSelect from "../../components/common/SearchableSelect";
 import { useAuth } from "../../context/AuthContext";
 import {
   CONSULTATION_TYPE_OPTIONS,
-  PAYMENT_TYPE_OPTIONS,
   loadDoctors,
   STATUS,
   createEncounter,
@@ -28,7 +27,6 @@ export default function CreateEncounterModal({ onClose, onCreated, presetHospita
   const [hospitalNo, setHospitalNo] = useState(presetHospitalNo || "");
   const [doctor, setDoctor] = useState("");
   const [consultationType, setConsultationType] = useState("");
-  const [paymentType, setPaymentType] = useState("");
   const [appointmentDate, setAppointmentDate] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -51,8 +49,8 @@ export default function CreateEncounterModal({ onClose, onCreated, presetHospita
       setError("Please select a doctor.");
       return;
     }
-    if (!consultationType || !paymentType) {
-      setError("Please fill in the consultation and payment type.");
+    if (!consultationType) {
+      setError("Please fill in the consultation type.");
       return;
     }
 
@@ -63,7 +61,6 @@ export default function CreateEncounterModal({ onClose, onCreated, presetHospita
         hospitalNo,
         appointmentDate,
         doctor,
-        paymentType,
         consultationType,
         fee: 0,
         reasonForVisiting: "",
@@ -131,32 +128,17 @@ export default function CreateEncounterModal({ onClose, onCreated, presetHospita
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
-                Appointment Date
-              </label>
-              <input
-                type="date"
-                value={appointmentDate}
-                onChange={(e) => setAppointmentDate(e.target.value)}
-                className={inputClass}
-                required
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
-                Payment Type
-              </label>
-              <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className={inputClass} required>
-                <option value="">Select</option>
-                {PAYMENT_TYPE_OPTIONS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 block">
+              Appointment Date
+            </label>
+            <input
+              type="date"
+              value={appointmentDate}
+              onChange={(e) => setAppointmentDate(e.target.value)}
+              className={inputClass}
+              required
+            />
           </div>
 
           <div>
