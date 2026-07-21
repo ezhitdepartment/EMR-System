@@ -8,14 +8,24 @@
 // from another; these are separate legal/clinical documents, not copies of
 // each other.
 //
-//   Shared key    | What it is                         | EMR field(s)          | Consultation field | Discharge field     | Konsulta field      | Medical Certificate field
-//   chiefComplaint| Chief Complaint                    | chiefComplaints        | chiefComplaint      | —                    | —                    | —
+//   Shared key    | What it is                         | EMR field(s)          | Consultation field  | Discharge field     | Konsulta field      | Medical Certificate field
+//   chiefComplaint| Chief Complaint                    | chiefComplaints        | chiefComplaint      | chiefComplaints      | —                    | —
 //   physicalExam  | Physical Exam / Objective Findings | objectiveFindings      | —                   | —                    | physicalExamination | pertinentPhysicalExaminationFindings
 //   impression    | Initial / Physician's Impression   | physicianImpression    | —                   | —                    | initialImpression    | —
-//   management    | Management at ED / Treatment given | treatmentLeft + treatmentRight (read-only source — split per eye, so a combined value never writes back into it) | — | treatmentGiven | managementAtED | treatmentDoneMedicationGiven
+//   management    | Management at ED / Treatment given | treatmentLeft + treatmentRight (read-only source — split per eye, so a combined value never writes back into it) | medicationOrders | treatmentGiven | managementAtED | treatmentDoneMedicationGiven
 //   diagnosis     | Final / Active / Clinical Diagnosis| —                      | activeDiagnoses     | finalDiagnosis       | finalDiagnosis       | clinicalDiagnosis
-//   disposition   | Disposition                        | disposition            | —                   | disposition          | —                    | disposition
+//   disposition   | Disposition                        | disposition            | disposition         | disposition          | —                    | disposition
 //   followUp      | Follow-up / Recommendations        | followUpExamination    | —                   | followUpExamination  | recommendations      | —
+//
+// The Consultation Form is the richest single source of what actually
+// happened during a visit (chief complaint, active diagnoses, medication
+// orders, and — now that a doctor's Disposition select was added there —
+// the final disposition too), so it now contributes chiefComplaint,
+// management, and disposition here in addition to diagnosis. That means:
+// the moment a nurse/doctor saves a Consultation, ER Discharge (and,
+// where applicable, Konsulta/Medical Certificate) gets those blanks
+// filled in immediately via PatientProfile.jsx's syncSharedClinical() —
+// no need to retype anything already captured during the consultation.
 export const SHARED_FIELD_MAP = {
   emr: {
     chiefComplaint: "chiefComplaints",
@@ -27,8 +37,11 @@ export const SHARED_FIELD_MAP = {
   consultation: {
     chiefComplaint: "chiefComplaint",
     diagnosis: "activeDiagnoses",
+    management: "medicationOrders",
+    disposition: "disposition",
   },
   discharge: {
+    chiefComplaint: "chiefComplaints",
     management: "treatmentGiven",
     diagnosis: "finalDiagnosis",
     disposition: "disposition",

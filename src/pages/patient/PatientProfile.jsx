@@ -44,7 +44,7 @@ import { pdf } from "@react-pdf/renderer";
 import PatientRegistration from "./PatientRegistration";
 import PatientEncountersPanel from "../../features/encounters/PatientEncountersPanel";
 import PatientRecordPDF from "./PatientRecordPDF";
-import ErDischargeForm from "./ErDischargeForm";
+import ErDischargeForm, { ANCILLARY_TEST_NAMES } from "./ErDischargeForm";
 import ErDischargePDF from "./ErDischargePDF";
 import KonsultaReferralModal from "./KonsultaReferralModal";
 import KonsultaReferralPDF from "./KonsultaReferralPDF";
@@ -56,9 +56,9 @@ import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
 import { findEncounterById, loadEncounters, updateEncounter, STATUS as ENCOUNTER_STATUS } from "../../utils/encounters";
-import { loadLabOrders, upsertLabOrderForEncounter, getLabOrderFileUrl, formatDateCreated } from "../../utils/labOrders";
+import { loadLabOrders, createLabOrder, formatDateCreated, DIAGNOSTIC_GROUPS } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
-import { loadMedicinePrescriptions, upsertMedicinePrescriptionForEncounter } from "../../utils/medicinePrescriptions";
+import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
 import {
   loadSharedClinical,
   saveSharedClinical,
@@ -66,7 +66,7 @@ import {
   fillBlanksFromShared,
 } from "./sharedClinicalFields";
 import { findPatientById, updatePatient, savePatientPhoto } from "../../utils/patients";
-import { loadConsultationHistory, saveConsultationEntry } from "../../utils/consultations";
+import { loadConsultationHistory, saveConsultationEntry, formatDiagnosisText } from "../../utils/consultations";
 import {
   loadAllPatientDocuments,
   saveEmr,
@@ -151,10 +151,6 @@ function patientToEmrSeed(patient, shared = {}) {
 // still blank afterward gets one more pass from the shared clinical store.
 function patientToConsultationSeed(patient, shared = {}) {
   const age = calculateAge(patient.dateOfBirth);
-  const patientFullName = [patient.firstName, patient.middleName, patient.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .toUpperCase();
   const seed = {
     lastName: patient.lastName || "",
     firstName: patient.firstName || "",
@@ -163,14 +159,6 @@ function patientToConsultationSeed(patient, shared = {}) {
     gender: patient.sex || "",
     age: age !== null ? String(age) : "",
     residentialAddress: patient.address || "",
-    region: patient.region || "",
-    regionCode: patient.regionCode || "",
-    province: patient.province || "",
-    provinceCode: patient.provinceCode || "",
-    city: patient.city || "",
-    cityCode: patient.cityCode || "",
-    barangay: patient.barangay || "",
-    zipCode: patient.zipCode || "",
     email: patient.email || "",
     phoneCell: patient.mobile || "",
     phoneHome: patient.landline || "",
@@ -187,30 +175,88 @@ function patientToConsultationSeed(patient, shared = {}) {
     emergencyAddress: patient.emergencyAddress || "",
     emergencyPhoneHome: patient.emergencyPhoneHome || "",
     emergencyPhoneCell: patient.emergencyPhoneCell || "",
-    // Consent sign-off — defaulted to today and the patient's own name so
-    // the nurse/doctor doesn't have to retype it, but both stay ordinary
-    // editable inputs (see ConsultationForm.jsx) in case a guardian or
-    // authorized representative signs instead, or the visit spans more
-    // than one calendar day.
-    consentDate: new Date().toISOString().slice(0, 10),
-    consentSignature: patientFullName,
   };
   return fillBlanksFromShared(seed, "consultation", shared).patched;
 }
 
-// Seed the ER Discharge form from the patient's profile and, if it exists,
-// their EMR — so the "matched" fields don't need to be retyped. Anything
-// still blank after that gets one more pass from the shared clinical store
-// (Final Diagnosis, in particular, now comes from the Consultation Form's
-// Active Diagnoses via the shared store, since the EMR no longer carries
-// that field itself).
-function buildDischargeSeed(patient, emr, shared = {}) {
+// test_name -> ancillary checkbox key (the reverse of ANCILLARY_TEST_NAMES),
+// so a Consultation's ordered diagnostics can auto-check the matching box.
+const ANCILLARY_KEY_BY_TEST_NAME = Object.fromEntries(
+  Object.entries(ANCILLARY_TEST_NAMES).map(([key, testName]) => [testName, key])
+);
+
+// Seed the ER Discharge form from everything already on hand for this
+// visit — the patient's profile, their EMR (if any), the Consultation Form
+// entry for this visit (if any), and finally the shared clinical store —
+// so none of it needs to be retyped by whoever opens this form first.
+// Order of precedence, field by field: whichever source actually captured
+// that concept wins; the shared-clinical-store pass at the end only fills
+// in whatever is STILL blank.
+//
+//   Field                | Comes from
+//   chiefComplaints       | consultation.chiefComplaint, then emr
+//   finalDiagnosis        | consultation's Diagnosis + any ICD-10 codes
+//                         | picked (formatDiagnosisText — same helper the
+//                         | Registration table's Diagnosis column uses)
+//   treatmentGiven        | consultation.medicationOrders ("Medication
+//                         | Orders" from the Consultation Form)
+//   disposition           | consultation.disposition, then emr
+//   ancillaries / xray /  | consultation.diagnosticsSelected — whatever
+//   others                | tests the doctor checked in "Diagnostics /
+//                         | Tests Ordered" are matched against the same
+//                         | ANCILLARY_TEST_NAMES lookup the checkboxes use;
+//                         | anything in DIAGNOSTIC_GROUPS["X-Ray"] checks
+//                         | Xray instead; anything left over (Ultrasound &
+//                         | Imaging, other Lab tests with no matching box,
+//                         | plus any free-text diagnosticsNotes) goes into
+//                         | Others.
+//   medications           | consultation.prescriptionItems, one row each
+//   dateTimeAttended /     | the matched registration's own appointment
+//   erPhysician            | date/time and assigned doctor, when this
+//                         | consultation was saved from a specific
+//                         | registration (see consultationEncounter in
+//                         | handleSaveConsultation) — falls back to the EMR
+//                         | otherwise.
+function buildDischargeSeed(patient, emr, consultation, encounters, shared = {}) {
   const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
     .filter(Boolean)
     .join(", ");
   const age = calculateAge(patient.dateOfBirth);
+
+  const matchedEncounter =
+    consultation?.encounterId && Array.isArray(encounters)
+      ? encounters.find((e) => e.id === consultation.encounterId)
+      : null;
+
+  // Sort whatever the doctor ordered in the Consultation Form's
+  // Diagnostics section into: a matching ancillary checkbox, an X-Ray, or
+  // "Others" (Ultrasound & Imaging, or any Laboratory test with no
+  // checkbox of its own on this printed form).
+  const ancillaries = {};
+  const xrayTests = [];
+  const otherTests = [];
+  for (const testName of consultation?.diagnosticsSelected || []) {
+    const ancillaryKey = ANCILLARY_KEY_BY_TEST_NAME[testName];
+    if (ancillaryKey) {
+      ancillaries[ancillaryKey] = true;
+    } else if ((DIAGNOSTIC_GROUPS["X-Ray"] || []).includes(testName)) {
+      xrayTests.push(testName);
+    } else {
+      otherTests.push(testName);
+    }
+  }
+  if (consultation?.diagnosticsNotes) otherTests.push(consultation.diagnosticsNotes);
+
+  const medications = Array.isArray(consultation?.prescriptionItems)
+    ? consultation.prescriptionItems
+        .filter((item) => item?.medicine)
+        .map((item) => ({ medicine: item.medicine || "", dosage: item.instructions || "", time: "" }))
+    : [];
+
+  const attendedAt = matchedEncounter?.dateCreated ? new Date(matchedEncounter.dateCreated) : null;
+
   const seed = {
-    hospitalNo: emr?.hospitalRecordNo || "",
+    hospitalNo: emr?.hospitalRecordNo || patient.hospitalNo || "",
     patientName: [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
       .filter(Boolean)
       .join(" "),
@@ -218,14 +264,27 @@ function buildDischargeSeed(patient, emr, shared = {}) {
     age: age !== null ? String(age) : "",
     sex: patient.sex || "",
     dob: patient.dateOfBirth || "",
-    dateTimeAttended: emr?.dateOfVisit
+    dateTimeAttended: attendedAt
+      ? `${attendedAt.toLocaleDateString("en-PH")} ${attendedAt.toLocaleTimeString("en-PH", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`
+      : emr?.dateOfVisit
       ? `${emr.dateOfVisit}${emr.timeOfVisit ? " " + emr.timeOfVisit : ""}`
       : "",
     nurseOnDuty: emr?.nurseOnDuty || "",
-    chiefComplaints: emr?.chiefComplaints || "",
-    disposition: emr?.disposition || "",
+    chiefComplaints: consultation?.chiefComplaint || emr?.chiefComplaints || "",
+    ancillaries,
+    xray: xrayTests.length > 0,
+    xrayNote: xrayTests.join(", "),
+    others: otherTests.length > 0,
+    othersNote: otherTests.join(", "),
+    finalDiagnosis: consultation ? formatDiagnosisText(consultation) : "",
+    treatmentGiven: consultation?.medicationOrders || "",
+    disposition: consultation?.disposition || emr?.disposition || "",
+    medications,
     followUpExamination: emr?.followUpExamination || "",
-    erPhysician: emr?.physician || "",
+    erPhysician: matchedEncounter?.doctor || emr?.physician || "",
   };
   return fillBlanksFromShared(seed, "discharge", shared).patched;
 }
@@ -552,7 +611,6 @@ function PatientFilesPanel({
   konsultaReferral,
   medicalCertificate,
   consultationHistory,
-  labOrders,
   downloadingPdf,
   downloadingDischargePdf,
   downloadingKonsultaPdf,
@@ -578,17 +636,6 @@ function PatientFilesPanel({
   const erEntries = (consultationHistory || []).filter((e) => e.authorRole === "er_nurse");
   const opdEntries = (consultationHistory || []).filter((e) => e.authorRole === "opd_nurse");
   const doctorEntries = (consultationHistory || []).filter((e) => e.authorRole === "doctor");
-
-  // Every result file a Med Tech/X-ray Tech has uploaded against any of
-  // this patient's lab orders, across every order — flattened the same
-  // way ConsultationForm.jsx's doctor reference panel already does, so
-  // "one folder with every result" doesn't require opening each lab order
-  // individually to find its files.
-  const labResultFiles = (labOrders || []).flatMap((order) =>
-    Object.entries(order.tests || {}).flatMap(([testName, test]) =>
-      (test.files || []).map((f) => ({ ...f, testName, orderId: order.id }))
-    )
-  );
 
   function entryLabel(entry) {
     const dt = entry.createdAt ? new Date(entry.createdAt) : null;
@@ -627,23 +674,6 @@ function PatientFilesPanel({
       count: opdEntries.length,
       description: "Every consultation an OPD nurse recorded for this patient, newest first.",
       historyList: toHistoryList(opdEntries, "OPD consultation"),
-    },
-    {
-      id: "laboratory-results",
-      label: "Laboratory Results",
-      count: labResultFiles.length,
-      description:
-        "Every result file a Med Tech or X-ray Tech has uploaded against this patient's lab orders, across every order.",
-      emptyMessage: "No lab results uploaded yet.",
-      historyList: labResultFiles.map((f) => ({
-        id: f.id,
-        label: f.name,
-        sublabel: `${f.testName} · ${f.uploadedAt ? formatDateCreated(f.uploadedAt) : "—"}`,
-        onClick: async () => {
-          const url = await getLabOrderFileUrl(f.storagePath);
-          if (url) window.open(url, "_blank");
-        },
-      })),
     },
     {
       id: "medical-certificate",
@@ -814,7 +844,7 @@ function PatientFilesPanel({
               <div className="mt-4 w-full text-left">
                 {selectedFolder.historyList.length === 0 ? (
                   <p className="text-xs text-slate-400 italic text-center">
-                    {selectedFolder.emptyMessage || "No consultations recorded yet."}
+                    No consultations recorded yet.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
@@ -1083,26 +1113,24 @@ export default function PatientProfile() {
       return;
     }
 
-    // Auto-create/sync a Lab Order for whatever the doctor checked off in
-    // the "Diagnostics / Tests Ordered" section, so the nurse/tech side of
-    // the workflow doesn't need a second manual step to place the same
-    // order the doctor already specified here. Only doctors ever see/edit
-    // this section (see DOCTOR_SECTIONS in ConsultationForm.jsx).
-    //
-    // Scoped to this ONE registration via consultationEncounter?.id: the
-    // first save creates the order, every later save of the same
-    // consultation updates that same order's tests (adding newly checked
-    // ones, dropping unchecked ones that haven't been worked on yet)
-    // instead of placing a duplicate order — see
-    // upsertLabOrderForEncounter() in utils/labOrders.js.
+    // Auto-create a Lab Order for whatever the doctor checked off in the
+    // "Diagnostics / Tests Ordered" section, so the nurse/tech side of the
+    // workflow doesn't need a second manual step to place the same order
+    // the doctor already specified here. Only doctors ever see/edit this
+    // section (see DOCTOR_SECTIONS in ConsultationForm.jsx), and it fires
+    // on every save that has at least one test checked — including a
+    // second save of the same consultation, which will place a second
+    // order for the same tests. If that turns out to be a problem in
+    // practice (e.g. a doctor re-saving after fixing a typo elsewhere in
+    // the form), the fix is to only fire this when diagnosticsSelected has
+    // actually changed since the last save, not just whenever it's
+    // non-empty.
     if (user?.role === "doctor" && formData.diagnosticsSelected?.length > 0) {
       try {
-        await upsertLabOrderForEncounter({
-          encounterId: consultationEncounter?.id ?? null,
+        await createLabOrder({
           hospitalNo,
           diagnostics: formData.diagnosticsSelected,
           testDetails: formData.diagnosticsTestDetails || {},
-          createdBy: user?.id || null,
         });
       } catch (err) {
         // The consultation itself already saved successfully above — don't
@@ -1110,53 +1138,6 @@ export default function PatientProfile() {
         // surface it so the doctor knows to place the order manually.
         alert(
           `The consultation was saved, but the lab order couldn't be created automatically: ${
-            err.message || "unknown error"
-          }`
-        );
-      }
-    }
-
-    // Auto-create/sync a Medicine Prescription for whatever the doctor (or
-    // admin) filled in the Consultation Form's "Medicine Prescription"
-    // section, so it shows up in the standalone Medicine Prescriptions
-    // list too instead of being stuck inside this one consultation record.
-    //
-    // Scoped to this ONE registration via consultationEncounter?.id, same
-    // "one per registration" guarantee lab_orders already has (a partial
-    // UNIQUE index on encounter_id) — the first save creates the
-    // prescription, every later save of the same consultation syncs that
-    // same prescription's line items instead of creating a duplicate. See
-    // upsertMedicinePrescriptionForEncounter() in
-    // utils/medicinePrescriptions.js — it's the exact same function the
-    // standalone Add Prescription page already uses for this.
-    const prescriptionItems = (formData.prescriptionItems || []).filter(
-      (it) => it.medicineName?.trim()
-    );
-    if ((user?.role === "doctor" || user?.role === "admin") && prescriptionItems.length > 0) {
-      const prescribedBy =
-        formData.attendingPrintedName?.trim() ||
-        [user?.prefix, user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
-        "Attending Physician";
-      try {
-        await upsertMedicinePrescriptionForEncounter({
-          hospitalNo,
-          encounterId: consultationEncounter?.id ?? null,
-          prescribedBy,
-          createdBy: user?.id || null,
-          items: prescriptionItems.map((it) => ({
-            medicineName: it.medicineName,
-            quantity: Number(it.quantity) || 1,
-            instructions: it.instructions || "",
-            milligram: it.milligram || "",
-          })),
-        });
-        refreshMedicinePrescriptions(hospitalNo);
-      } catch (err) {
-        // Same as the lab order case above — the consultation itself
-        // already saved successfully, so don't let this look like the
-        // whole save failed.
-        alert(
-          `The consultation was saved, but the medicine prescription couldn't be synced automatically: ${
             err.message || "unknown error"
           }`
         );
@@ -1217,34 +1198,20 @@ export default function PatientProfile() {
       const isDoctor = user?.role === "doctor";
 
       if (isNurse || isDoctor) {
-        try {
-          const updatedEncounter = await updateEncounter(consultationEncounter.id, (e) => {
-            const next = { ...e };
-            if (isNurse) next.nurseConsultationDone = true;
-            if (isDoctor) next.doctorConsultationDone = true;
-            if (
-              next.nurseConsultationDone &&
-              next.doctorConsultationDone &&
-              next.status !== ENCOUNTER_STATUS.CANCELLED
-            ) {
-              next.status = ENCOUNTER_STATUS.COMPLETED;
-            }
-            return next;
-          });
-          if (updatedEncounter) setConsultationEncounter(updatedEncounter);
-        } catch (err) {
-          // The consultation itself already saved successfully above —
-          // don't let this look like the whole save failed. But this step
-          // is what flips nurse/doctorConsultationDone AND is what
-          // triggers the DB to assign a Census No., so a swallowed
-          // failure here is exactly how "Census No. doesn't work" used to
-          // show up with no visible cause. Surface it instead.
-          alert(
-            `The consultation was saved, but the registration couldn't be updated (this also affects Census No. assignment): ${
-              err.message || "unknown error"
-            }`
-          );
-        }
+        const updatedEncounter = await updateEncounter(consultationEncounter.id, (e) => {
+          const next = { ...e };
+          if (isNurse) next.nurseConsultationDone = true;
+          if (isDoctor) next.doctorConsultationDone = true;
+          if (
+            next.nurseConsultationDone &&
+            next.doctorConsultationDone &&
+            next.status !== ENCOUNTER_STATUS.CANCELLED
+          ) {
+            next.status = ENCOUNTER_STATUS.COMPLETED;
+          }
+          return next;
+        });
+        if (updatedEncounter) setConsultationEncounter(updatedEncounter);
       }
     }
   }
@@ -2202,7 +2169,6 @@ export default function PatientProfile() {
                 konsultaReferral={konsultaReferral}
                 medicalCertificate={medicalCertificate}
                 consultationHistory={consultationHistoryList}
-                labOrders={labOrders}
                 downloadingPdf={downloadingPdf}
                 downloadingDischargePdf={downloadingDischargePdf}
                 downloadingKonsultaPdf={downloadingKonsultaPdf}
@@ -2323,10 +2289,13 @@ export default function PatientProfile() {
         />
       )}
 
-      {/* ER Discharge Instructions editor — pre-filled from patient + EMR, save overwrites */}
+      {/* ER Discharge Instructions editor — pre-filled from patient + EMR +
+          the most recent saved Consultation (chief complaint, diagnosis,
+          disposition, medication orders, diagnostics ordered, and Rx —
+          see buildDischargeSeed above), save overwrites */}
       {showDischarge && (
         <ErDischargeForm
-          initialValues={discharge || buildDischargeSeed(patient, emr, sharedClinical)}
+          initialValues={discharge || buildDischargeSeed(patient, emr, consultation, encounters, sharedClinical)}
           onSave={handleSaveDischarge}
           onClose={() => setShowDischarge(false)}
         />
