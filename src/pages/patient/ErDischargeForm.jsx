@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
+import logoImg from "../../assets/logo.jpg";
 
 // One row per numbered line on the paper form (1–9 under Take Home Medications).
 const MED_ROWS = 9;
@@ -171,9 +172,11 @@ export default function ErDischargeForm({ initialValues, onSave, onClose }) {
             {/* Letterhead */}
             <div className="flex items-start justify-between border-b-2 border-slate-900 pb-3 mb-5">
               <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full border-2 border-slate-900 flex items-center justify-center shrink-0">
-                  <span className="text-[10px] font-bold tracking-tighter">EZH</span>
-                </div>
+                <img
+                  src={logoImg}
+                  alt="E. Zarate General Hospital seal"
+                  className="w-14 h-14 rounded-full object-cover shrink-0 border border-slate-300"
+                />
                 <div>
                   <h1 className="text-xl font-bold tracking-wide">E. ZARATE HOSPITAL</h1>
                   <p className="text-[10px] text-slate-700 leading-snug">

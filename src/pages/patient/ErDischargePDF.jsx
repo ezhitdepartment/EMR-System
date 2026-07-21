@@ -1,6 +1,7 @@
 import {
-  Document, Page, Text, View, StyleSheet,
+  Document, Page, Text, View, StyleSheet, Image,
 } from "@react-pdf/renderer";
+import logoImg from "../../assets/logo.jpg";
 
 // Plain black-on-white, ruled-paper styling — deliberately NOT the
 // teal/rounded look the rest of this app's PDFs use, so this prints as a
@@ -28,10 +29,10 @@ const s = StyleSheet.create({
   },
   headerLeft: { flexDirection: "row", alignItems: "center" },
   seal: {
-    width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: C.black,
-    alignItems: "center", justifyContent: "center", marginRight: 10,
+    width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: "#cbd5e1",
+    marginRight: 10, overflow: "hidden",
   },
-  sealText: { fontSize: 7, fontFamily: "Times-Bold" },
+  sealImg: { width: 44, height: 44, objectFit: "cover" },
   hospName: { fontSize: 15, fontFamily: "Times-Bold", letterSpacing: 0.5 },
   hospSub: { fontSize: 7.5, color: C.mid, marginTop: 1 },
   hospNoLabel: { fontSize: 8, fontFamily: "Times-Bold" },
@@ -195,7 +196,7 @@ export default function ErDischargePDF({ form }) {
         {/* Letterhead */}
         <View style={s.headerRow}>
           <View style={s.headerLeft}>
-            <View style={s.seal}><Text style={s.sealText}>EZH</Text></View>
+            <View style={s.seal}><Image src={logoImg} style={s.sealImg} /></View>
             <View>
               <Text style={s.hospName}>E. ZARATE HOSPITAL</Text>
               <Text style={s.hospSub}>16 J. Aguilar Avenue, Talon II, Las Piñas City, Metro Manila, Philippines</Text>
