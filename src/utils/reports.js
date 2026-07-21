@@ -176,17 +176,37 @@ export function getMonthlyPatientTypeCounts(encounters, year, patientType) {
   return MONTH_LABELS.map((label, i) => ({ label, value: counts[i] }));
 }
 
+// One row per distinct free-text diagnosis phrase found in Active
+// Diagnoses this year — `label`/`count` stay as-is (the bar chart on the
+// Reports page maps straight off those two), with `patientNames`/
+// `hospitalNos` added alongside so the exported report also shows who
+// those patients actually are, same as the ICD-10 report below.
 export function getDiagnosisBreakdown(consultations, year) {
-  const counts = new Map();
+  const counts = new Map(); // key -> { label, count, patients: Map(hospitalNo -> displayName) }
   getEncountersForYear(consultations, year).forEach((c) => {
     parseDiagnoses(c.activeDiagnoses).forEach((dx) => {
       const key = dx.toLowerCase();
-      const existing = counts.get(key);
-      if (existing) existing.count += 1;
-      else counts.set(key, { label: dx, count: 1 });
+      const entry = counts.get(key) || { label: dx, count: 0, patients: new Map() };
+      entry.count += 1;
+      if (c.hospitalNo && !entry.patients.has(c.hospitalNo)) {
+        entry.patients.set(c.hospitalNo, patientName(c.patient, c.hospitalNo));
+      }
+      counts.set(key, entry);
     });
   });
-  return Array.from(counts.values()).sort((a, b) => b.count - a.count);
+  return Array.from(counts.values())
+    .map((e) => {
+      const hospitalNos = Array.from(e.patients.keys());
+      const patientNames = hospitalNos.map((no) => e.patients.get(no));
+      return {
+        label: e.label,
+        count: e.count,
+        patientCount: hospitalNos.length,
+        patientNames: patientNames.join("; "),
+        hospitalNos: hospitalNos.join("; "),
+      };
+    })
+    .sort((a, b) => b.count - a.count);
 }
 
 export function getEncounterReportRows(consultations, year) {
@@ -222,22 +242,38 @@ export function getYakapReportRows(consultations, year) {
     }));
 }
 
-// One row per ICD-10 code that's actually been assigned this year, with
-// how many distinct patients carry it — "how many patients have that
-// disease", not a raw count of every time it was picked.
+// One row per ICD-10 code that's actually been assigned this year — how
+// many distinct patients carry it ("how many patients have that disease",
+// not a raw count of every time it was picked), plus who those patients
+// actually are (name + Hospital No.), so the report is usable on its own
+// without cross-referencing another list.
 export function getIcd10DiagnosisReportRows(consultations, year) {
-  const byCode = new Map(); // code -> { code, name, hospitalNos: Set }
+  const byCode = new Map(); // code -> { code, name, patients: Map(hospitalNo -> displayName) }
   getEncountersForYear(consultations, year).forEach((c) => {
     (c.icdDiagnoses || []).forEach((dx) => {
       if (!dx?.code) return;
-      const entry = byCode.get(dx.code) || { code: dx.code, name: dx.name || "", hospitalNos: new Set() };
+      const entry = byCode.get(dx.code) || { code: dx.code, name: dx.name || "", patients: new Map() };
       if (!entry.name && dx.name) entry.name = dx.name;
-      entry.hospitalNos.add(c.hospitalNo);
+      if (c.hospitalNo && !entry.patients.has(c.hospitalNo)) {
+        entry.patients.set(c.hospitalNo, patientName(c.patient, c.hospitalNo));
+      }
       byCode.set(dx.code, entry);
     });
   });
   return Array.from(byCode.values())
-    .map((e) => ({ code: e.code, name: e.name, patientCount: e.hospitalNos.size }))
+    .map((e) => {
+      // Keep name/hospitalNo pairs in the same order across both lists, so
+      // the Nth name always lines up with the Nth Hospital No.
+      const hospitalNos = Array.from(e.patients.keys());
+      const patientNames = hospitalNos.map((no) => e.patients.get(no));
+      return {
+        code: e.code,
+        name: e.name,
+        patientCount: hospitalNos.length,
+        patientNames: patientNames.join("; "),
+        hospitalNos: hospitalNos.join("; "),
+      };
+    })
     .sort((a, b) => b.patientCount - a.patientCount);
 }
 
