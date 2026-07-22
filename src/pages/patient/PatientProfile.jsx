@@ -51,8 +51,8 @@ import KonsultaReferralPDF from "./KonsultaReferralPDF";
 import MedicalCertificateForm from "./MedicalCertificateForm";
 import MedicalCertificatePDF from "./MedicalCertificatePDF";
 import ConsultationForm, { NURSE_ROLES } from "./ConsultationForm";
-import ConsultationRecordPDF from "./ConsultationRecordPDF";
 import NurseConsultationPDF from "./NurseConsultationPDF";
+import DoctorConsultationPDF from "./DoctorConsultationPDF";
 import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
@@ -1539,11 +1539,22 @@ export default function PatientProfile() {
 
   async function handleViewConsultationEntryPdf(entry) {
     // Nurse-authored entries (ER/OPD) print as the paper-form replica —
-    // see NurseConsultationPDF.jsx. Everything else (doctor, admin) keeps
-    // using the general-purpose ConsultationRecordPDF template.
-    const PdfComponent = NURSE_ROLES.includes(entry?.authorRole) ? NurseConsultationPDF : ConsultationRecordPDF;
+    // see NurseConsultationPDF.jsx. Doctor/admin entries print as the
+    // OPD Consultation Record paper-form replica instead — see
+    // DoctorConsultationPDF.jsx, which also needs that visit's Triage
+    // vitals (Temperature/Cardiac Rate/Respiratory Rate/Blood Pressure/
+    // Weight) for its Vital Signs table; those live on the encounter, not
+    // on the consultation entry itself, so they're fetched here rather
+    // than being part of `entry`.
+    const isNurseEntry = NURSE_ROLES.includes(entry?.authorRole);
+    let triage = null;
+    if (!isNurseEntry && entry?.encounterId) {
+      const encounter = await findEncounterById(entry.encounterId);
+      triage = encounter?.triage || null;
+    }
+    const PdfComponent = isNurseEntry ? NurseConsultationPDF : DoctorConsultationPDF;
     const blob = await pdf(
-      <PdfComponent patient={patient} form={entry} generatedBy={user?.username} />
+      <PdfComponent patient={patient} form={entry} triage={triage} generatedBy={user?.username} />
     ).toBlob();
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");

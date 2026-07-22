@@ -603,6 +603,27 @@ export const initialConsultationForm = {
   chiefComplaint: "",
   historyOfPresentIllness: "",
 
+  // E. Zarate Hospital OPD Consultation Record (paper form) — the fields
+  // below exist ONLY to back that paper form's replica on page 1 of
+  // DoctorConsultationPDF.jsx. objectiveFindings is the doctor's narrative
+  // "Pertinent P.E. / Objective Findings" box (distinct from the
+  // structured PhilHealth CF4 Physical Examination checklist below, which
+  // has no free-narrative equivalent on the paper form). visitTime/
+  // nurseOnDuty/residentOnDuty/classification are this visit's admin
+  // metadata; o2Sat is recorded here (not on Triage) since on the paper
+  // form it's taken alongside the rest of this visit's vitals by whoever
+  // is on duty at consult time. referredTo/followUpExamination are the
+  // paper form's post-Disposition fields.
+  objectiveFindings: "",
+  visitTime: "",
+  nurseOnDuty: "",
+  residentOnDuty: "",
+  classification: "",
+  o2Sat: "",
+  referredTo: "",
+  followUpExamination: "",
+
+
   // PhilHealth CF4 — Pertinent Signs and Symptoms on Admission (checklist,
   // item 3 on the form). "Pain" and "Others" are also selectable options
   // in the list itself; these two fields hold the accompanying free text
@@ -1624,6 +1645,65 @@ export default function ConsultationForm({
         </div>
         )}
 
+        {/* ── VISIT DETAILS + OBJECTIVE FINDINGS (doctor) ──
+            Backs the "Visit Details", "Vital Signs" (O2 Sat only — the
+            rest come from Triage, shown read-only above) and
+            "Pertinent P.E. / Objective Findings" boxes on the E. Zarate
+            Hospital OPD Consultation Record paper form. Gated by the same
+            "physicalExamination" permission as the CF4 PE checklist below
+            it, since both describe the same physical exam. */}
+        {canEdit("physicalExamination") && (
+        <div>
+          <div className="flex items-start justify-between border border-slate-200 rounded-t-lg px-4 py-3 bg-white">
+            <div>
+              <p className="text-sm font-bold text-slate-800">Visit Details</p>
+              <p className="text-xs text-slate-400">Printed on the OPD Consultation Record paper form</p>
+            </div>
+            <Stethoscope size={20} className="text-blue-600" />
+          </div>
+          <div className="border border-t-0 border-slate-200 rounded-b-lg p-4 space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Field label="Time of Visit">
+                <input type="time" name="visitTime" value={form.visitTime} onChange={handle} className={inputClass} />
+              </Field>
+              <Field label="Nurse-on-Duty">
+                <input name="nurseOnDuty" value={form.nurseOnDuty} onChange={handle} className={inputClass} />
+              </Field>
+              <Field label="Resident-on-Duty">
+                <input name="residentOnDuty" value={form.residentOnDuty} onChange={handle} className={inputClass} />
+              </Field>
+              <Field label="Classification">
+                <input
+                  name="classification"
+                  value={form.classification}
+                  onChange={handle}
+                  placeholder="e.g. New, Follow-up"
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+            <Field label="O2 Sat" className="sm:w-40">
+              <input
+                name="o2Sat"
+                value={form.o2Sat}
+                onChange={handle}
+                placeholder="e.g. 98%"
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Pertinent P.E. / Objective Findings">
+              <textarea
+                name="objectiveFindings"
+                value={form.objectiveFindings}
+                onChange={handle}
+                rows={4}
+                className={textareaClass}
+              />
+            </Field>
+          </div>
+        </div>
+        )}
+
         {/* ── PHILHEALTH CF4: SIGNS AND SYMPTOMS ON ADMISSION (doctor) ── */}
         {canEdit("signsAndSymptoms") && (
         <div>
@@ -2553,6 +2633,18 @@ export default function ConsultationForm({
             </Field>
             <Field label="Notes">
               <input name="dispositionNotes" value={form.dispositionNotes} onChange={handle} className={inputClass} />
+            </Field>
+            <Field label="Referred To">
+              <input name="referredTo" value={form.referredTo} onChange={handle} className={inputClass} />
+            </Field>
+            <Field label="Follow-up Examination">
+              <input
+                name="followUpExamination"
+                value={form.followUpExamination}
+                onChange={handle}
+                placeholder="e.g. 1 week, PRN"
+                className={inputClass}
+              />
             </Field>
           </div>
 
