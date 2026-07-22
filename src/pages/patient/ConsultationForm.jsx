@@ -2285,7 +2285,7 @@ export default function ConsultationForm({
 
             <div className="flex flex-col gap-3">
               {form.prescriptionItems.map((item) => (
-                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_90px_1fr_110px_32px] gap-3 items-start">
+                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_110px_90px_1fr_32px] gap-3 items-start">
                   <div>
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
                       Medicine
@@ -2302,6 +2302,19 @@ export default function ConsultationForm({
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Milligram
+                    </p>
+                    <input
+                      type="text"
+                      value={item.milligram ?? ""}
+                      onChange={(e) => updatePrescriptionItem(item.id, { milligram: e.target.value })}
+                      placeholder="e.g. 500mg"
+                      className={`${inputClass} w-full`}
+                    />
                   </div>
 
                   <div>
@@ -2326,19 +2339,6 @@ export default function ConsultationForm({
                       value={item.instructions}
                       onChange={(e) => updatePrescriptionItem(item.id, { instructions: e.target.value })}
                       placeholder="e.g. 1 tablet 3x a day after meals for 7 days"
-                      className={`${inputClass} w-full`}
-                    />
-                  </div>
-
-                  <div>
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                      Milligram
-                    </p>
-                    <input
-                      type="text"
-                      value={item.milligram ?? ""}
-                      onChange={(e) => updatePrescriptionItem(item.id, { milligram: e.target.value })}
-                      placeholder="e.g. 500mg"
                       className={`${inputClass} w-full`}
                     />
                   </div>
