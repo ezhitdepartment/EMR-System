@@ -24,6 +24,7 @@ import {
 import { pdf } from "@react-pdf/renderer";
 import AddressFields from "../../components/common/AddressFields";
 import Icd10Autocomplete from "../../components/common/Icd10Autocomplete";
+import RvsAutocomplete from "../../components/common/RvsAutocomplete";
 import DiagnosticTestChecklist from "../../components/common/DiagnosticTestChecklist";
 import SearchableSelect from "../../components/common/SearchableSelect";
 import { useAuth } from "../../context/AuthContext";
@@ -1152,11 +1153,11 @@ function DoctorConsultationReferencePanel({ patient, form }) {
         {form.diagnosis && <p className="whitespace-pre-wrap">{form.diagnosis}</p>}
       </RefCard>
 
-      {/* Surgical Procedure */}
+      {/* ED Management (RVS Code / Notes — was labeled "Surgical Procedure") */}
       <RefCard
-        title="Surgical Procedure"
+        title="ED Management"
         icon={Pill}
-        empty={!form.surgicalProcedureRvsCode && !form.surgicalProcedureNotes ? "No surgical procedure recorded yet." : null}
+        empty={!form.surgicalProcedureRvsCode && !form.surgicalProcedureNotes ? "No ED management recorded yet." : null}
       >
         {(form.surgicalProcedureRvsCode || form.surgicalProcedureNotes) && (
           <p className="whitespace-pre-wrap">
@@ -2303,11 +2304,32 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── SURGICAL PROCEDURE (doctor) ── */}
+        {/* ── ED MANAGEMENT (doctor) ── */}
+        {/* Was labeled "Surgical Procedure" — renamed to ED Management.
+            RvsAutocomplete is a search-and-select picker, same idea as the
+            ICD-10 picker in the Diagnosis section above: search by code,
+            description, or section, then click a result. Picking one fills
+            in BOTH fields below — surgicalProcedureRvsCode gets the code,
+            surgicalProcedureNotes gets that code's description — and both
+            stay fully editable afterward. If a procedure isn't on the RVS
+            list (or a newer code isn't in it yet), just type directly into
+            either field instead; nothing here requires using the picker. */}
         {canEdit("surgicalProcedure") && (
         <div>
-          <SectionHeader title="Surgical Procedure" />
+          <SectionHeader title="ED Management" />
           <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
+            <Field label="Search RVS Code / Procedure">
+              <RvsAutocomplete
+                onSelect={(entry) => {
+                  set("surgicalProcedureRvsCode", entry.code);
+                  set("surgicalProcedureNotes", entry.name);
+                }}
+              />
+              <p className="mt-1 text-[11px] text-slate-400">
+                PhilHealth RVS procedure list — selecting one fills in the RVS Code and Notes fields
+                below. If a code you need isn't here, just type it in directly.
+              </p>
+            </Field>
             <Field label="RVS Code">
               <input
                 name="surgicalProcedureRvsCode"
