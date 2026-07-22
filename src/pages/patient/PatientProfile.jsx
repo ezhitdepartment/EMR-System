@@ -5,7 +5,6 @@ import { hasFeatureAccess } from "../../data/roles";
 import {
   ArrowLeft,
   User,
-  FileEdit,
   Phone,
   MapPin,
   ShieldCheck,
@@ -2195,6 +2194,100 @@ export default function PatientProfile() {
                 </div>
               </div>
 
+              {/* Consultation Summary — chief complaint, history of present
+                  illness, diagnosis, disposition, allergies, blood type, and
+                  medication orders from this patient's most recently saved
+                  Consultation Form entry (see `consultation` above). These
+                  fields were already being captured and saved — they were
+                  just never displayed anywhere on the profile itself, even
+                  though a nurse or doctor had already filled them in. */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 flex items-center gap-1.5">
+                    <ClipboardCheck size={14} className="text-teal-700" />
+                    Consultation Summary
+                  </p>
+                  {consultation && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConsultationReadOnly(false);
+                        setConsultationReturnTo(null);
+                        setConsultationEncounter(null);
+                        setShowConsultation(true);
+                      }}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-800"
+                    >
+                      Update in Consultation Form
+                    </button>
+                  )}
+                </div>
+                {consultation ? (
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">Chief Complaint</dt>
+                      <dd className="text-slate-800 font-medium leading-snug whitespace-pre-wrap">
+                        {consultation.chiefComplaint || "—"}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">
+                        History of Present Illness
+                      </dt>
+                      <dd className="text-slate-800 font-medium leading-snug whitespace-pre-wrap">
+                        {consultation.historyOfPresentIllness || "—"}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">Diagnosis</dt>
+                      <dd className="text-slate-800 font-medium leading-snug whitespace-pre-wrap">
+                        {formatDiagnosisText(consultation) || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">Disposition</dt>
+                      <dd className="text-slate-800 font-medium leading-snug">
+                        {consultation.disposition || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">Blood Type</dt>
+                      <dd className="text-slate-800 font-medium leading-snug">
+                        {consultation.bloodType || "—"}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">Allergies</dt>
+                      <dd className="text-slate-800 font-medium leading-snug whitespace-pre-wrap">
+                        {consultation.allergies || "—"}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">Medication Orders</dt>
+                      <dd className="text-slate-800 font-medium leading-snug whitespace-pre-wrap">
+                        {consultation.medicationOrders || "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <div className="flex flex-col items-start gap-2 py-1">
+                    <p className="text-xs text-slate-400">No consultation recorded yet.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConsultationReadOnly(false);
+                        setConsultationReturnTo(null);
+                        setConsultationEncounter(null);
+                        setShowConsultation(true);
+                      }}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-800"
+                    >
+                      Record in Consultation Form
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Additional information */}
               <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mt-2">
                 Additional Information
@@ -2255,7 +2348,7 @@ export default function PatientProfile() {
                 <Row label="Phone (Cell)" value={patient.emergencyPhoneCell} />
               </Card>
 
-              {emr ? (
+              {emr && (
                 <>
                   <Card title="Health Coverage" icon={<IdCard size={15} />}>
                     <Row label="PhilHealth Member" value={emr.philhealthMember} />
@@ -2274,18 +2367,6 @@ export default function PatientProfile() {
                     />
                   </Card>
                 </>
-              ) : (
-                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center text-center gap-2 sm:col-span-2 xl:col-span-1">
-                  <FileEdit size={20} className="text-slate-300" />
-                  <p className="text-xs font-medium text-slate-500">No EMR on file yet</p>
-                  <button
-                    type="button"
-                    onClick={() => setShowEmr(true)}
-                    className="text-xs font-semibold text-teal-700 hover:text-teal-800"
-                  >
-                    Add EMR details
-                  </button>
-                </div>
               )}
               </div>
             </div>

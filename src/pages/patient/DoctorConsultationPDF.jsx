@@ -564,7 +564,7 @@ export default function DoctorConsultationPDF({ patient = {}, form = {}, triage 
             <View style={s.signCell}>
               <Text style={s.signLine}> </Text>
               <Text style={s.signCaption}>
-                OPD NURSE{"\n"}
+                NURSE{"\n"}
                 {form.nurseOnDuty || "SIGNATURE OVER PRINTED NAME (Please use TRODAT)"}
               </Text>
             </View>
