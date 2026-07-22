@@ -64,7 +64,7 @@ import {
 } from "../../utils/encounters";
 import { loadLabOrders, createLabOrder, formatDateCreated, DIAGNOSTIC_GROUPS } from "../../utils/labOrders";
 import { getOrderStatus, ORDER_STATUS_STYLES } from "../../utils/labOrderDiagnostics";
-import { loadMedicinePrescriptions } from "../../utils/medicinePrescriptions";
+import { loadMedicinePrescriptions, upsertMedicinePrescriptionForEncounter } from "../../utils/medicinePrescriptions";
 import {
   loadSharedClinical,
   saveSharedClinical,
@@ -1187,6 +1187,47 @@ export default function PatientProfile() {
       }
     }
 
+    // Sync the "Medicine Prescription" section of this consultation into
+    // the real Medicine Prescriptions feature (medicine_prescriptions /
+    // prescription_items tables). Without this, what a doctor prescribes
+    // here only ever lived inside the consultation record itself (details
+    // jsonb) — it never actually reached the Medicine Prescriptions
+    // list/side-panel/PDF, which is a completely separate table. Only
+    // doctors have a Medicine Prescription section on this form (see
+    // DOCTOR_SECTIONS in ConsultationForm.jsx), and this only fires when
+    // at least one medicine was actually selected. upsertMedicinePrescriptionForEncounter
+    // keys off consultationEncounter?.id, so re-saving the same
+    // registration's consultation updates that one prescription instead of
+    // stacking up duplicates (same guarantee Lab Orders already has above).
+    if (user?.role === "doctor") {
+      const rxItems = (formData.prescriptionItems || []).filter((it) => it.medicineName?.trim());
+      if (rxItems.length > 0) {
+        const prescribedBy = [user?.prefix, user?.firstName, user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        try {
+          await upsertMedicinePrescriptionForEncounter({
+            hospitalNo,
+            encounterId: consultationEncounter?.id ?? null,
+            prescribedBy: prescribedBy || "—",
+            createdBy: user?.id ?? null,
+            items: rxItems,
+          });
+          await refreshMedicinePrescriptions(hospitalNo);
+        } catch (err) {
+          // The consultation itself already saved successfully above —
+          // same "don't let this look like the whole save failed" treatment
+          // the lab-order auto-create gets.
+          alert(
+            `The consultation was saved, but the medicine prescription couldn't be synced to the Medicine Prescriptions list: ${
+              err.message || "unknown error"
+            }`
+          );
+        }
+      }
+    }
+
     // Personal Details / Health Coverage / Emergency Contact live here now
     // (moved from the EMR) — keep the patient master record's overlapping
     // fields in sync so the rest of the profile updates immediately too.
@@ -1502,6 +1543,34 @@ export default function PatientProfile() {
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
     setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  // The Konsulta/Yakap Referral needs data that lives on TWO different
+  // roles' consultation entries — the nurse's intake (PhilHealth PIN, under
+  // Health Coverage) and the doctor's clinical assessment (Chief Complaint,
+  // History of Present Illness, Diagnosis, Medication, Disposition — see
+  // DOCTOR_SECTIONS in ConsultationForm.jsx). Reading from whichever entry
+  // happened to save most recently (the single `consultation` state) is
+  // exactly what caused prescriptions/diagnoses to go missing from this
+  // referral: if the nurse saves after the doctor, `consultation` becomes
+  // the nurse's entry, which has none of the doctor's clinical fields. This
+  // resolves both, matched to the SAME registration whenever possible —
+  // same "doctor entry + matching nurse entry" pairing CF4 already uses
+  // above, just without needing the triage fetch.
+  function resolveKonsultaSources() {
+    const doctorEntries = (consultationHistoryList || []).filter(
+      (e) => e.authorRole === "doctor" || e.authorRole === "admin"
+    );
+    const nurseEntries = (consultationHistoryList || []).filter((e) => NURSE_ROLES.includes(e.authorRole));
+    const doctorEntry = doctorEntries[0] || null;
+    const nurseEntry =
+      (doctorEntry?.encounterId && nurseEntries.find((e) => e.encounterId === doctorEntry.encounterId)) ||
+      nurseEntries[0] ||
+      null;
+    const encounter =
+      (doctorEntry?.encounterId && encounters.find((e) => e.id === doctorEntry.encounterId)) ||
+      matchEncounterForConsultation(consultation, encounters);
+    return { doctorEntry, nurseEntry, encounter };
   }
 
   // CF4 has no form of its own — it's assembled from whatever the doctor
@@ -2345,18 +2414,22 @@ export default function PatientProfile() {
       )}
 
       {/* Emergency Care Benefit Referral to Konsulta/Yakap — Save Changes here; PDF download lives in the folder panel */}
-      {showKonsultaReferral && (
-        <KonsultaReferralModal
-          patient={patient}
-          emr={emr}
-          consultation={consultation}
-          encounter={matchEncounterForConsultation(consultation, encounters)}
-          shared={sharedClinical}
-          initialValues={konsultaReferral || undefined}
-          onSave={handleSaveKonsultaReferral}
-          onClose={() => setShowKonsultaReferral(false)}
-        />
-      )}
+      {showKonsultaReferral && (() => {
+        const { doctorEntry, nurseEntry, encounter } = resolveKonsultaSources();
+        return (
+          <KonsultaReferralModal
+            patient={patient}
+            emr={emr}
+            doctorEntry={doctorEntry}
+            nurseEntry={nurseEntry}
+            encounter={encounter}
+            shared={sharedClinical}
+            initialValues={konsultaReferral || undefined}
+            onSave={handleSaveKonsultaReferral}
+            onClose={() => setShowKonsultaReferral(false)}
+          />
+        );
+      })()}
 
       {/* Medical Certificate editor — pre-filled from patient + EMR, save overwrites */}
       {showMedicalCertificate && (

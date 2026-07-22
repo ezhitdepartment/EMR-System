@@ -27,7 +27,6 @@ import {
   STATUS,
   STATUS_STYLES,
   CONSULTATION_TYPE_OPTIONS,
-  PAYMENT_TYPE_OPTIONS,
   MIGRATED_STATUS_OPTIONS,
   PCU_STATUS_OPTIONS,
   PATIENT_TYPE_OPTIONS,
@@ -88,7 +87,6 @@ export default function Encounters() {
   const [migratedFilter, setMigratedFilter] = useState("All");
   const [apptYear, setApptYear] = useState("");
   const [apptMonth, setApptMonth] = useState("");
-  const [paymentTypeFilter, setPaymentTypeFilter] = useState("All");
   const [consultationTypeFilter, setConsultationTypeFilter] = useState("All");
   const [pcuStatusFilter, setPcuStatusFilter] = useState("All");
   const [patientTypeFilter, setPatientTypeFilter] = useState("All");
@@ -135,14 +133,13 @@ export default function Encounters() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, tab, migratedFilter, apptYear, apptMonth, paymentTypeFilter, consultationTypeFilter, pcuStatusFilter, patientTypeFilter]);
+  }, [search, tab, migratedFilter, apptYear, apptMonth, consultationTypeFilter, pcuStatusFilter, patientTypeFilter]);
 
   const hasActiveFilters =
     search.trim() !== "" ||
     migratedFilter !== "All" ||
     apptYear !== "" ||
     apptMonth !== "" ||
-    paymentTypeFilter !== "All" ||
     consultationTypeFilter !== "All" ||
     pcuStatusFilter !== "All" ||
     patientTypeFilter !== "All";
@@ -152,7 +149,6 @@ export default function Encounters() {
     setMigratedFilter("All");
     setApptYear("");
     setApptMonth("");
-    setPaymentTypeFilter("All");
     setConsultationTypeFilter("All");
     setPcuStatusFilter("All");
     setPatientTypeFilter("All");
@@ -247,7 +243,6 @@ export default function Encounters() {
     const result = withDerived.filter((e) => {
       if (tab !== "ALL" && e.status !== tab) return false;
       if (migratedFilter !== "All" && e.migratedStatus !== migratedFilter) return false;
-      if (paymentTypeFilter !== "All" && e.paymentType !== paymentTypeFilter) return false;
       if (consultationTypeFilter !== "All" && e.consultationType !== consultationTypeFilter) return false;
       if (pcuStatusFilter !== "All" && e.pcuStatus !== pcuStatusFilter) return false;
       if (patientTypeFilter !== "All" && e.patientType !== patientTypeFilter) return false;
@@ -306,7 +301,6 @@ export default function Encounters() {
     migratedFilter,
     apptYear,
     apptMonth,
-    paymentTypeFilter,
     consultationTypeFilter,
     pcuStatusFilter,
     patientTypeFilter,
@@ -371,18 +365,6 @@ export default function Encounters() {
           onYearChange={setApptYear}
           onMonthChange={setApptMonth}
         />
-        <select
-          value={paymentTypeFilter}
-          onChange={(e) => setPaymentTypeFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
-        >
-          <option value="All">Payment Type</option>
-          {PAYMENT_TYPE_OPTIONS.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
         <select
           value={consultationTypeFilter}
           onChange={(e) => setConsultationTypeFilter(e.target.value)}
