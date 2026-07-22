@@ -1340,6 +1340,33 @@ export default function ConsultationForm({
     );
   }
 
+  // ED Management — stacks RVS codes/descriptions instead of replacing
+  // whatever's already there, so picking 5 codes in a row builds up all 5
+  // rather than each pick overwriting the last one. Uses the functional
+  // setForm updater (not the `set` helper, which closes over the `form`
+  // from render time) so a doctor clicking through several results in
+  // quick succession can't lose one to a stale-closure race.
+  // surgicalProcedureRvsCode grows as a comma-separated list of codes;
+  // surgicalProcedureNotes grows as one sentence per code, each ending in
+  // its own period — "put a dot after the description of every RVS code".
+  // Both fields stay plain, fully editable text afterward, so a doctor can
+  // freely rewrite/trim/reorder them, or type in a code/procedure by hand
+  // that isn't on the RVS list at all.
+  function addSurgicalProcedureRvsCode(entry) {
+    setForm((f) => {
+      const prevCode = f.surgicalProcedureRvsCode.trim();
+      const prevNotes = f.surgicalProcedureNotes.trim();
+      const nextName = entry.name.trim();
+      return {
+        ...f,
+        surgicalProcedureRvsCode: prevCode ? `${prevCode}, ${entry.code}` : entry.code,
+        surgicalProcedureNotes: prevNotes
+          ? `${prevNotes} ${nextName}.`
+          : `${nextName}.`,
+      };
+    });
+  }
+
   // PhilHealth CF4 — Course in the Ward: a running, dated log of the
   // Doctor's Order/Action (Doctor role — see DOCTOR_SECTIONS).
   // Same add/update/remove shape as the prescription items above.
@@ -2308,29 +2335,27 @@ export default function ConsultationForm({
         {/* Was labeled "Surgical Procedure" — renamed to ED Management.
             RvsAutocomplete is a search-and-select picker, same idea as the
             ICD-10 picker in the Diagnosis section above: search by code,
-            description, or section, then click a result. Picking one fills
-            in BOTH fields below — surgicalProcedureRvsCode gets the code,
-            surgicalProcedureNotes gets that code's description — and both
-            stay fully editable afterward. If a procedure isn't on the RVS
-            list (or a newer code isn't in it yet), just type directly into
-            either field instead; nothing here requires using the picker. */}
+            description, or section, then click a result. Picking one
+            STACKS onto both fields below instead of replacing them —
+            surgicalProcedureRvsCode grows as "10060, 11040, ..." and
+            surgicalProcedureNotes grows one sentence per code, each ending
+            in its own period, so picking 5 codes in a row builds up all 5
+            (see addSurgicalProcedureRvsCode). Both fields stay fully
+            editable afterward. If a procedure isn't on the RVS list (or a
+            newer code isn't in it yet), just type directly into either
+            field instead; nothing here requires using the picker. */}
         {canEdit("surgicalProcedure") && (
         <div>
           <SectionHeader title="ED Management" />
           <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
             <Field label="Search RVS Code / Procedure">
-              <RvsAutocomplete
-                onSelect={(entry) => {
-                  set("surgicalProcedureRvsCode", entry.code);
-                  set("surgicalProcedureNotes", entry.name);
-                }}
-              />
+              <RvsAutocomplete onSelect={addSurgicalProcedureRvsCode} />
               <p className="mt-1 text-[11px] text-slate-400">
-                PhilHealth RVS procedure list — selecting one fills in the RVS Code and Notes fields
-                below. If a code you need isn't here, just type it in directly.
+                PhilHealth RVS procedure list — pick as many as apply; each one stacks onto the RVS
+                Code and Notes fields below. If a code you need isn't here, just type it in directly.
               </p>
             </Field>
-            <Field label="RVS Code">
+            <Field label="RVS Code(s)">
               <input
                 name="surgicalProcedureRvsCode"
                 value={form.surgicalProcedureRvsCode}
@@ -2343,7 +2368,7 @@ export default function ConsultationForm({
                 name="surgicalProcedureNotes"
                 value={form.surgicalProcedureNotes}
                 onChange={handle}
-                rows={3}
+                rows={5}
                 className={textareaClass}
               />
             </Field>

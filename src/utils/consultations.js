@@ -148,6 +148,25 @@ export function formatDiagnosisText(entry) {
   return "";
 }
 
+// "10060, 11040 — Incision and drainage of abscess. Debridement; skin,
+// partial thickness." — the doctor's ED Management entry: whichever RVS
+// code(s) were picked/typed into surgicalProcedureRvsCode, plus whatever
+// ended up in surgicalProcedureNotes (auto-stacked, one sentence per code
+// picked from the RVS list, but just as often edited/typed by hand). Same
+// "single source of truth" role formatDiagnosisText plays for Diagnosis —
+// used by the Consultation Form's own reference panel, the Patient
+// Profile consultation summary, and (for the code/notes split, not this
+// combined string) the CF4 PDF.
+export function formatEdManagementText(entry) {
+  if (!entry) return "";
+
+  const code = (entry.surgicalProcedureRvsCode || "").trim();
+  const notes = (entry.surgicalProcedureNotes || "").trim();
+
+  if (code && notes) return `${code} — ${notes}`;
+  return code || notes || "";
+}
+
 // Every consultation ever saved, across every patient, with just enough
 // patient info attached (name, date of birth) for reports to compute
 // names/ages without a second round-trip per row. Used by utils/reports.js

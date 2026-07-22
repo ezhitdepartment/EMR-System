@@ -72,7 +72,7 @@ import {
   fillBlanksFromShared,
 } from "./sharedClinicalFields";
 import { findPatientById, updatePatient, savePatientPhoto } from "../../utils/patients";
-import { loadConsultationHistory, saveConsultationEntry, formatDiagnosisText } from "../../utils/consultations";
+import { loadConsultationHistory, saveConsultationEntry, formatDiagnosisText, formatEdManagementText } from "../../utils/consultations";
 import {
   loadAllPatientDocuments,
   saveEmr,
@@ -2265,7 +2265,7 @@ export default function PatientProfile() {
                     <div className="sm:col-span-2">
                       <dt className="text-[11px] text-slate-400 uppercase tracking-wide">ED Management</dt>
                       <dd className="text-slate-800 font-medium leading-snug whitespace-pre-wrap">
-                        {consultation.medicationOrders || "—"}
+                        {formatEdManagementText(consultation) || "—"}
                       </dd>
                     </div>
                   </dl>

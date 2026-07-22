@@ -65,14 +65,16 @@ function scoreEntry(entry, rawQuery, tokens) {
 
 // RVS (Relative Value Scale) procedure code picker for the ED Management
 // section — search-and-select, exactly like the ICD-10 diagnosis picker
-// (Icd10Autocomplete) elsewhere on this form, but single-select: picking a
-// result calls onSelect(entry) once and clears the search box, instead of
-// building up a list of chips. It's deliberately not the thing that holds
-// the RVS Code / Notes values itself — ConsultationForm wires
-// onSelect to fill in the RVS Code field with entry.code and the Notes box
-// with entry.name, and both of those plain fields are left fully editable
-// afterward (so a doctor can adjust the wording, or just type a code/note
-// by hand for a procedure that isn't on this list yet).
+// (Icd10Autocomplete) elsewhere on this form. Each click calls onSelect(entry)
+// once and clears the search box (the dropdown stays open so several codes
+// can be picked back-to-back) — it's deliberately not the thing that holds
+// the RVS Code / Notes values itself. ConsultationForm.jsx's
+// addSurgicalProcedureRvsCode stacks every pick onto the RVS Code field
+// (comma-separated) and the Notes field (one sentence per code, each
+// ending in its own period), and both of those plain fields are left fully
+// editable afterward (so a doctor can adjust the wording, reorder/trim
+// entries, or just type a code/note by hand for a procedure that isn't on
+// this list yet).
 //
 // Backed by the full PhilHealth "List of Procedure Case Rates" schedule
 // (src/data/rvsCodes.js). Search matches on code, description, or
@@ -125,7 +127,10 @@ export default function RvsAutocomplete({ onSelect, placeholder = "Search an RVS
   function pick(entry) {
     onSelect(entry);
     setQuery("");
-    setOpen(false);
+    // Deliberately left open — ED Management stacks multiple RVS codes
+    // (see addSurgicalProcedureRvsCode in ConsultationForm.jsx), so a
+    // doctor picking several in a row shouldn't have to reopen the list
+    // after every single pick.
   }
 
   function handleKeyDown(e) {

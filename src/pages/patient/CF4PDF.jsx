@@ -9,7 +9,7 @@
 //     nearly every CF4 field: Chief Complaint, Admitting/Discharge
 //     Diagnosis, Case Rate Codes, admission/discharge date & time,
 //     Referral, Pertinent Signs & Symptoms, Physical Examination on
-//     Admission, Course in the Ward, Surgical Procedure/RVS Code,
+//     Admission, Course in the Ward, ED Management (Surgical Procedure/RVS Code),
 //     Outcome of Treatment, Drugs/Medicines, and the Certification
 //     signature block.
 //   - `erEntry` — the ER nurse's most recent consultation save (matched to
@@ -30,7 +30,7 @@
 //         OB-GYN), Signs & Symptoms, Referral.
 // Page 2: Physical Examination on Admission (General Survey, Vitals,
 //         HEENT, and every PE_SYSTEMS group — all of it, not split
-//         mid-section), Course in the Ward, Surgical Procedure, Drugs /
+//         mid-section), Course in the Ward, ED Management, Drugs /
 //         Medicines, Outcome of Treatment, Certification.
 //
 // Every field on this form is a real doctor/nurse text field, so react-pdf
@@ -407,7 +407,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
           )}
         </View>
 
-        <Text style={s.sectionLabel}>Surgical Procedure / RVS Code</Text>
+        <Text style={s.sectionLabel}>ED Management</Text>
         <View style={[s.blkVal, { marginBottom: 3 }]}>
           <Text>
             {dash(doctorEntry.surgicalProcedureRvsCode)}
