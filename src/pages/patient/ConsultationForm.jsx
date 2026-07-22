@@ -456,7 +456,7 @@ const NURSE_SECTIONS = new Set([
 
 const DOCTOR_SECTIONS = new Set([
   "diagnosis",
-  "medication",
+  "surgicalProcedure",
   "disposition",
   "medicinePrescription",
   "diagnostics",
@@ -470,12 +470,6 @@ const DOCTOR_SECTIONS = new Set([
   // doctor's half of the form, not the nurse's.
   "courseInWard",
 ]);
-
-// Surgical Procedure/RVS Code — per hospital workflow this is logged by
-// the ER Nurse specifically, not OPD Nurse and not Doctor, so it gets its
-// own section set rather than joining NURSE_SECTIONS (shared by both
-// nurse roles) or DOCTOR_SECTIONS.
-const ER_NURSE_ONLY_SECTIONS = new Set(["surgicalProcedure"]);
 
 export const initialConsultationForm = {
   // Identity — pre-filled from the patient record
@@ -564,9 +558,11 @@ export const initialConsultationForm = {
   referredFromOtherHCI: "",
   referringHCIName: "",
 
-  // Medication — the doctor's new orders for this visit (distinct from
-  // Active Medication, which is the patient's existing home medication
-  // taken during nurse intake).
+  // Medication — legacy field from consultations recorded before Surgical
+  // Procedure took its place in the doctor's section (see
+  // surgicalProcedureRvsCode/Notes below). No longer has an input in this
+  // form; kept only so older saved consultations that have a value here
+  // still display correctly (Consultation Record PDF, Patient Profile).
   medicationOrders: "",
 
   // Disposition
@@ -661,11 +657,11 @@ export const initialConsultationForm = {
   attendingSignature: "",
 
   // PhilHealth CF4 — Course in the Ward (Doctor's Order/Action, a running
-  // dated log) and Surgical Procedure/RVS Code. Course in the Ward is
-  // captured by the Doctor role (see DOCTOR_SECTIONS below); Surgical
-  // Procedure is still captured by the ER Nurse role (see
-  // ER_NURSE_ONLY_SECTIONS below).
+  // dated log), captured by the Doctor role (see DOCTOR_SECTIONS below).
   courseInWardEntries: [],
+
+  // Surgical Procedure/RVS Code — now captured by the Doctor role, in the
+  // spot the Medication field used to occupy (see DOCTOR_SECTIONS below).
   surgicalProcedureRvsCode: "",
   surgicalProcedureNotes: "",
 
@@ -1087,7 +1083,8 @@ function DoctorConsultationReferencePanel({ patient, form }) {
     .join(" ");
   const hasDoctorRecord =
     form.diagnosis ||
-    form.medicationOrders ||
+    form.surgicalProcedureRvsCode ||
+    form.surgicalProcedureNotes ||
     form.disposition ||
     (form.icdDiagnoses || []).length > 0 ||
     (form.diagnosticsSelected || []).length > 0 ||
@@ -1155,13 +1152,19 @@ function DoctorConsultationReferencePanel({ patient, form }) {
         {form.diagnosis && <p className="whitespace-pre-wrap">{form.diagnosis}</p>}
       </RefCard>
 
-      {/* Medication */}
+      {/* Surgical Procedure */}
       <RefCard
-        title="Medication"
+        title="Surgical Procedure"
         icon={Pill}
-        empty={!form.medicationOrders ? "No medication recorded yet." : null}
+        empty={!form.surgicalProcedureRvsCode && !form.surgicalProcedureNotes ? "No surgical procedure recorded yet." : null}
       >
-        {form.medicationOrders && <p className="whitespace-pre-wrap">{form.medicationOrders}</p>}
+        {(form.surgicalProcedureRvsCode || form.surgicalProcedureNotes) && (
+          <p className="whitespace-pre-wrap">
+            {form.surgicalProcedureRvsCode}
+            {form.surgicalProcedureRvsCode && form.surgicalProcedureNotes ? " — " : ""}
+            {form.surgicalProcedureNotes}
+          </p>
+        )}
       </RefCard>
 
       {/* Disposition */}
@@ -1246,7 +1249,6 @@ export default function ConsultationForm({
   // view-only sections stop rendering at all.
   function canEdit(section) {
     if (user?.role === "admin") return true;
-    if (ER_NURSE_ONLY_SECTIONS.has(section)) return user?.role === "er_nurse";
     if (isNurse) return NURSE_SECTIONS.has(section);
     if (isDoctor) return DOCTOR_SECTIONS.has(section);
     return false;
@@ -2301,26 +2303,29 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── MEDICATION (doctor) ── */}
-        {/* Wires up form.medicationOrders — this field already existed
-            (mapped to consultations.medication_orders in
-            utils/consultations.js and printed on the Consultation Record
-            PDF right after Diagnosis) but had no input anywhere in the
-            form itself, so there was no way for a doctor to actually type
-            it in. */}
-        {canEdit("medication") && (
+        {/* ── SURGICAL PROCEDURE (doctor) ── */}
+        {canEdit("surgicalProcedure") && (
         <div>
-          <SectionHeader title="Medication" />
-          <Field label="Medication">
-            <textarea
-              name="medicationOrders"
-              value={form.medicationOrders}
-              onChange={handle}
-              rows={4}
-              placeholder="Medication ordered for this visit"
-              className={textareaClass}
-            />
-          </Field>
+          <SectionHeader title="Surgical Procedure" />
+          <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
+            <Field label="RVS Code">
+              <input
+                name="surgicalProcedureRvsCode"
+                value={form.surgicalProcedureRvsCode}
+                onChange={handle}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Notes (attach photocopy of OR technique separately)">
+              <textarea
+                name="surgicalProcedureNotes"
+                value={form.surgicalProcedureNotes}
+                onChange={handle}
+                rows={3}
+                className={textareaClass}
+              />
+            </Field>
+          </div>
         </div>
         )}
 
@@ -2780,32 +2785,6 @@ export default function ConsultationForm({
               <Plus size={14} />
               Add entry
             </button>
-          </div>
-        </div>
-        )}
-
-        {/* ── PHILHEALTH CF4: SURGICAL PROCEDURE (ER Nurse only) ── */}
-        {canEdit("surgicalProcedure") && (
-        <div>
-          <SectionHeader title="Surgical Procedure" />
-          <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
-            <Field label="RVS Code">
-              <input
-                name="surgicalProcedureRvsCode"
-                value={form.surgicalProcedureRvsCode}
-                onChange={handle}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Notes (attach photocopy of OR technique separately)">
-              <textarea
-                name="surgicalProcedureNotes"
-                value={form.surgicalProcedureNotes}
-                onChange={handle}
-                rows={3}
-                className={textareaClass}
-              />
-            </Field>
           </div>
         </div>
         )}

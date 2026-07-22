@@ -2263,7 +2263,7 @@ export default function PatientProfile() {
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
-                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">Medication Orders</dt>
+                      <dt className="text-[11px] text-slate-400 uppercase tracking-wide">ED Management</dt>
                       <dd className="text-slate-800 font-medium leading-snug whitespace-pre-wrap">
                         {consultation.medicationOrders || "—"}
                       </dd>

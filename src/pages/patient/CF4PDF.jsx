@@ -9,14 +9,13 @@
 //     nearly every CF4 field: Chief Complaint, Admitting/Discharge
 //     Diagnosis, Case Rate Codes, admission/discharge date & time,
 //     Referral, Pertinent Signs & Symptoms, Physical Examination on
-//     Admission, Course in the Ward, Outcome of Treatment,
-//     Drugs/Medicines, and the Certification signature block.
+//     Admission, Course in the Ward, Surgical Procedure/RVS Code,
+//     Outcome of Treatment, Drugs/Medicines, and the Certification
+//     signature block.
 //   - `erEntry` — the ER nurse's most recent consultation save (matched to
 //     the same encounter as `doctorEntry` when possible). Owns Pertinent
-//     Past Medical History, OB/GYN History, and Surgical Procedure/RVS
-//     Code — see ER_NURSE_ONLY_SECTIONS and NURSE_SECTIONS in
-//     ConsultationForm.jsx for why those specifically live there instead
-//     of on the doctor's entry.
+//     Past Medical History and OB/GYN History — see NURSE_SECTIONS in
+//     ConsultationForm.jsx.
 //   - `patient` — name, sex, date of birth, Hospital No.
 //   - `triage` — the encounter's vitals (BP/HR/RR/Temp), for the Vital
 //     Signs line under Physical Examination on Admission.
@@ -411,8 +410,8 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
         <Text style={s.sectionLabel}>Surgical Procedure / RVS Code</Text>
         <View style={[s.blkVal, { marginBottom: 3 }]}>
           <Text>
-            {dash(erEntry.surgicalProcedureRvsCode)}
-            {erEntry.surgicalProcedureNotes ? ` — ${erEntry.surgicalProcedureNotes}` : ""}
+            {dash(doctorEntry.surgicalProcedureRvsCode)}
+            {doctorEntry.surgicalProcedureNotes ? ` — ${doctorEntry.surgicalProcedureNotes}` : ""}
           </Text>
         </View>
 
