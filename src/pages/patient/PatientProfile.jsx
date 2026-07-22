@@ -52,6 +52,7 @@ import MedicalCertificateForm from "./MedicalCertificateForm";
 import MedicalCertificatePDF from "./MedicalCertificatePDF";
 import ConsultationForm, { NURSE_ROLES } from "./ConsultationForm";
 import ConsultationRecordPDF from "./ConsultationRecordPDF";
+import NurseConsultationPDF from "./NurseConsultationPDF";
 import CF4PDF from "./CF4PDF";
 import CreateLabOrderModal from "../../features/lab-orders/CreateLabOrderModal";
 import ViewMedicinePrescriptionModal from "../../features/medicine-prescriptions/ViewMedicinePrescriptionModal";
@@ -1537,8 +1538,12 @@ export default function PatientProfile() {
   }
 
   async function handleViewConsultationEntryPdf(entry) {
+    // Nurse-authored entries (ER/OPD) print as the paper-form replica —
+    // see NurseConsultationPDF.jsx. Everything else (doctor, admin) keeps
+    // using the general-purpose ConsultationRecordPDF template.
+    const PdfComponent = NURSE_ROLES.includes(entry?.authorRole) ? NurseConsultationPDF : ConsultationRecordPDF;
     const blob = await pdf(
-      <ConsultationRecordPDF patient={patient} form={entry} generatedBy={user?.username} />
+      <PdfComponent patient={patient} form={entry} generatedBy={user?.username} />
     ).toBlob();
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");

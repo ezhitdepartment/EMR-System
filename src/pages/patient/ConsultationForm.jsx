@@ -464,14 +464,18 @@ const DOCTOR_SECTIONS = new Set([
   "signsAndSymptoms",
   "physicalExamination",
   "certification",
+  // Course in the Ward (Doctor's Order/Action) — moved here from the ER
+  // Nurse's section set. It's the attending physician's running log of
+  // orders/actions taken during the patient's stay, so it belongs on the
+  // doctor's half of the form, not the nurse's.
+  "courseInWard",
 ]);
 
-// Course in the Ward (Doctor's Order/Action) and Surgical Procedure/RVS
-// Code — per hospital workflow these are logged by the ER Nurse
-// specifically, not OPD Nurse and not Doctor, so they get their own
-// section set rather than joining NURSE_SECTIONS (shared by both nurse
-// roles) or DOCTOR_SECTIONS.
-const ER_NURSE_ONLY_SECTIONS = new Set(["courseInWard", "surgicalProcedure"]);
+// Surgical Procedure/RVS Code — per hospital workflow this is logged by
+// the ER Nurse specifically, not OPD Nurse and not Doctor, so it gets its
+// own section set rather than joining NURSE_SECTIONS (shared by both
+// nurse roles) or DOCTOR_SECTIONS.
+const ER_NURSE_ONLY_SECTIONS = new Set(["surgicalProcedure"]);
 
 export const initialConsultationForm = {
   // Identity — pre-filled from the patient record
@@ -636,9 +640,10 @@ export const initialConsultationForm = {
   attendingSignature: "",
 
   // PhilHealth CF4 — Course in the Ward (Doctor's Order/Action, a running
-  // dated log) and Surgical Procedure/RVS Code. Per hospital workflow
-  // these two are captured by the ER Nurse role rather than the doctor —
-  // see ER_NURSE_ONLY_SECTIONS below.
+  // dated log) and Surgical Procedure/RVS Code. Course in the Ward is
+  // captured by the Doctor role (see DOCTOR_SECTIONS below); Surgical
+  // Procedure is still captured by the ER Nurse role (see
+  // ER_NURSE_ONLY_SECTIONS below).
   courseInWardEntries: [],
   surgicalProcedureRvsCode: "",
   surgicalProcedureNotes: "",
@@ -1312,7 +1317,7 @@ export default function ConsultationForm({
   }
 
   // PhilHealth CF4 — Course in the Ward: a running, dated log of the
-  // Doctor's Order/Action (ER Nurse role — see ER_NURSE_ONLY_SECTIONS).
+  // Doctor's Order/Action (Doctor role — see DOCTOR_SECTIONS).
   // Same add/update/remove shape as the prescription items above.
   function addCourseInWardEntry() {
     set("courseInWardEntries", [...form.courseInWardEntries, { id: nextId(), date: "", orderAction: "" }]);
@@ -2636,7 +2641,7 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── PHILHEALTH CF4: COURSE IN THE WARD (ER Nurse only) ── */}
+        {/* ── PHILHEALTH CF4: COURSE IN THE WARD (Doctor only) ── */}
         {canEdit("courseInWard") && (
         <div>
           <SectionHeader title="Course in the Ward" />

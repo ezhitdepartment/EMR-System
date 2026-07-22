@@ -9,14 +9,14 @@
 //     nearly every CF4 field: Chief Complaint, Admitting/Discharge
 //     Diagnosis, Case Rate Codes, admission/discharge date & time,
 //     Referral, Pertinent Signs & Symptoms, Physical Examination on
-//     Admission, Outcome of Treatment, Drugs/Medicines, and the
-//     Certification signature block.
+//     Admission, Course in the Ward, Outcome of Treatment,
+//     Drugs/Medicines, and the Certification signature block.
 //   - `erEntry` — the ER nurse's most recent consultation save (matched to
 //     the same encounter as `doctorEntry` when possible). Owns Pertinent
-//     Past Medical History, OB/GYN History, Course in the Ward, and
-//     Surgical Procedure/RVS Code — see ER_NURSE_ONLY_SECTIONS and
-//     NURSE_SECTIONS in ConsultationForm.jsx for why those specifically
-//     live there instead of on the doctor's entry.
+//     Past Medical History, OB/GYN History, and Surgical Procedure/RVS
+//     Code — see ER_NURSE_ONLY_SECTIONS and NURSE_SECTIONS in
+//     ConsultationForm.jsx for why those specifically live there instead
+//     of on the doctor's entry.
 //   - `patient` — name, sex, date of birth, Hospital No.
 //   - `triage` — the encounter's vitals (BP/HR/RR/Temp), for the Vital
 //     Signs line under Physical Examination on Admission.
@@ -213,7 +213,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
     .join("; ");
   const obGyneNA = !isFemale;
   const referred = doctorEntry.referredFromOtherHCI;
-  const courseInWard = (erEntry.courseInWardEntries || []).filter((e) => e.date || e.orderAction);
+  const courseInWard = (doctorEntry.courseInWardEntries || []).filter((e) => e.date || e.orderAction);
   const prescriptionItems = (doctorEntry.prescriptionItems || []).filter(
     (i) => i.medicineName || i.instructions
   );
