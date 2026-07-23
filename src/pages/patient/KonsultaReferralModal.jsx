@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import logoImg from "../../assets/logo.jpg";
 import { fillBlanksFromShared } from "./sharedClinicalFields";
-import { formatDiagnosisText, formatPhysicalExamText } from "../../utils/consultations";
+import { formatDiagnosisText, formatPhysicalExamText, formatManagementAtEdText } from "../../utils/consultations";
 
 function calcAge(dob) {
   if (!dob) return "";
@@ -13,6 +13,48 @@ function calcAge(dob) {
   const m = today.getMonth() - birth.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
   return String(age);
+}
+
+// The doctor-authored fields Konsulta shares with the Consultation Form —
+// computed straight from the doctor's latest saved entry, not through
+// SHARED_FIELD_MAP (see sharedClinicalFields.js), since each of these is
+// either a multi-field checklist (Physical Examination), a combination of
+// several sections (Management at ED = Course in the Ward + ED Management
+// + Surgical Procedure/RVS Code), or benefits from the same
+// doctor-entry-first precedence as Final Diagnosis — none of them is a
+// single plain field a generic map entry could point at.
+//
+// Exported so PatientProfile.jsx's handleSaveConsultation() can push a
+// fresh value into an ALREADY-SAVED Konsulta Referral the instant the
+// doctor saves the Consultation Form — not just the first time this modal
+// happens to be opened.
+export function deriveKonsultaFieldsFromDoctorEntry(doctorEntry, emr) {
+  return {
+    // "Pertinent Physical Examination on Admission" (the doctor's CF4
+    // checklist — General Survey, HEENT, Chest/Lungs, CVS, Abdomen, GU/OB,
+    // Skin/Extremities, Neuro Exam) is the primary source, with every
+    // checked finding (plus any "specify"/"Others" text) written out by
+    // formatPhysicalExamText. Falls back to the EMR's "Objective Findings"
+    // box only if the doctor hasn't examined the patient yet this visit.
+    physicalExamination: (doctorEntry && formatPhysicalExamText(doctorEntry)) || emr?.objectiveFindings || "",
+    // Initial Impression, Diagnosis, and Physician's Impression are the
+    // same clinical concept captured on three different forms — the
+    // doctor's live Diagnosis field (Consultation Form) wins when present,
+    // same precedence Final Diagnosis below already gives it; EMR's
+    // Physician's Impression is the fallback. (Kept in sync going forward
+    // too, via the "impression" shared-clinical-fields mapping — see
+    // sharedClinicalFields.js.)
+    initialImpression: doctorEntry?.diagnosis || emr?.physicianImpression || "",
+    // Course in the Ward + ED Management + Surgical Procedure/RVS Code,
+    // combined by formatManagementAtEdText. Falls back to Medication
+    // Orders, then EMR's per-eye treatment fields, only if the doctor
+    // hasn't filled in any of those three CF4 sections yet.
+    managementAtED:
+      (doctorEntry && formatManagementAtEdText(doctorEntry)) ||
+      doctorEntry?.medicationOrders ||
+      [emr?.treatmentLeft, emr?.treatmentRight].filter(Boolean).join("\n"),
+    finalDiagnosis: doctorEntry ? formatDiagnosisText(doctorEntry) : emr?.activeDiagnoses || "",
+  };
 }
 
 // Everything here already exists somewhere in the patient's record — pulled
@@ -32,8 +74,6 @@ function buildAutoFilled(patient, emr, doctorEntry, nurseEntry, encounter) {
   const fullName = [patient?.lastName, patient?.firstName, patient?.middleName]
     .filter(Boolean)
     .join(", ");
-  const managementAtED =
-    doctorEntry?.medicationOrders || [emr?.treatmentLeft, emr?.treatmentRight].filter(Boolean).join("\n");
   const recommendations =
     [doctorEntry?.disposition, doctorEntry?.dispositionNotes].filter(Boolean).join(" — ") ||
     emr?.followUpExamination ||
@@ -49,23 +89,7 @@ function buildAutoFilled(patient, emr, doctorEntry, nurseEntry, encounter) {
     pin: nurseEntry?.philhealthPin || emr?.philhealthPin || "",
     chiefComplaint: doctorEntry?.chiefComplaint || emr?.chiefComplaints || "",
     historyOfPresentIllness: doctorEntry?.historyOfPresentIllness || "",
-    // "Pertinent Physical Examination on Admission" (the doctor's CF4
-    // checklist — General Survey, HEENT, Chest/Lungs, CVS, Abdomen, GU/OB,
-    // Skin/Extremities, Neuro Exam) is the primary source now, formatted
-    // into narrative text by formatPhysicalExamText. Falls back to the
-    // EMR's "Objective Findings" box only if the doctor hasn't examined
-    // the patient yet (or checked nothing) for this visit.
-    physicalExamination: (doctorEntry && formatPhysicalExamText(doctorEntry)) || emr?.objectiveFindings || "",
-    // Initial Impression, Diagnosis, and Physician's Impression are the
-    // same clinical concept captured on three different forms — the
-    // doctor's live Diagnosis field (Consultation Form) wins when present,
-    // same precedence finalDiagnosis below already gives it; EMR's
-    // Physician's Impression is the fallback. (Kept in sync going forward
-    // too, via the "impression" shared-clinical-fields mapping — see
-    // sharedClinicalFields.js.)
-    initialImpression: doctorEntry?.diagnosis || emr?.physicianImpression || "",
-    managementAtED,
-    finalDiagnosis: doctorEntry ? formatDiagnosisText(doctorEntry) : emr?.activeDiagnoses || "",
+    ...deriveKonsultaFieldsFromDoctorEntry(doctorEntry, emr),
     recommendations,
   };
 }
@@ -78,6 +102,27 @@ function emptyNewFields() {
     receivingKonsultaProvider: "",
     dateReceived: "",
   };
+}
+
+// Layers a previously-saved referral's fields on top of the freshly
+// computed autofill — but only the fields that are actually non-blank.
+// Without this, reopening a referral that was already saved once (even
+// with some fields left blank) would let those saved blanks permanently
+// mask the autofill forever, since a plain object spread can't tell "the
+// saved value is blank" apart from "the saved value is blank ON PURPOSE".
+// This is exactly why reconnecting Physical Examination/Management at
+// ED/Initial Impression to the doctor's Consultation Form wouldn't show up
+// on a referral that had already been created before: the modal was
+// showing the old (blank) saved value instead of recomputing it. A field
+// the person actually typed something into is still never overwritten.
+function overlayNonBlank(base, overrides) {
+  const out = { ...base };
+  for (const [key, value] of Object.entries(overrides || {})) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,11 +192,7 @@ export default function KonsultaReferralModal({
     // value someone already typed into Discharge or the Medical
     // Certificate for the same concept.
     const { patched } = fillBlanksFromShared(autoFilled, "konsulta", shared || {});
-    return {
-      ...patched,
-      ...emptyNewFields(),
-      ...(initialValues || {}),
-    };
+    return overlayNonBlank({ ...patched, ...emptyNewFields() }, initialValues);
   });
 
   function handle(e) {

@@ -218,6 +218,49 @@ export function formatPhysicalExamText(entry) {
   return lines.join("\n");
 }
 
+// "07/06/2026 — Started IV fluids, ordered CBC" — the doctor's CF4
+// "Course in the Ward" log (a running list of dated Doctor's Order/Action
+// entries, see courseInWardEntries in ConsultationForm.jsx), one line per
+// entry in the order they were added. An entry missing a date still shows
+// (just without the leading date), rather than being silently dropped —
+// better to see an undated note than lose it.
+export function formatCourseInWardText(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return "";
+  return entries
+    .filter((e) => e?.date?.trim() || e?.orderAction?.trim())
+    .map((e) => (e.date?.trim() ? `${e.date} — ${e.orderAction || ""}`.trim() : (e.orderAction || "").trim()))
+    .filter(Boolean)
+    .join("\n");
+}
+
+// "Management at ED" for the Konsulta/Yakap Referral — combines every
+// doctor-entered management/intervention concept from the Consultation
+// Form's CF4 section into one narrative block, under its own subheading:
+// Course in the Ward (the dated order/action log above), ED Management
+// (edManagement — free-text notes), and Surgical Procedure/RVS Code
+// (formatEdManagementText above). Any piece that's empty is left out
+// entirely, and the whole thing is blank only if all three are. This is
+// what KonsultaReferralModal.jsx's buildAutoFilled() feeds "Management at
+// ED" from, and what PatientProfile.jsx's handleSaveConsultation() uses to
+// push a fresh value into an already-saved referral the instant the
+// doctor saves — same "read straight from the doctor's latest entry"
+// precedent as formatPhysicalExamText, since none of these three concepts
+// is a single plain field a SHARED_FIELD_MAP entry could point at.
+export function formatManagementAtEdText(entry) {
+  if (!entry) return "";
+  const parts = [];
+
+  const courseInWard = formatCourseInWardText(entry.courseInWardEntries);
+  if (courseInWard) parts.push(`Course in the Ward:\n${courseInWard}`);
+
+  if (entry.edManagement?.trim()) parts.push(`ED Management:\n${entry.edManagement.trim()}`);
+
+  const surgicalProcedure = formatEdManagementText(entry);
+  if (surgicalProcedure) parts.push(`Surgical Procedure/RVS Code:\n${surgicalProcedure}`);
+
+  return parts.join("\n\n");
+}
+
 // Every consultation ever saved, across every patient, with just enough
 // patient info attached (name, date of birth) for reports to compute
 // names/ages without a second round-trip per row. Used by utils/reports.js

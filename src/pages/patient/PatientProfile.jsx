@@ -45,7 +45,7 @@ import PatientEncountersPanel from "../../features/encounters/PatientEncountersP
 import PatientRecordPDF from "./PatientRecordPDF";
 import ErDischargeForm, { ANCILLARY_TEST_NAMES } from "./ErDischargeForm";
 import ErDischargePDF from "./ErDischargePDF";
-import KonsultaReferralModal from "./KonsultaReferralModal";
+import KonsultaReferralModal, { deriveKonsultaFieldsFromDoctorEntry } from "./KonsultaReferralModal";
 import KonsultaReferralPDF from "./KonsultaReferralPDF";
 import MedicalCertificateForm from "./MedicalCertificateForm";
 import MedicalCertificatePDF from "./MedicalCertificatePDF";
@@ -1275,6 +1275,36 @@ export default function PatientProfile() {
     setConsultation(entry);
     setConsultationHistoryList((list) => [entry, ...list]);
     await syncSharedClinical("consultation", formData);
+
+    // Push straight into an already-saved Konsulta/Yakap Referral, too —
+    // Physical Examination, Initial Impression, Management at ED (Course
+    // in the Ward + ED Management + Surgical Procedure/RVS Code), and
+    // Final Diagnosis are each computed from a checklist or a combination
+    // of several Consultation Form sections, not a single plain field, so
+    // they can't go through the generic shared-clinical-fields sync above
+    // (see deriveKonsultaFieldsFromDoctorEntry in KonsultaReferralModal.jsx
+    // and the "impression"/"diagnosis" mappings in sharedClinicalFields.js,
+    // which already cover the plain-field concepts). Only fills fields
+    // that are still blank on the saved referral — a value staff already
+    // typed directly into the referral is never overwritten, same rule
+    // every other shared field in this app follows. Only doctors author
+    // these CF4 sections (see DOCTOR_SECTIONS in ConsultationForm.jsx), so
+    // this only needs to run on a doctor's save.
+    if (user?.role === "doctor" && konsultaReferral) {
+      const derived = deriveKonsultaFieldsFromDoctorEntry(entry, emr);
+      const patch = {};
+      for (const [key, value] of Object.entries(derived)) {
+        if (!konsultaReferral[key]?.trim?.() && value) patch[key] = value;
+      }
+      if (Object.keys(patch).length > 0) {
+        const updatedReferral = await saveKonsultaReferral(
+          hospitalNo,
+          { ...konsultaReferral, ...patch },
+          user?.id ?? null
+        );
+        setKonsultaReferral(updatedReferral);
+      }
+    }
 
     // Registration auto-completion: once both a nurse and a doctor have
     // saved their part of this encounter's Consultation Form, flip its
