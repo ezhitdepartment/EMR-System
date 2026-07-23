@@ -97,6 +97,41 @@ export async function saveUserPhoto(userId, photoDataUrl) {
   return data;
 }
 
+function rowToArchivedAccount(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    prefix: row.prefix || "",
+    firstName: row.first_name || "",
+    lastName: row.last_name || "",
+    email: row.email || "",
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+// Suspended accounts, for the Archive page's "Archived User Accounts" tab.
+// "Archived" here means suspended (status = 'suspended') — the same state
+// Roles.jsx's Suspend/Unsuspend toggle already writes via
+// setAccountSuspension() above. A permanently deleted account isn't
+// listed here at all (there's no row left to list — admin-delete-account
+// removes it from auth.users and profiles entirely), so this only ever
+// shows accounts an admin can still un-suspend and restore.
+export async function loadArchivedAccounts() {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, username, role, prefix, first_name, last_name, email, status, created_at")
+    .eq("status", "suspended")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("loadArchivedAccounts failed:", error.message);
+    return [];
+  }
+  return (data || []).map(rowToArchivedAccount);
+}
+
 // Activity summary for the user profile page: how many patients they
 // registered, and how many consultation entries they've authored (plus
 // how many distinct patients those consultations touched).

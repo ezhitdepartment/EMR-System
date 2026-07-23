@@ -1,91 +1,129 @@
 import {
-  Document, Page, Text, View, StyleSheet,
+  Document, Page, Text, View, StyleSheet, Image,
 } from "@react-pdf/renderer";
+import logoImg from "../../assets/logo.jpg";
 
+// Plain black-on-white, ruled-paper styling — deliberately matches the
+// pre-printed "MEDICAL CERTIFICATE" pad (see ErDischargePDF.jsx, which
+// uses the same approach for its own printed form) rather than the
+// teal/rounded look the rest of this app's PDFs use. Sized for A4 and
+// tuned to fit on exactly one page — nothing here is meant to spill onto
+// a second sheet.
 const C = {
-  teal: "#0f766e",
-  dark: "#1e293b",
-  mid: "#64748b",
-  light: "#94a3b8",
-  border: "#cbd5e1",
-  bg: "#f8fafc",
-  white: "#ffffff",
+  black: "#0f172a",
+  mid: "#334155",
+  line: "#0f172a",
+  rule: "#94a3b8",
 };
 
 const s = StyleSheet.create({
   page: {
-    paddingTop: 28, paddingBottom: 32,
-    paddingHorizontal: 32,
-    fontSize: 8, fontFamily: "Helvetica", color: C.dark,
+    paddingTop: 26, paddingBottom: 30,
+    paddingHorizontal: 40,
+    fontSize: 9, fontFamily: "Times-Roman", color: C.black,
   },
 
+  // Letterhead — hospital name/address on the left, seal + tagline on the
+  // right, same placement as the printed pad.
   headerRow: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "flex-start",
-    borderBottomWidth: 2, borderBottomColor: C.teal,
-    paddingBottom: 6, marginBottom: 6,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
+    borderBottomWidth: 1.5, borderBottomColor: C.black,
+    paddingBottom: 8, marginBottom: 10,
   },
-  hospName: { fontSize: 13, fontFamily: "Helvetica-Bold" },
-  hospSub:  { fontSize: 7, color: C.mid, marginTop: 1 },
-  recLabel: { fontSize: 7, color: C.mid, textAlign: "right" },
-  recNo:    { fontSize: 13, fontFamily: "Helvetica-Bold", color: C.teal, textAlign: "right", letterSpacing: 1 },
-
-  bar: {
-    backgroundColor: C.dark, paddingVertical: 3, paddingHorizontal: 6,
-    marginTop: 6, marginBottom: 4, borderRadius: 2,
+  hospName: { fontSize: 17, fontFamily: "Times-Bold", letterSpacing: 0.5 },
+  hospSub: { fontSize: 7.5, color: C.mid, marginTop: 2 },
+  sealCol: { alignItems: "center", width: 70 },
+  seal: {
+    width: 52, height: 52, borderRadius: 26, borderWidth: 1, borderColor: "#cbd5e1",
+    overflow: "hidden",
   },
-  barText: { color: C.white, fontSize: 7.5, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.4 },
+  sealImg: { width: 52, height: 52, objectFit: "cover" },
 
-  row: { flexDirection: "row", marginBottom: 4 },
-  col: { flex: 1, paddingRight: 8 },
+  title: {
+    fontSize: 13, fontFamily: "Times-Bold", textAlign: "center",
+    textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 14,
+  },
 
-  fLabel: { fontSize: 6, color: C.light, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 1 },
-  fValue: { fontSize: 8, fontFamily: "Helvetica-Bold", borderBottomWidth: 0.5, borderBottomColor: C.border, paddingBottom: 1 },
+  // Label: value lines
+  fieldRow: { flexDirection: "row", marginBottom: 9, alignItems: "flex-end" },
+  fLabel: { fontSize: 8.5, fontFamily: "Times-Bold", marginRight: 4 },
+  fValue: {
+    flex: 1, fontSize: 9.5, borderBottomWidth: 0.75, borderBottomColor: C.line,
+    paddingBottom: 1, minHeight: 12,
+  },
 
-  blk: { marginBottom: 5 },
-  blkLabel: { fontSize: 6, color: C.light, textTransform: "uppercase", marginBottom: 1 },
-  blkVal: { fontSize: 7.5, backgroundColor: C.bg, padding: 4, borderRadius: 2, lineHeight: 1.4, minHeight: 20 },
+  // Ruled multi-line blocks for the descriptive/clinical fields
+  blockWrap: { marginBottom: 8 },
+  blockLabel: { fontSize: 8.5, fontFamily: "Times-Bold", marginBottom: 3 },
+  ruledBox: { borderWidth: 0.5, borderColor: C.rule },
+  ruledLineText: {
+    fontSize: 9, minHeight: 15, paddingHorizontal: 2, paddingTop: 2,
+    borderBottomWidth: 0.5, borderBottomColor: C.rule,
+  },
 
   disclaimer: {
-    marginTop: 10, padding: 6, borderWidth: 0.5, borderColor: C.border, borderRadius: 2,
-    fontSize: 6.5, color: C.mid, lineHeight: 1.4,
+    marginTop: 4, marginBottom: 6,
+    fontSize: 7, fontFamily: "Times-Italic", color: C.mid, lineHeight: 1.5,
   },
 
-  sigRow: { flexDirection: "row", marginTop: 18, gap: 16 },
-  sigBlock: { flex: 1, alignItems: "flex-start" },
-  sigLine: { width: "100%", borderBottomWidth: 1, borderBottomColor: C.dark, height: 24, marginBottom: 3 },
-  sigName: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
-  sigSub: { fontSize: 6.5, color: C.mid },
-  sigMeta: { fontSize: 7, marginTop: 4 },
+  sigRow: { marginTop: 16, alignItems: "flex-start" },
+  sigLine: { width: 260, borderBottomWidth: 1, borderBottomColor: C.black, height: 22 },
+  sigName: { fontSize: 9.5, fontFamily: "Times-Bold", marginTop: 3 },
+  sigLabel: { fontSize: 7.5, fontFamily: "Times-Italic", color: C.mid },
+  sigMetaRow: { flexDirection: "row", gap: 30, marginTop: 8 },
+  sigMeta: { fontSize: 8.5 },
 
   footer: {
-    position: "absolute", bottom: 16, left: 32, right: 32,
+    position: "absolute", bottom: 16, left: 40, right: 40,
     flexDirection: "row", justifyContent: "space-between",
-    fontSize: 6.5, color: C.light,
-    borderTopWidth: 0.5, borderTopColor: C.border, paddingTop: 4,
+    fontSize: 6.5, color: C.mid,
+    borderTopWidth: 0.5, borderTopColor: C.rule, paddingTop: 4,
   },
 });
 
-const dash = (v) => (v && String(v).trim() ? String(v) : "—");
+const dash = (v) => (v && String(v).trim() ? String(v) : "");
 
-function Bar({ title }) {
-  return <View style={s.bar}><Text style={s.barText}>{title}</Text></View>;
-}
-
-function ColField({ label, value }) {
+function FieldLine({ label, value, width }) {
   return (
-    <View style={s.col}>
-      <Text style={s.fLabel}>{label}</Text>
+    <View style={[s.fieldRow, width ? { width } : { flex: 1 }]}>
+      <Text style={s.fLabel}>{label}:</Text>
       <Text style={s.fValue}>{dash(value)}</Text>
     </View>
   );
 }
 
-function Blk({ label, value, rows = 2 }) {
+// Renders a block of text as individual ruled lines, matching the way
+// ErDischargePDF fills in its own multi-line boxes, so longer typed
+// content still reads like it belongs on a ruled pad instead of one
+// unbroken paragraph.
+function RuledBlock({ label, value, lines }) {
+  const text = dash(value);
+  const words = text.split(/\s+/).filter(Boolean);
+  const rowsOut = [];
+  let current = "";
+  const maxCharsPerLine = 96;
+  for (const w of words) {
+    const next = current ? `${current} ${w}` : w;
+    if (next.length > maxCharsPerLine) {
+      rowsOut.push(current);
+      current = w;
+    } else {
+      current = next;
+    }
+  }
+  if (current) rowsOut.push(current);
+
+  const rowCount = Math.max(lines, rowsOut.length);
+  const filled = Array.from({ length: rowCount }, (_, i) => rowsOut[i] || "");
+
   return (
-    <View style={s.blk}>
-      <Text style={s.blkLabel}>{label}</Text>
-      <Text style={[s.blkVal, { minHeight: rows * 11 }]}>{dash(value)}</Text>
+    <View style={s.blockWrap}>
+      <Text style={s.blockLabel}>{label}:</Text>
+      <View style={s.ruledBox}>
+        {filled.map((line, i) => (
+          <Text key={i} style={s.ruledLineText}>{line}</Text>
+        ))}
+      </View>
     </View>
   );
 }
@@ -95,63 +133,51 @@ export default function MedicalCertificatePDF({ form }) {
 
   return (
     <Document title={`Medical Certificate - ${form.patientName || "Patient"}`} author="E. ZARATE HOSPITAL">
-      <Page size="LEGAL" style={s.page}>
+      <Page size="A4" style={s.page}>
 
-        {/* Header */}
+        {/* Letterhead — matches the printed pad's layout */}
         <View style={s.headerRow}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={s.hospName}>E. ZARATE HOSPITAL</Text>
             <Text style={s.hospSub}>16 J. Aguilar Avenue, Talon 1, Las Piñas City, Metro Manila, Philippines</Text>
-            <Text style={s.hospSub}>
-              Tel. Nos.: (02) 8871-1440 · (02) 8873-5593 · (02) 8874-6905  |  Mobile Nos.: Smart (0919) 991-4938 · Globe (0917) 538-2440
-            </Text>
+            <Text style={s.hospSub}>Tel. Nos.: (02) 8871-1440 · (02) 8873-5593 · (02) 8874-6905</Text>
+            <Text style={s.hospSub}>Mobile Nos.: Smart (0919) 991-4938 · Globe (0917) 538-2440</Text>
             <Text style={s.hospSub}>E-mails: zarateclinic@yahoo.com · zarateopd@gmail.com</Text>
-            <Text style={[s.hospSub, { marginTop: 3, fontFamily: "Helvetica-Bold", color: C.dark, fontSize: 9 }]}>
-              MEDICAL CERTIFICATE
-            </Text>
           </View>
-          <View>
-            <Text style={s.recLabel}>Date</Text>
-            <Text style={s.recNo}>{dash(form.date)}</Text>
+          <View style={s.sealCol}>
+            <View style={s.seal}><Image src={logoImg} style={s.sealImg} /></View>
           </View>
         </View>
 
-        {/* Patient info */}
-        <View style={s.row}>
-          <ColField label="Patient's Name" value={form.patientName} />
-          <ColField label="Age" value={form.age} />
+        <Text style={s.title}>Medical Certificate</Text>
+
+        {/* Patient info — same order as the printed pad */}
+        <View style={s.fieldRow}>
+          <FieldLine label="Patient's Name" value={form.patientName} />
+          <View style={{ width: 10 }} />
+          <FieldLine label="Age" value={form.age} width={70} />
+          <View style={{ width: 10 }} />
+          <FieldLine label="Date" value={form.date} width={110} />
         </View>
-        <View style={s.row}>
-          <ColField label="Occupation" value={form.occupation} />
-          <ColField label="Classification" value={form.classification} />
+        <View style={s.fieldRow}>
+          <FieldLine label="Occupation" value={form.occupation} />
+          <View style={{ width: 10 }} />
+          <FieldLine label="Classification" value={form.classification} width={160} />
         </View>
-        <View style={s.row}>
-          <ColField label="Address" value={form.address} />
-        </View>
-        <View style={s.row}>
-          <ColField label="Inclusive Dates of Treatment" value={form.inclusiveDatesOfTreatment} />
-        </View>
+        <FieldLine label="Address" value={form.address} />
+        <FieldLine label="Inclusive Dates of Treatment" value={form.inclusiveDatesOfTreatment} />
 
-        {/* Clinical details */}
-        <Bar title="Subjective Complaints" />
-        <Blk label="Subjective Complaints" value={form.subjectiveComplaints} rows={2} />
+        {/* Clinical details — ruled multi-line blocks, matching the pad's
+            large write-in areas for each of these */}
+        <RuledBlock label="Subjective Complaints" value={form.subjectiveComplaints} lines={2} />
+        <RuledBlock label="Pertinent Physical Examination Findings" value={form.pertinentPhysicalExaminationFindings} lines={3} />
+        <RuledBlock label="Ancillary Examination Done" value={form.ancillaryExaminationDone} lines={2} />
+        <RuledBlock label="Clinical Diagnosis" value={form.clinicalDiagnosis} lines={2} />
+        <RuledBlock label="Treatment Done / Medication Given" value={form.treatmentDoneMedicationGiven} lines={3} />
 
-        <Bar title="Pertinent Physical Examination Findings" />
-        <Blk label="Pertinent Physical Examination Findings" value={form.pertinentPhysicalExaminationFindings} rows={3} />
+        <FieldLine label="Disposition" value={form.disposition} />
 
-        <Bar title="Ancillary Examination Done" />
-        <Blk label="Ancillary Examination Done" value={form.ancillaryExaminationDone} rows={2} />
-
-        <Bar title="Clinical Diagnosis" />
-        <Blk label="Clinical Diagnosis" value={form.clinicalDiagnosis} rows={2} />
-
-        <Bar title="Treatment Done / Medication Given" />
-        <Blk label="Treatment Done / Medication Given" value={form.treatmentDoneMedicationGiven} rows={3} />
-
-        <Bar title="Disposition" />
-        <Blk label="Disposition" value={form.disposition} rows={1} />
-
-        {/* Disclaimer, matches the printed pad */}
+        {/* Disclaimer, verbatim from the printed pad */}
         <Text style={s.disclaimer}>
           Date In the Medical Certificate is based on actual medical records, issued upon the request and/or consent
           of the patient; Unless otherwise ordered by the court by way of subpoena duces tecum, medical records of
@@ -161,12 +187,12 @@ export default function MedicalCertificatePDF({ form }) {
 
         {/* Attending physician signature */}
         <View style={s.sigRow}>
-          <View style={s.sigBlock}>
-            <View style={s.sigLine} />
-            <Text style={s.sigName}>{dash(form.attendingPhysician)}, M.D.</Text>
-            <Text style={s.sigSub}>Name and Signature of Attending Physician</Text>
+          <View style={s.sigLine} />
+          <Text style={s.sigName}>{dash(form.attendingPhysician)}{form.attendingPhysician ? ", M.D." : ""}</Text>
+          <Text style={s.sigLabel}>Name and Signature of Attending Physician</Text>
+          <View style={s.sigMetaRow}>
             <Text style={s.sigMeta}>Lic. No.: {dash(form.licNo)}</Text>
-            <Text style={s.sigMeta}>PTR No.: {dash(form.ptrNo)}</Text>
+            <Text style={s.sigMeta}>PTR no.: {dash(form.ptrNo)}</Text>
           </View>
         </View>
 
