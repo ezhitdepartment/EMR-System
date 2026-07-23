@@ -167,6 +167,57 @@ export function formatEdManagementText(entry) {
   return code || notes || "";
 }
 
+// PhilHealth CF4, item 5 — Physical Examination on Admission. Mirrors the
+// six PE_SYSTEMS entries in ConsultationForm.jsx (label/key/othersKey only
+// — the actual checkbox OPTIONS lists stay owned by the form itself; this
+// util only needs to know which fields to read, not what's selectable).
+// Kept in sync manually since the checklist rarely changes; if a system is
+// ever added/renamed there, add it here too.
+const PE_SYSTEM_LABELS = [
+  { key: "peChestLungs", othersKey: "peChestLungsOthers", label: "Chest/Lungs" },
+  { key: "peCvs", othersKey: "peCvsOthers", label: "CVS" },
+  { key: "peAbdomen", othersKey: "peAbdomenOthers", label: "Abdomen" },
+  { key: "peGuOb", othersKey: "peGuObOthers", label: "GU/OB" },
+  { key: "peSkinExtremities", othersKey: "peSkinExtremitiesOthers", label: "Skin/Extremities" },
+  { key: "peNeuroExam", othersKey: "peNeuroExamOthers", label: "Neuro Exam" },
+];
+
+// "General Survey: Awake and alert\nHEENT: Essentially normal\nChest/Lungs:
+// Wheezes, Lump/s over Breast(s) (left, 2cm)\n..." — turns the doctor's
+// structured CF4 "Pertinent Physical Examination on Admission" checklist
+// (eight checkbox groups, each with its own free-text "specify"/"Others"
+// field) into one readable narrative block. A system with nothing checked
+// and no specify/Others text is left out entirely, so a mostly-blank exam
+// doesn't produce a wall of empty headers. This is what feeds the
+// Konsulta/Yakap Referral's "Physical Examination" field — that field is
+// free narrative text, not a checklist, so there's no single form field to
+// point a shared-clinical-fields mapping at (same reason the ED
+// Management field pulls straight from source in KonsultaReferralModal.jsx
+// instead of going through SHARED_FIELD_MAP — see sharedClinicalFields.js).
+export function formatPhysicalExamText(entry) {
+  if (!entry) return "";
+  const lines = [];
+
+  const generalSurvey = [...(entry.peGeneralSurvey || [])];
+  const alteredIdx = generalSurvey.indexOf("Altered sensorium");
+  if (alteredIdx !== -1 && entry.peGeneralSurveyAlteredSensoriumSpecify?.trim()) {
+    generalSurvey[alteredIdx] = `Altered sensorium (${entry.peGeneralSurveyAlteredSensoriumSpecify.trim()})`;
+  }
+  if (generalSurvey.length) lines.push(`General Survey: ${generalSurvey.join(", ")}`);
+
+  const heent = [...(entry.peHeent || [])];
+  if (entry.peHeentOthers?.trim()) heent.push(entry.peHeentOthers.trim());
+  if (heent.length) lines.push(`HEENT: ${heent.join(", ")}`);
+
+  for (const { key, othersKey, label } of PE_SYSTEM_LABELS) {
+    const findings = [...(entry[key] || [])];
+    if (entry[othersKey]?.trim()) findings.push(entry[othersKey].trim());
+    if (findings.length) lines.push(`${label}: ${findings.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
 // Every consultation ever saved, across every patient, with just enough
 // patient info attached (name, date of birth) for reports to compute
 // names/ages without a second round-trip per row. Used by utils/reports.js

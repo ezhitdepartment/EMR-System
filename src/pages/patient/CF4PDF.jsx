@@ -9,8 +9,8 @@
 //     nearly every CF4 field: Chief Complaint, Admitting/Discharge
 //     Diagnosis, Case Rate Codes, admission/discharge date & time,
 //     Referral, Pertinent Signs & Symptoms, Physical Examination on
-//     Admission, Course in the Ward, ED Management (Surgical Procedure/RVS Code),
-//     Outcome of Treatment, Drugs/Medicines, and the Certification
+//     Admission, Course in the Ward, ED Management, Surgical Procedure/RVS
+//     Code, Outcome of Treatment, Drugs/Medicines, and the Certification
 //     signature block.
 //   - `erEntry` — the ER nurse's most recent consultation save (matched to
 //     the same encounter as `doctorEntry` when possible). Owns Pertinent
@@ -30,8 +30,9 @@
 //         OB-GYN), Signs & Symptoms, Referral.
 // Page 2: Physical Examination on Admission (General Survey, Vitals,
 //         HEENT, and every PE_SYSTEMS group — all of it, not split
-//         mid-section), Course in the Ward, ED Management, Drugs /
-//         Medicines, Outcome of Treatment, Certification.
+//         mid-section), Course in the Ward, ED Management, Surgical
+//         Procedure/RVS Code, Drugs / Medicines, Outcome of Treatment,
+//         Certification.
 //
 // Every field on this form is a real doctor/nurse text field, so react-pdf
 // still auto-paginates onto extra pages if someone writes an unusually
@@ -409,6 +410,11 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
 
         <Text style={s.sectionLabel}>ED Management</Text>
         <View style={[s.blkVal, { marginBottom: 3 }]}>
+          <Text>{dash(doctorEntry.edManagement)}</Text>
+        </View>
+
+        <Text style={s.sectionLabel}>Surgical Procedure/RVS Code</Text>
+        <View style={[s.blkVal, { marginBottom: 3 }]}>
           <Text>
             {dash(doctorEntry.surgicalProcedureRvsCode)}
             {doctorEntry.surgicalProcedureNotes ? ` — ${doctorEntry.surgicalProcedureNotes}` : ""}
@@ -443,7 +449,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
 
         <Bar title="VI. Outcome of Treatment" />
         <View style={s.outcomeRow}>
-          {["Improved", "HAMA", "Expired", "Absconded", "Transferred"].map((opt) => (
+          {["Discharged", "Improved", "HAMA", "Expired", "Absconded", "Transferred"].map((opt) => (
             <View key={opt} style={s.outcomeItem}>
               <View style={[s.checkBox, doctorEntry.outcomeOfTreatment === opt ? s.checkBoxChecked : null]} />
               <Text style={s.checkLabel}>{opt.toUpperCase()}</Text>

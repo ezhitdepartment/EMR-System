@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import logoImg from "../../assets/logo.jpg";
 import { fillBlanksFromShared } from "./sharedClinicalFields";
-import { formatDiagnosisText } from "../../utils/consultations";
+import { formatDiagnosisText, formatPhysicalExamText } from "../../utils/consultations";
 
 function calcAge(dob) {
   if (!dob) return "";
@@ -49,8 +49,21 @@ function buildAutoFilled(patient, emr, doctorEntry, nurseEntry, encounter) {
     pin: nurseEntry?.philhealthPin || emr?.philhealthPin || "",
     chiefComplaint: doctorEntry?.chiefComplaint || emr?.chiefComplaints || "",
     historyOfPresentIllness: doctorEntry?.historyOfPresentIllness || "",
-    physicalExamination: emr?.objectiveFindings || "",
-    initialImpression: emr?.physicianImpression || "",
+    // "Pertinent Physical Examination on Admission" (the doctor's CF4
+    // checklist — General Survey, HEENT, Chest/Lungs, CVS, Abdomen, GU/OB,
+    // Skin/Extremities, Neuro Exam) is the primary source now, formatted
+    // into narrative text by formatPhysicalExamText. Falls back to the
+    // EMR's "Objective Findings" box only if the doctor hasn't examined
+    // the patient yet (or checked nothing) for this visit.
+    physicalExamination: (doctorEntry && formatPhysicalExamText(doctorEntry)) || emr?.objectiveFindings || "",
+    // Initial Impression, Diagnosis, and Physician's Impression are the
+    // same clinical concept captured on three different forms — the
+    // doctor's live Diagnosis field (Consultation Form) wins when present,
+    // same precedence finalDiagnosis below already gives it; EMR's
+    // Physician's Impression is the fallback. (Kept in sync going forward
+    // too, via the "impression" shared-clinical-fields mapping — see
+    // sharedClinicalFields.js.)
+    initialImpression: doctorEntry?.diagnosis || emr?.physicianImpression || "",
     managementAtED,
     finalDiagnosis: doctorEntry ? formatDiagnosisText(doctorEntry) : emr?.activeDiagnoses || "",
     recommendations,

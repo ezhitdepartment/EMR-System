@@ -661,6 +661,11 @@ export const initialConsultationForm = {
   // dated log), captured by the Doctor role (see DOCTOR_SECTIONS below).
   courseInWardEntries: [],
 
+  // ED Management — free-text notes, distinct from Surgical Procedure/RVS
+  // Code below. Sits between Course in the Ward and Surgical Procedure/RVS
+  // Code in both the form and the CF4 PDF (see DOCTOR_SECTIONS below).
+  edManagement: "",
+
   // Surgical Procedure/RVS Code — now captured by the Doctor role, in the
   // spot the Medication field used to occupy (see DOCTOR_SECTIONS below).
   surgicalProcedureRvsCode: "",
@@ -1084,6 +1089,7 @@ function DoctorConsultationReferencePanel({ patient, form }) {
     .join(" ");
   const hasDoctorRecord =
     form.diagnosis ||
+    form.edManagement ||
     form.surgicalProcedureRvsCode ||
     form.surgicalProcedureNotes ||
     form.disposition ||
@@ -1153,11 +1159,21 @@ function DoctorConsultationReferencePanel({ patient, form }) {
         {form.diagnosis && <p className="whitespace-pre-wrap">{form.diagnosis}</p>}
       </RefCard>
 
-      {/* ED Management (RVS Code / Notes — was labeled "Surgical Procedure") */}
+      {/* ED Management — free-text notes, distinct from the RVS-coded
+          Surgical Procedure card below it. */}
       <RefCard
         title="ED Management"
         icon={Pill}
-        empty={!form.surgicalProcedureRvsCode && !form.surgicalProcedureNotes ? "No ED management recorded yet." : null}
+        empty={!form.edManagement ? "No ED management recorded yet." : null}
+      >
+        {form.edManagement && <p className="whitespace-pre-wrap">{form.edManagement}</p>}
+      </RefCard>
+
+      {/* Surgical Procedure/RVS Code (was labeled "ED Management") */}
+      <RefCard
+        title="Surgical Procedure/RVS Code"
+        icon={Pill}
+        empty={!form.surgicalProcedureRvsCode && !form.surgicalProcedureNotes ? "No surgical procedure recorded yet." : null}
       >
         {(form.surgicalProcedureRvsCode || form.surgicalProcedureNotes) && (
           <p className="whitespace-pre-wrap">
@@ -1322,7 +1338,7 @@ export default function ConsultationForm({
     uidCounter += 1;
     set("prescriptionItems", [
       ...form.prescriptionItems,
-      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "", milligram: "" },
+      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "", milligram: "", isCustomMedicine: false },
     ]);
   }
 
@@ -1675,13 +1691,14 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── VISIT DETAILS + OBJECTIVE FINDINGS (doctor) ──
-            Backs the "Visit Details", "Vital Signs" (O2 Sat only — the
-            rest come from Triage, shown read-only above) and
-            "Pertinent P.E. / Objective Findings" boxes on the E. Zarate
-            Hospital OPD Consultation Record paper form. Gated by the same
-            "physicalExamination" permission as the CF4 PE checklist below
-            it, since both describe the same physical exam. */}
+        {/* ── VISIT DETAILS (doctor) ──
+            Backs the "Visit Details" box on the E. Zarate Hospital OPD
+            Consultation Record paper form. O2 Sat and Pertinent P.E. /
+            Objective Findings were removed from this section per request —
+            Vital Signs otherwise come from Triage, shown read-only above.
+            Gated by the same "physicalExamination" permission as the CF4
+            PE checklist below it, since both describe the same physical
+            exam. */}
         {canEdit("physicalExamination") && (
         <div>
           <div className="flex items-start justify-between border border-slate-200 rounded-t-lg px-4 py-3 bg-white">
@@ -1712,24 +1729,6 @@ export default function ConsultationForm({
                 />
               </Field>
             </div>
-            <Field label="O2 Sat" className="sm:w-40">
-              <input
-                name="o2Sat"
-                value={form.o2Sat}
-                onChange={handle}
-                placeholder="e.g. 98%"
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Pertinent P.E. / Objective Findings">
-              <textarea
-                name="objectiveFindings"
-                value={form.objectiveFindings}
-                onChange={handle}
-                rows={4}
-                className={textareaClass}
-              />
-            </Field>
           </div>
         </div>
         )}
@@ -1771,7 +1770,7 @@ export default function ConsultationForm({
         {/* ── PHILHEALTH CF4: PHYSICAL EXAMINATION ON ADMISSION (doctor) ── */}
         {canEdit("physicalExamination") && (
         <div>
-          <SectionHeader title="Physical Examination on Admission" />
+          <SectionHeader title="Pertinent Physical Examination on Admission" />
           <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-5">
             <div>
               <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">General Survey</p>
@@ -2331,22 +2330,97 @@ export default function ConsultationForm({
         </div>
         )}
 
+        {/* ── PHILHEALTH CF4: COURSE IN THE WARD (Doctor only) ── */}
+        {/* Moved here, right after Diagnosis — comes before ED Management
+            and Surgical Procedure/RVS Code now. */}
+        {canEdit("courseInWard") && (
+        <div>
+          <SectionHeader title="Course in the Ward" />
+          <div className="border border-slate-200 rounded-lg p-4 bg-white">
+            <p className="text-sm font-bold text-slate-800 mb-3">Doctor's Order/Action</p>
+            <div className="flex flex-col gap-3">
+              {form.courseInWardEntries.map((entry) => (
+                <div key={entry.id} className="grid grid-cols-1 md:grid-cols-[160px_1fr_32px] gap-3 items-start">
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Date</p>
+                    <input
+                      type="date"
+                      value={entry.date}
+                      onChange={(e) => updateCourseInWardEntry(entry.id, { date: e.target.value })}
+                      className={`${inputClass} w-full`}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Doctor's Order/Action
+                    </p>
+                    <textarea
+                      value={entry.orderAction}
+                      onChange={(e) => updateCourseInWardEntry(entry.id, { orderAction: e.target.value })}
+                      rows={2}
+                      className={`${textareaClass} w-full`}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCourseInWardEntry(entry.id)}
+                    className="mt-6 inline-flex items-center justify-center w-8 h-8 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addCourseInWardEntry}
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-teal-700 hover:text-teal-800"
+            >
+              <Plus size={14} />
+              Add entry
+            </button>
+          </div>
+        </div>
+        )}
+
         {/* ── ED MANAGEMENT (doctor) ── */}
-        {/* Was labeled "Surgical Procedure" — renamed to ED Management.
-            RvsAutocomplete is a search-and-select picker, same idea as the
-            ICD-10 picker in the Diagnosis section above: search by code,
-            description, or section, then click a result. Picking one
-            STACKS onto both fields below instead of replacing them —
-            surgicalProcedureRvsCode grows as "10060, 11040, ..." and
-            surgicalProcedureNotes grows one sentence per code, each ending
-            in its own period, so picking 5 codes in a row builds up all 5
-            (see addSurgicalProcedureRvsCode). Both fields stay fully
+        {/* Plain free-text notes now — the RVS code picker/fields that used
+            to live here moved down into Surgical Procedure/RVS Code below. */}
+        {canEdit("surgicalProcedure") && (
+        <div>
+          <SectionHeader title="ED Management" />
+          <div className="border border-slate-200 rounded-lg p-4 bg-white">
+            <Field label="ED Management Notes">
+              <textarea
+                name="edManagement"
+                value={form.edManagement}
+                onChange={handle}
+                rows={5}
+                placeholder="ED management notes"
+                className={textareaClass}
+              />
+            </Field>
+          </div>
+        </div>
+        )}
+
+        {/* ── SURGICAL PROCEDURE / RVS CODE (doctor) ── */}
+        {/* Was labeled "ED Management" — renamed to Surgical Procedure/RVS
+            Code, now that ED Management above is its own plain-text
+            section. RvsAutocomplete is a search-and-select picker, same
+            idea as the ICD-10 picker in the Diagnosis section above:
+            search by code, description, or section, then click a result.
+            Picking one STACKS onto both fields below instead of replacing
+            them — surgicalProcedureRvsCode grows as "10060, 11040, ..."
+            and surgicalProcedureNotes grows one sentence per code, each
+            ending in its own period, so picking 5 codes in a row builds up
+            all 5 (see addSurgicalProcedureRvsCode). Both fields stay fully
             editable afterward. If a procedure isn't on the RVS list (or a
             newer code isn't in it yet), just type directly into either
             field instead; nothing here requires using the picker. */}
         {canEdit("surgicalProcedure") && (
         <div>
-          <SectionHeader title="ED Management" />
+          <SectionHeader title="Surgical Procedure/RVS Code" />
           <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-4">
             <Field label="Search RVS Code / Procedure">
               <RvsAutocomplete onSelect={addSurgicalProcedureRvsCode} />
@@ -2427,18 +2501,46 @@ export default function ConsultationForm({
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
                       Medicine
                     </p>
-                    <select
-                      value={item.medicineName}
-                      onChange={(e) => updatePrescriptionItem(item.id, { medicineName: e.target.value })}
-                      className={`${inputClass} w-full`}
-                    >
-                      <option value="">Select medicine</option>
-                      {MEDICINE_CATALOG.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
+                    {item.isCustomMedicine ? (
+                      <div>
+                        <input
+                          type="text"
+                          value={item.medicineName}
+                          onChange={(e) => updatePrescriptionItem(item.id, { medicineName: e.target.value })}
+                          placeholder="Type medicine name"
+                          className={`${inputClass} w-full`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updatePrescriptionItem(item.id, { medicineName: "", isCustomMedicine: false })
+                          }
+                          className="mt-1 text-[11px] font-medium text-teal-700 hover:text-teal-800"
+                        >
+                          Choose from list instead
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={item.medicineName}
+                        onChange={(e) => {
+                          if (e.target.value === "__others__") {
+                            updatePrescriptionItem(item.id, { medicineName: "", isCustomMedicine: true });
+                          } else {
+                            updatePrescriptionItem(item.id, { medicineName: e.target.value });
+                          }
+                        }}
+                        className={`${inputClass} w-full`}
+                      >
+                        <option value="">Select medicine</option>
+                        {MEDICINE_CATALOG.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                        <option value="__others__">Others (not on the list)</option>
+                      </select>
+                    )}
                   </div>
 
                   <div>
@@ -2678,7 +2780,7 @@ export default function ConsultationForm({
                 <option>Discharged</option>
                 <option>Admitted</option>
                 <option>Transferred / Referred</option>
-                <option>Home Medication</option>
+                <option>HAMA</option>
                 <option>Absconded</option>
                 <option>Expired</option>
               </select>
@@ -2705,7 +2807,7 @@ export default function ConsultationForm({
               PhilHealth CF4 — Outcome of Treatment
             </p>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {["Improved", "HAMA", "Absconded", "Transferred", "Expired"].map((opt) => (
+              {["Discharged", "Improved", "HAMA", "Absconded", "Transferred", "Expired"].map((opt) => (
                 <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="radio"
@@ -2785,56 +2887,8 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── PHILHEALTH CF4: COURSE IN THE WARD (Doctor only) ── */}
-        {canEdit("courseInWard") && (
-        <div>
-          <SectionHeader title="Course in the Ward" />
-          <div className="border border-slate-200 rounded-lg p-4 bg-white">
-            <p className="text-sm font-bold text-slate-800 mb-3">Doctor's Order/Action</p>
-            <div className="flex flex-col gap-3">
-              {form.courseInWardEntries.map((entry) => (
-                <div key={entry.id} className="grid grid-cols-1 md:grid-cols-[160px_1fr_32px] gap-3 items-start">
-                  <div>
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Date</p>
-                    <input
-                      type="date"
-                      value={entry.date}
-                      onChange={(e) => updateCourseInWardEntry(entry.id, { date: e.target.value })}
-                      className={`${inputClass} w-full`}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                      Doctor's Order/Action
-                    </p>
-                    <textarea
-                      value={entry.orderAction}
-                      onChange={(e) => updateCourseInWardEntry(entry.id, { orderAction: e.target.value })}
-                      rows={2}
-                      className={`${textareaClass} w-full`}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeCourseInWardEntry(entry.id)}
-                    className="mt-6 inline-flex items-center justify-center w-8 h-8 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={addCourseInWardEntry}
-              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-teal-700 hover:text-teal-800"
-            >
-              <Plus size={14} />
-              Add entry
-            </button>
-          </div>
-        </div>
-        )}
+        {/* Course in the Ward moved to right after Diagnosis, ahead of ED
+            Management / Surgical Procedure — see that block above. */}
 
         {/* ── CONSENT ── */}
         {canEdit("consentSignoff") && (

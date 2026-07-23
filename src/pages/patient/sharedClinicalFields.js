@@ -10,8 +10,8 @@
 //
 //   Shared key    | What it is                         | EMR field(s)          | Consultation field  | Discharge field     | Konsulta field      | Medical Certificate field
 //   chiefComplaint| Chief Complaint                    | chiefComplaints        | chiefComplaint      | chiefComplaints      | chiefComplaint       | subjectiveComplaints
-//   physicalExam  | Physical Exam / Objective Findings | objectiveFindings      | —                   | —                    | physicalExamination | pertinentPhysicalExaminationFindings
-//   impression    | Initial / Physician's Impression   | physicianImpression    | —                   | —                    | initialImpression    | —
+//   physicalExam  | Physical Exam / Objective Findings | objectiveFindings      | — (read-only source — see note below) | — | physicalExamination | pertinentPhysicalExaminationFindings
+//   impression    | Initial / Physician's Impression / Diagnosis | physicianImpression | diagnosis    | —                    | initialImpression    | —
 //   management    | Management at ED / Treatment given | treatmentLeft + treatmentRight (read-only source — split per eye, so a combined value never writes back into it) | medicationOrders | treatmentGiven | managementAtED | treatmentDoneMedicationGiven
 //   diagnosis     | Final / Active / Clinical Diagnosis| —                      | activeDiagnoses     | finalDiagnosis       | finalDiagnosis       | clinicalDiagnosis
 //   disposition   | Disposition                        | disposition            | disposition         | disposition          | —                    | disposition
@@ -26,6 +26,28 @@
 // where applicable, Konsulta/Medical Certificate) gets those blanks
 // filled in immediately via PatientProfile.jsx's syncSharedClinical() —
 // no need to retype anything already captured during the consultation.
+//
+// "impression" now also pulls from the Consultation Form's own Diagnosis
+// field (form.diagnosis — distinct from Active Diagnoses/activeDiagnoses,
+// which feeds the separate "diagnosis" key above): the doctor's Diagnosis,
+// EMR's Physician's Impression, and Konsulta's Initial Impression are
+// treated as the same clinical judgment under three different names, so
+// whichever one gets filled in first auto-fills the still-blank other two
+// (never overwrites one that's already been typed into, same "blanks
+// only" rule as every other shared field).
+//
+// NOTE on "physicalExam": the Consultation Form's matching concept — the
+// CF4 "Pertinent Physical Examination on Admission" checklist (General
+// Survey, HEENT, Chest/Lungs, CVS, Abdomen, GU/OB, Skin/Extremities, Neuro
+// Exam) — is eight separate checkbox groups plus their own "specify"/
+// "Others" text, not one field extractSharedFields could read a value out
+// of. It's intentionally left out of `consultation` below (same reason
+// EMR's split treatmentLeft/treatmentRight is left out of "management")
+// and instead read directly, formatted into narrative text via
+// formatPhysicalExamText() in utils/consultations.js, by
+// KonsultaReferralModal.jsx's buildAutoFilled() — a live read of the
+// doctor's latest exam every time the referral is opened, rather than a
+// value that only syncs at save time.
 export const SHARED_FIELD_MAP = {
   emr: {
     chiefComplaint: "chiefComplaints",
@@ -37,6 +59,7 @@ export const SHARED_FIELD_MAP = {
   consultation: {
     chiefComplaint: "chiefComplaint",
     diagnosis: "activeDiagnoses",
+    impression: "diagnosis",
     management: "medicationOrders",
     disposition: "disposition",
   },
