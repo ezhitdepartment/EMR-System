@@ -299,35 +299,40 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
   return fillBlanksFromShared(seed, "discharge", shared).patched;
 }
 
-// Seed the Medical Certificate from the patient's profile, their EMR (if
-// it exists), and — same "matched fields don't need to be retyped"
-// approach as the ER Discharge seed above — the Consultation Form entry
-// and matched registration for this visit, plus a shared-clinical-store
-// pass for anything still blank.
+// The doctor- and nurse-authored fields the Medical Certificate shares
+// with the Consultation Form — computed straight from the doctor's/
+// nurse's latest saved entry, not through SHARED_FIELD_MAP (see
+// sharedClinicalFields.js), since a couple of these (Ancillary
+// Examination Done, License No./PTR split into two printed-form lines)
+// aren't single plain fields a generic map entry could point at.
 //
-//   Field                         | Comes from
-//   subjectiveComplaints          | consultation.chiefComplaint, then emr
-//   clinicalDiagnosis             | consultation's Diagnosis + ICD-10 codes
-//                                 | (formatDiagnosisText), via the shared store
-//   treatmentDoneMedicationGiven  | consultation.medicationOrders, via the
-//                                 | shared store
-//   ancillaryExaminationDone      | consultation.diagnosticsSelected — the
-//                                 | same tests/x-ray/others sorting the
-//                                 | Discharge form uses, flattened to text
-//   disposition                   | consultation.disposition, then emr
-//   inclusiveDatesOfTreatment     | the matched registration's own
-//                                 | appointment date, falling back to the
-//                                 | EMR's date of visit
-//   attendingPhysician            | the matched registration's assigned
-//                                 | doctor, falling back to the EMR
-function buildMedicalCertificateSeed(patient, emr, consultation, encounters, shared = {}) {
-  const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
-    .filter(Boolean)
-    .join(", ");
-  const age = calculateAge(patient.dateOfBirth);
-
-  const matchedEncounter = matchEncounterForConsultation(consultation, encounters);
-
+//   Field                         | Comes from                                   | Authored by
+//   occupation                    | consultation.occupation ("Personal Details") | Nurse
+//   inclusiveDatesOfTreatment     | the matched registration's own appointment   |
+//                                 | date, falling back to the EMR's date of visit|
+//   subjectiveComplaints          | consultation.chiefComplaint, then emr        | Nurse/Doctor
+//   ancillaryExaminationDone      | consultation.diagnosticsSelected — the same  | Doctor
+//                                 | tests/x-ray/others sorting the Discharge     |
+//                                 | form uses, flattened to text                 |
+//   clinicalDiagnosis             | consultation's Diagnosis + ICD-10 codes      | Doctor
+//                                 | (formatDiagnosisText)                        |
+//   treatmentDoneMedicationGiven  | consultation.medicationOrders                | Doctor
+//   disposition                   | consultation.disposition, then emr           | Doctor
+//   attendingPhysician            | consultation.attendingPrintedName (CF4       | Doctor
+//                                 | Certification), falling back to the matched  |
+//                                 | registration's assigned doctor, then the EMR |
+//   licNo / ptrNo                 | consultation.attendingLicenseNumber (CF4     | Doctor
+//                                 | Certification's combined "License Number /   |
+//                                 | PTR" field — the printed Medical Certificate |
+//                                 | pad splits it into two lines, so the same    |
+//                                 | value fills both)                            |
+//
+// Exported so PatientProfile.jsx's handleSaveConsultation() can push a
+// fresh value into an ALREADY-SAVED Medical Certificate the instant a
+// nurse or doctor saves the Consultation Form — not just the first time
+// this modal happens to be opened (same precedent as
+// deriveKonsultaFieldsFromDoctorEntry in KonsultaReferralModal.jsx).
+export function deriveMedCertFieldsFromEntries(consultation, emr, matchedEncounter) {
   const { ancillaries, xrayTests, otherTests } = sortOrderedDiagnostics(consultation);
   const ancillaryNames = Object.keys(ancillaries)
     .map((key) => ANCILLARY_TEST_NAMES[key])
@@ -339,13 +344,10 @@ function buildMedicalCertificateSeed(patient, emr, consultation, encounters, sha
     ? attendedAt.toLocaleDateString("en-PH")
     : emr?.dateOfVisit || "";
 
-  const seed = {
-    patientName: [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
-      .filter(Boolean)
-      .join(" "),
-    age: age !== null ? String(age) : "",
-    date: new Date().toISOString().slice(0, 10),
-    address: fullAddress,
+  const licenseNumber = consultation?.attendingLicenseNumber || "";
+
+  return {
+    occupation: consultation?.occupation || emr?.occupation || "",
     classification: emr?.classification || "",
     inclusiveDatesOfTreatment,
     subjectiveComplaints: consultation?.chiefComplaint || emr?.chiefComplaints || "",
@@ -353,7 +355,33 @@ function buildMedicalCertificateSeed(patient, emr, consultation, encounters, sha
     clinicalDiagnosis: consultation ? formatDiagnosisText(consultation) : "",
     treatmentDoneMedicationGiven: consultation?.medicationOrders || "",
     disposition: consultation?.disposition || emr?.disposition || "",
-    attendingPhysician: matchedEncounter?.doctor || emr?.physician || "",
+    attendingPhysician: consultation?.attendingPrintedName || matchedEncounter?.doctor || emr?.physician || "",
+    licNo: licenseNumber,
+    ptrNo: licenseNumber,
+  };
+}
+
+// Seed the Medical Certificate from the patient's profile, their EMR (if
+// it exists), and — same "matched fields don't need to be retyped"
+// approach as the ER Discharge seed above — the Consultation Form entry
+// and matched registration for this visit (via deriveMedCertFieldsFromEntries
+// above), plus a shared-clinical-store pass for anything still blank.
+function buildMedicalCertificateSeed(patient, emr, consultation, encounters, shared = {}) {
+  const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
+    .filter(Boolean)
+    .join(", ");
+  const age = calculateAge(patient.dateOfBirth);
+
+  const matchedEncounter = matchEncounterForConsultation(consultation, encounters);
+
+  const seed = {
+    patientName: [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
+      .filter(Boolean)
+      .join(" "),
+    age: age !== null ? String(age) : "",
+    date: new Date().toISOString().slice(0, 10),
+    address: fullAddress,
+    ...deriveMedCertFieldsFromEntries(consultation, emr, matchedEncounter),
   };
   return fillBlanksFromShared(seed, "medcert", shared).patched;
 }
@@ -1303,6 +1331,32 @@ export default function PatientProfile() {
           user?.id ?? null
         );
         setKonsultaReferral(updatedReferral);
+      }
+    }
+
+    // Same live push into an already-saved Medical Certificate — see
+    // deriveMedCertFieldsFromEntries above. Unlike the Konsulta block,
+    // this runs on BOTH a nurse's save (occupation, from the "Personal
+    // Details" section) and a doctor's save (subjective complaints,
+    // ancillary exams, diagnosis, treatment, disposition, attending
+    // physician, license/PTR, from the CF4 sections), since the matching
+    // fields on the Medical Certificate are split between the two roles.
+    // Only fills fields that are still blank on the saved certificate — a
+    // value staff already typed directly onto the certificate is never
+    // overwritten, same rule every other shared field in this app follows.
+    if (medicalCertificate) {
+      const derived = deriveMedCertFieldsFromEntries(entry, emr, consultationEncounter);
+      const patch = {};
+      for (const [key, value] of Object.entries(derived)) {
+        if (!medicalCertificate[key]?.trim?.() && value) patch[key] = value;
+      }
+      if (Object.keys(patch).length > 0) {
+        const updatedCertificate = await saveMedicalCertificate(
+          hospitalNo,
+          { ...medicalCertificate, ...patch },
+          user?.id ?? null
+        );
+        setMedicalCertificate(updatedCertificate);
       }
     }
 
