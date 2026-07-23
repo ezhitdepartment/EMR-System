@@ -50,6 +50,18 @@ const NURSE_ROLES = ["er_nurse", "opd_nurse"];
 const TECH_ROLES = ["med_tech", "xray_tech"];
 const VIEW_ONLY_RESULTS_ROLES = [...NURSE_ROLES, "cashier"];
 
+// Order detail is reached from two different sidebar tabs now (Lab Orders
+// and X-Ray Orders — see OrdersListView.jsx), plus a handful of direct
+// links elsewhere (Archive, notifications, Patient Profile) that don't
+// know or care which tab "owns" the order. X-ray Tech only ever has the
+// X-Ray Orders tab, so their "back" link/label should point there; every
+// other role defaults to Lab Orders, same as before.
+function ordersListFor(role) {
+  return role === "xray_tech"
+    ? { path: "/xray-orders", label: "X-Ray Orders" }
+    : { path: "/lab-orders", label: "Lab Orders" };
+}
+
 // "1957-03-31" -> "03/31/1957" (matches the reference screen's Date of Birth column).
 function formatDob(dob) {
   if (!dob) return "—";
@@ -324,7 +336,7 @@ export default function ViewLabOrderPage() {
           className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 text-sm font-medium transition-colors"
         >
           <ArrowLeft size={16} />
-          Back to Lab Orders
+          Back to {ordersListFor(user?.role).label}
         </button>
       </div>
     );
@@ -351,7 +363,7 @@ export default function ViewLabOrderPage() {
           className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 text-sm font-medium transition-colors"
         >
           <ArrowLeft size={16} />
-          Back to Lab Orders
+          Back to {ordersListFor(user?.role).label}
         </button>
       </div>
     );
@@ -369,10 +381,10 @@ export default function ViewLabOrderPage() {
         <div>
           <button
             type="button"
-            onClick={() => navigate("/lab-orders")}
+            onClick={() => navigate(ordersListFor(user?.role).path)}
             className="text-xs font-semibold uppercase tracking-wide text-teal-700 hover:text-teal-800 mb-1"
           >
-            Lab Orders
+            {ordersListFor(user?.role).label}
           </button>
           <h1 className="text-2xl font-semibold text-slate-800">{order.id}</h1>
           <p className="text-sm text-slate-500 mt-1">View and manage lab order details</p>

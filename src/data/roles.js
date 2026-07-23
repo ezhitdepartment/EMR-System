@@ -28,13 +28,35 @@ export const STAFF_ROLES = [
 // data/navigation.js) each role can see/reach. "all" means unrestricted —
 // currently only Admin. Add a new role's dashboard access here; Sidebar.jsx
 // and AppRoutes.jsx both read from this so they can't drift apart.
+// "labOrders" and "xrayOrders" are two SEPARATE sidebar tabs/pages (Lab
+// Orders vs X-Ray Orders — see LabOrders.jsx / XRayOrders.jsx), even though
+// under the hood they both read/write the same `lab_orders` /
+// `lab_order_tests` tables, just scoped to a different set of diagnostic
+// tests (Laboratory vs X-Ray/Ultrasound & Imaging — see FORM_TYPE_BY_TEST
+// in utils/labOrders.js). A role can be granted one, the other, or both:
+//   - med_tech only ever needs Laboratory results -> "labOrders" only.
+//   - xray_tech only ever needs X-Ray/Ultrasound results -> "xrayOrders" only.
+//   - everyone else who touches orders across both specialties (nurses,
+//     cashier, admin) gets both, so nothing they created disappears from
+//     view depending on which tab they happen to be on.
+//
+// NOTE: "xrayOrders" is a FRONTEND-ONLY distinction (which nav tab shows,
+// which route a role can reach). It is intentionally NOT mirrored as its
+// own row in the Supabase `role_feature_access` table — server-side RLS on
+// lab_orders/lab_order_tests still checks the single 'labOrders' feature
+// flag (see current_user_has_feature('labOrders') in the SQL schema) plus
+// current_user_can_access_form_type() to scope which tests a tech role can
+// see/edit. xray_tech already has a 'labOrders' row in that DB table from
+// the original schema — leave it there; removing it would break xray_tech's
+// actual data access even though their sidebar no longer shows a tab
+// literally labeled "Lab Orders".
 export const ROLE_FEATURE_ACCESS = {
   admin: "all",
-  er_nurse: ["registration", "patients", "labOrders", "reports", "masterlist", "archive"],
-  opd_nurse: ["registration", "patients", "labOrders", "reports", "masterlist", "archive"],
+  er_nurse: ["registration", "patients", "labOrders", "xrayOrders", "reports", "masterlist", "archive"],
+  opd_nurse: ["registration", "patients", "labOrders", "xrayOrders", "reports", "masterlist", "archive"],
   doctor: ["registration", "patients", "medicinePrescriptions", "reports", "masterlist", "archive"],
   med_tech: ["patients", "labOrders", "reports", "masterlist", "archive"],
-  xray_tech: ["patients", "labOrders", "reports", "masterlist", "archive"],
+  xray_tech: ["patients", "xrayOrders", "reports", "masterlist", "archive"],
   // NOTE: Cashier can view Lab Orders and Medicine Prescriptions, but this
   // single "medicinePrescriptions" feature flag is also what grants
   // create/edit rights on that table today (see ADDENDUM D in the SQL
@@ -42,8 +64,8 @@ export const ROLE_FEATURE_ACCESS = {
   // way Lab Orders has current_user_can_create_lab_order() vs
   // current_user_can_edit_lab_results(). Cashier is deliberately NOT added
   // to either of those two lab-order functions, so their Lab Orders access
-  // is view-only even though "labOrders" is in this list.
-  cashier: ["labOrders", "registration", "archive", "reports", "medicinePrescriptions"],
+  // is view-only even though "labOrders"/"xrayOrders" are in this list.
+  cashier: ["labOrders", "xrayOrders", "registration", "archive", "reports", "medicinePrescriptions"],
   pharmacist: ["medicinePrescriptions", "medicines", "reports", "archive"],
   staff: ["registration", "patients", "archive", "reports"],
 };

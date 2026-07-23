@@ -390,7 +390,11 @@ function Row({ label, value, full }) {
 const PROFILE_NAV_ITEMS = [
   { id: "profile", label: "Profile", icon: User, feature: null },
   { id: "registration", label: "Registration", icon: ClipboardCheck, feature: "registration" },
-  { id: "lab-orders", label: "Lab Orders", icon: FlaskConical, feature: "labOrders" },
+  // Split into "labOrders"/"xrayOrders" on the dashboard sidebar (see
+  // data/roles.js), but this tab stays a single "Lab Orders" entry here —
+  // whichever of the two features the role has, they can still see this
+  // patient's lab/x-ray order history in one place.
+  { id: "lab-orders", label: "Lab Orders", icon: FlaskConical, feature: ["labOrders", "xrayOrders"] },
   {
     id: "medicine-prescription",
     label: "Medicine Prescriptions",
@@ -943,9 +947,11 @@ export default function PatientProfile() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const visibleNavItems = PROFILE_NAV_ITEMS.filter(
-    (item) => !item.feature || hasFeatureAccess(user?.role, item.feature)
-  );
+  const visibleNavItems = PROFILE_NAV_ITEMS.filter((item) => {
+    if (!item.feature) return true;
+    const required = Array.isArray(item.feature) ? item.feature : [item.feature];
+    return required.some((f) => hasFeatureAccess(user?.role, f));
+  });
   const [patient, setPatient] = useState(undefined); // undefined = loading, null = not found
   const [emr, setEmr] = useState(null);
   const [discharge, setDischarge] = useState(null);

@@ -13,6 +13,7 @@ export const navGroups = [
       { label: "Registration", path: "/encounters", icon: "Stethoscope", feature: "registration" },
       { label: "Patients", path: "/patients", icon: "Users", feature: "patients" },
       { label: "Lab Orders", path: "/lab-orders", icon: "FlaskConical", feature: "labOrders" },
+      { label: "X-Ray Orders", path: "/xray-orders", icon: "Activity", feature: "xrayOrders" },
       {
         label: "Medicine Prescriptions",
         path: "/medicine-prescriptions",
