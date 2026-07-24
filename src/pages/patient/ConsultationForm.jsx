@@ -1338,7 +1338,7 @@ export default function ConsultationForm({
     uidCounter += 1;
     set("prescriptionItems", [
       ...form.prescriptionItems,
-      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "", milligram: "", isCustomMedicine: false },
+      { id: `rx-${uidCounter}`, medicineName: "", quantity: 1, instructions: "", milligram: "" },
     ]);
   }
 
@@ -2489,6 +2489,11 @@ export default function ConsultationForm({
         {canEdit("medicinePrescription") && (
         <div>
           <SectionHeader title="Medicine Prescription" />
+          <datalist id="medicine-catalog-options">
+            {MEDICINE_CATALOG.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
           <div className="border border-slate-200 rounded-lg p-4 bg-white">
             <p className="text-sm font-bold text-slate-800 mb-3">
               Medicines <span className="text-red-500">*</span>
@@ -2501,46 +2506,14 @@ export default function ConsultationForm({
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
                       Medicine
                     </p>
-                    {item.isCustomMedicine ? (
-                      <div>
-                        <input
-                          type="text"
-                          value={item.medicineName}
-                          onChange={(e) => updatePrescriptionItem(item.id, { medicineName: e.target.value })}
-                          placeholder="Type medicine name"
-                          className={`${inputClass} w-full`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updatePrescriptionItem(item.id, { medicineName: "", isCustomMedicine: false })
-                          }
-                          className="mt-1 text-[11px] font-medium text-teal-700 hover:text-teal-800"
-                        >
-                          Choose from list instead
-                        </button>
-                      </div>
-                    ) : (
-                      <select
-                        value={item.medicineName}
-                        onChange={(e) => {
-                          if (e.target.value === "__others__") {
-                            updatePrescriptionItem(item.id, { medicineName: "", isCustomMedicine: true });
-                          } else {
-                            updatePrescriptionItem(item.id, { medicineName: e.target.value });
-                          }
-                        }}
-                        className={`${inputClass} w-full`}
-                      >
-                        <option value="">Select medicine</option>
-                        {MEDICINE_CATALOG.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                        <option value="__others__">Others (not on the list)</option>
-                      </select>
-                    )}
+                    <input
+                      type="text"
+                      list="medicine-catalog-options"
+                      value={item.medicineName}
+                      onChange={(e) => updatePrescriptionItem(item.id, { medicineName: e.target.value })}
+                      placeholder="Type or select a medicine"
+                      className={`${inputClass} w-full`}
+                    />
                   </div>
 
                   <div>
