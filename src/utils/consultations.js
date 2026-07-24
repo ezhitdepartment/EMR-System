@@ -167,6 +167,42 @@ export async function saveConsultationEntry(hospitalNo, formData, authorRole, en
   return rowToEntry(data);
 }
 
+// Picks the right consultation entry to seed the Consultation Form with,
+// given the specific registration (encounter) it was opened from and the
+// role of whoever's opening it.
+//
+// Before this existed, PatientProfile.jsx just used `history[0]` — the
+// single most-recently-created row across every registration AND every
+// author role for this patient. That's what made doctor-only fields like
+// Time of Visit / Medicine Given at ER (CF4's Drugs/Medicines table) look
+// like they'd been wiped: the row saveConsultationEntry() upserts on is
+// keyed per (encounter_id, author_role), so as soon as a SECOND
+// registration existed for the patient, or the nurse saved after the
+// doctor did, `history[0]` pointed at a completely different row than the
+// one you were actually editing — the doctor's real data was still safely
+// in the database, the form was just seeded from the wrong row.
+//
+// - Same registration + same author role already has a row -> that's the
+//   one to edit (this is the normal "reopen and keep editing" case).
+// - Same registration, but this role hasn't saved yet -> seed from
+//   whichever role DID save for this registration, so shared
+//   identification/context fields aren't blank (harmless even for
+//   sections this role can't see, since canEdit() hides them anyway).
+// - No registration in context at all (the standalone Patient Profile
+//   "Add/Update consultation" shortcut) -> falls back to the single most
+//   recent entry on file, same as the old behavior.
+export function resolveConsultationInitialValues(historyList, encounterId, authorRole) {
+  const list = historyList || [];
+  if (encounterId) {
+    const own = list.find((e) => e.encounterId === encounterId && e.authorRole === authorRole);
+    if (own) return own;
+    const sibling = list.find((e) => e.encounterId === encounterId);
+    if (sibling) return sibling;
+    return null;
+  }
+  return list[0] || null;
+}
+
 // "Common cold (J00)" — the free-text diagnosis with whatever ICD-10
 // code(s) the doctor picked appended in parentheses. If only one of the
 // two was filled in, that one alone is returned (no dangling "()" or

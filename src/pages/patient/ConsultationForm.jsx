@@ -1442,7 +1442,13 @@ export default function ConsultationForm({
     setForm((prev) => (prev.cigarettePackYear === packYear ? prev : { ...prev, cigarettePackYear: packYear }));
   }, [form.cigarettesPerDay, form.yearsSmoking]);
 
-  function handleSubmit(e) {
+  // "saving" while the request is in flight, "saved" for a few seconds
+  // right after — Save no longer closes the form (see handleSubmit below),
+  // this is just a quiet confirmation that the click actually went
+  // through, since nothing else on screen changes.
+  const [saveStatus, setSaveStatus] = useState("idle"); // "idle" | "saving" | "saved"
+
+  async function handleSubmit(e) {
     e.preventDefault();
     if (readOnly) return;
     // Cashier and Staff now reach Registration too, but they were never
@@ -1451,8 +1457,26 @@ export default function ConsultationForm({
     // admin, so letting this through for any other role would fail as a
     // confusing DB error instead of just... not happening.
     if (!isNurse && !isDoctor && user?.role !== "admin") return;
-    onSave?.(form);
-    onClose?.();
+    setSaveStatus("saving");
+    try {
+      await onSave?.(form);
+      // Deliberately NOT calling onClose() here anymore. Saving used to
+      // immediately close (and therefore unmount) this form — the next
+      // time it was opened, React re-mounted it from scratch and re-ran
+      // its `useState(() => ({ ...initialConsultationForm, ...initialValues }))`
+      // initializer, so it always looked "reset" even when the save itself
+      // had worked. `form` is left completely untouched here — whatever
+      // was just typed stays exactly as-is on screen. The person can keep
+      // editing, or close manually with the Cancel/Close button whenever
+      // they're actually done.
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 3000);
+    } catch {
+      // onSave (handleSaveConsultation) already alerts the user on
+      // failure — just clear the "Saving…" state so the button isn't
+      // stuck disabled.
+      setSaveStatus("idle");
+    }
   }
 
   const chestPainYes = form.chestPainPressure === "YES";
@@ -2992,7 +3016,10 @@ export default function ConsultationForm({
         </fieldset>
 
         {/* ── SUBMIT ── */}
-        <div className="flex gap-4 justify-end pt-4 border-t border-slate-200">
+        <div className="flex items-center gap-4 justify-end pt-4 border-t border-slate-200">
+          {saveStatus === "saved" && (
+            <span className="text-sm font-medium text-emerald-600">Saved — you can keep editing or close.</span>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -3003,9 +3030,10 @@ export default function ConsultationForm({
           {!readOnly && (isNurse || isDoctor || user?.role === "admin") && (
             <button
               type="submit"
-              className="px-8 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium transition-colors"
+              disabled={saveStatus === "saving"}
+              className="px-8 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium transition-colors disabled:opacity-60"
             >
-              Save Changes
+              {saveStatus === "saving" ? "Saving…" : "Save Changes"}
             </button>
           )}
         </div>

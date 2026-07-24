@@ -72,7 +72,7 @@ import {
   fillBlanksFromShared,
 } from "./sharedClinicalFields";
 import { findPatientById, updatePatient, savePatientPhoto } from "../../utils/patients";
-import { loadConsultationHistory, saveConsultationEntry, formatDiagnosisText, formatEdManagementText } from "../../utils/consultations";
+import { loadConsultationHistory, saveConsultationEntry, formatDiagnosisText, formatEdManagementText, resolveConsultationInitialValues } from "../../utils/consultations";
 import {
   loadAllPatientDocuments,
   saveEmr,
@@ -1301,7 +1301,12 @@ export default function PatientProfile() {
 
     setPatient(updatedPatient);
     setConsultation(entry);
-    setConsultationHistoryList((list) => [entry, ...list]);
+    // Replace the existing row for this (encounter, author role) instead
+    // of blindly prepending — saveConsultationEntry() upserts, so without
+    // this the SAME row would show up twice in Patient Files' history
+    // (the stale pre-save copy plus the fresh one) every time the same
+    // registration's consultation was saved a second time.
+    setConsultationHistoryList((list) => [entry, ...list.filter((e) => e.id !== entry.id)]);
     await syncSharedClinical("consultation", formData);
 
     // Push straight into an already-saved Konsulta/Yakap Referral, too —
@@ -1667,7 +1672,17 @@ export default function PatientProfile() {
       (e) => e.authorRole === "doctor" || e.authorRole === "admin"
     );
     const nurseEntries = (consultationHistoryList || []).filter((e) => NURSE_ROLES.includes(e.authorRole));
-    const doctorEntry = doctorEntries[0] || null;
+    // Prefer the doctor entry for whichever registration is currently open
+    // (e.g. via "Start Consultation") over just the most-recently-created
+    // one on file — otherwise a doctor's fresh save can be invisible to
+    // this referral if a newer registration happens to exist for the same
+    // patient. Falls back to the old "most recent overall" behavior when
+    // there's no specific registration in context.
+    const doctorEntry =
+      (consultationEncounter?.id &&
+        doctorEntries.find((e) => e.encounterId === consultationEncounter.id)) ||
+      doctorEntries[0] ||
+      null;
     const nurseEntry =
       (doctorEntry?.encounterId && nurseEntries.find((e) => e.encounterId === doctorEntry.encounterId)) ||
       nurseEntries[0] ||
@@ -1696,7 +1711,16 @@ export default function PatientProfile() {
       (e) => e.authorRole === "doctor" || e.authorRole === "admin"
     );
     const erEntries = (consultationHistoryList || []).filter((e) => e.authorRole === "er_nurse");
-    const doctorEntry = doctorEntries[0];
+    // Same reasoning as resolveKonsultaSources above — prefer the doctor
+    // entry for the registration currently open on this page (this is
+    // what makes a just-saved "Medicine Given at ER" show up in CF4's
+    // Drugs/Medicines table right away) rather than whichever doctor
+    // entry happens to be newest across every registration this patient
+    // has ever had.
+    const doctorEntry =
+      (consultationEncounter?.id &&
+        doctorEntries.find((e) => e.encounterId === consultationEncounter.id)) ||
+      doctorEntries[0];
     if (!doctorEntry) return null;
 
     // Prefer the ER nurse entry from the SAME registration as the
@@ -2552,7 +2576,13 @@ export default function PatientProfile() {
       )}
       {showConsultation && consultationDataReady && (
         <ConsultationForm
-          initialValues={consultation || patientToConsultationSeed(patient, sharedClinical)}
+          initialValues={
+            resolveConsultationInitialValues(
+              consultationHistoryList,
+              consultationEncounter?.id ?? null,
+              user?.role
+            ) || patientToConsultationSeed(patient, sharedClinical)
+          }
           readOnly={consultationReadOnly}
           onSave={handleSaveConsultation}
           onClose={() => {
