@@ -12,13 +12,16 @@
 // etc.) can keep reading e.g. `entry.diagnosis` or `entry.pastMedicalHistory`
 // exactly like it did when everything was one flat localStorage blob.
 //
-// One thing that's genuinely different now, not just relocated: the table
-// only has an INSERT policy, no UPDATE (see the SQL schema) — every save
-// is a brand-new row, on purpose, so a doctor's or nurse's signed
-// consultation record can never be silently rewritten later. That's why
-// PatientProfile.jsx's cross-form "fill in my blanks from a sibling form"
-// sync no longer tries to patch values back into a consultation entry —
-// only patch other forms.
+// One thing that's genuinely different from a typical Supabase-backed
+// list: saveConsultationEntry() below upserts per (encounter_id,
+// author_role) instead of always inserting. That's what gives Patient
+// Files "one consultation history entry per registration, per author
+// role" instead of a new entry stacking up every time the same nurse or
+// doctor re-saves the same registration's Consultation Form. See that
+// function's own comment for the full rationale. (An entry saved with no
+// encounter_id — the standalone Patient Profile "Add/Update consultation"
+// shortcut — still always inserts a fresh row, since there's no
+// registration to key an update on.)
 
 import { supabase } from "../lib/supabaseClient";
 import { getPatientUuid } from "./patients";
@@ -83,12 +86,12 @@ function formDataToRow({ patientUuid, encounterId, authorRole, authorId, formDat
   return row;
 }
 
-// Every save appends a new row instead of overwriting — that's what lets
-// Patient Files show a real history (ER Consultation / OPD Consultation /
-// Medical Record) instead of just the single latest save. Entries are
-// tagged with who authored them (authorRole) so each folder can filter to
-// just its own kind, and with encounterId so a specific registration can
-// be matched back to the diagnosis recorded against it (see
+// Loads every consultation entry for this patient — one row per
+// registration per author role now (see saveConsultationEntry), plus any
+// standalone entries saved with no encounter_id. Entries are tagged with
+// who authored them (authorRole) so each Patient Files folder can filter
+// to just its own kind, and with encounterId so a specific registration
+// can be matched back to the diagnosis recorded against it (see
 // loadDiagnosesByEncounter below).
 export async function loadConsultationHistory(hospitalNo) {
   const patientUuid = await getPatientUuid(hospitalNo);
@@ -106,6 +109,20 @@ export async function loadConsultationHistory(hospitalNo) {
   return (data || []).map(rowToEntry);
 }
 
+// One consultation record per (registration, author role) — re-saving the
+// same registration's consultation (as either the nurse or the doctor)
+// overwrites that role's existing entry instead of stacking a new one in
+// Patient Files' history. A nurse's entry and a doctor's entry for the
+// SAME registration are still two separate rows (that's the "one history
+// per registration for doctor AND Nurse" the feature is meant to give
+// you) — it's only a second save by the SAME role on the SAME
+// registration that now overwrites instead of appending.
+//
+// Entries with no encounterId (the standalone "Add/Update consultation"
+// shortcut on the general Patient Profile page, not opened from any one
+// registration) are NOT deduplicated this way — there's no registration
+// to key an update on, so those keep the old "always insert a fresh row"
+// behavior, same as before.
 export async function saveConsultationEntry(hospitalNo, formData, authorRole, encounterId = null, authorId = null) {
   if (!VALID_AUTHOR_ROLES.includes(authorRole)) {
     throw new Error(
@@ -119,6 +136,31 @@ export async function saveConsultationEntry(hospitalNo, formData, authorRole, en
   if (!patientUuid) throw new Error(`No patient found with Hospital No. "${hospitalNo}"`);
 
   const row = formDataToRow({ patientUuid, encounterId, authorRole, authorId, formData });
+
+  if (encounterId) {
+    const { data: existing, error: findError } = await supabase
+      .from("consultations")
+      .select("id")
+      .eq("encounter_id", encounterId)
+      .eq("author_role", authorRole)
+      .maybeSingle();
+    if (findError) throw new Error(findError.message);
+
+    if (existing) {
+      // Keep the original row's id (and therefore its created_at) — only
+      // the content changes on a re-save.
+      const { id, ...updates } = row;
+      const { data, error } = await supabase
+        .from("consultations")
+        .update(updates)
+        .eq("id", existing.id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return rowToEntry(data);
+    }
+  }
+
   const { data, error } = await supabase.from("consultations").insert(row).select().single();
   if (error) throw new Error(error.message);
 

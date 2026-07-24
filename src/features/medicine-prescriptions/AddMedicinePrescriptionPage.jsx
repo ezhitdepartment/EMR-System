@@ -11,7 +11,6 @@ import {
   Pill,
 } from "lucide-react";
 import CreatePatientModal from "../patients/CreatePatientModal";
-import SearchableSelect from "../../components/common/SearchableSelect";
 import YearMonthFilter from "../../components/common/YearMonthFilter";
 import { formatDateCreated } from "../../utils/labOrders";
 import { loadPatients } from "../../utils/patients";
@@ -541,20 +540,25 @@ export default function AddMedicinePrescriptionPage() {
               <span />
             </div>
 
+            <datalist id="medicine-catalog-options">
+              {MEDICINE_CATALOG.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+
             <div className="flex flex-col gap-2">
               {rows.map((row) => (
                 <div
                   key={row.rowId}
                   className="grid grid-cols-[1fr_90px_60px_1fr_28px] gap-2 items-start"
                 >
-                  <SearchableSelect
+                  <input
+                    type="text"
+                    list="medicine-catalog-options"
                     value={row.medicineName}
-                    onChange={(name) => selectMedicine(row.rowId, name)}
-                    options={MEDICINE_CATALOG}
-                    getValue={(name) => name}
-                    getLabel={(name) => name}
-                    placeholder="Select medicine"
-                    inputClass="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                    onChange={(e) => selectMedicine(row.rowId, e.target.value)}
+                    placeholder="Type or select a medicine"
+                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                   />
                   <input
                     type="text"
