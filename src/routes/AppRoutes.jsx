@@ -11,6 +11,7 @@ import TriagePage from "../features/encounters/TriagePage";
 import EncounterFilesPage from "../features/encounters/EncounterFilesPage";
 import Patients from "../features/patients/Patients";
 import AdmittedPatients from "../features/patients/AdmittedPatients";
+import MedicalAbstractPage from "../pages/patient/MedicalAbstractPage";
 import LabOrders from "../features/lab-orders/LabOrders";
 import XRayOrders from "../features/lab-orders/XRayOrders";
 import ViewLabOrderPage from "../features/lab-orders/ViewLabOrderPage";
@@ -115,6 +116,16 @@ export default function AppRoutes() {
             element={
               hasFeatureAccess(user?.role, "admittedPatients") ? (
                 <AdmittedPatients />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
+          <Route
+            path="/admitted-patients/:hospitalNo/medical-abstract"
+            element={
+              hasFeatureAccess(user?.role, "admittedPatients") ? (
+                <MedicalAbstractPage />
               ) : (
                 <Navigate to="/reports" replace />
               )

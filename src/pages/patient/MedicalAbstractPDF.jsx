@@ -7,39 +7,14 @@
 // CF4PDF.jsx / ErDischargePDF.jsx / MedicalCertificatePDF.jsx, rather than
 // the dashboard's teal/rounded house style.
 //
-// DATA SOURCES — same three-source pattern CF4PDF.jsx already uses, since
-// this is assembled from the exact same consultation data (a Medical
-// Abstract and a CF4 summarize the same admission, just laid out
-// differently on paper):
-//   - `patient`     — name, sex, date of birth, address, Hospital No.
-//   - `doctorEntry` — the doctor's most recent consultation save for this
-//     admission. Owns nearly every field on this form: Chief Complaint,
-//     Admitting Impression (admittingDiagnosis), History of Present
-//     Illness, Signs & Symptoms, Referral, Physical Examination, Surgical
-//     Procedure/RVS Code, Course in the Ward, Final Diagnosis
-//     (dischargeDiagnosis), Case Rate Codes (used for "ICD 10 Code/RVS" —
-//     there's no separate ICD-10 field on the Consultation Form yet),
-//     admission/discharge date & time, Outcome of Treatment, Disposition,
-//     Take Home Medicines (prescriptionItems), and the Certification
-//     signature block.
-//   - `erEntry`     — the ER/OPD nurse's most recent consultation save for
-//     the same admission. Owns Pertinent Past Medical History and OB/GYN
-//     History.
-//   - `triage`      — the encounter's vitals (BP/HR/RR/Temp/Wt/Ht), for
-//     the Vital Signs line under Physical Examination on Admission.
-//   - `ancillaries` — optional array of { testName, status, datePerformed }
-//     for any Lab/X-Ray/Ultrasound orders tied to this same admission
-//     (see resolveMedicalAbstractSources() in utils/admittedPatients.js).
-//     Renders under "Ancillaries Done"; the paper form's own blank is
-//     otherwise hand-filled, so this is a bonus, not a required prop.
-//
-// Two fields on the paper form — "Admitting Nurse" and a dedicated ICD-10
-// code for the Final Diagnosis — don't have their own column/field
-// anywhere in the schema yet (nothing currently records which nurse's
-// name should print there, and Case Rate Codes are the closest existing
-// stand-in for "ICD 10 Code/RVS"). Both are left as blank ruled space
-// instead of guessing, exactly like every other not-yet-captured field on
-// this form.
+// DATA SOURCE — a single, flat `form` object: the saved Medical Abstract
+// document itself (patient_documents, doc_type "medabstract"), edited on
+// MedicalAbstractPage.jsx and passed straight through to this component
+// with no re-shaping — same "PDF renders exactly the saved form" pattern
+// MedicalCertificatePDF.jsx already uses. See
+// emptyMedicalAbstractForm()/buildMedicalAbstractSeed() in
+// medicalAbstractHelpers.js for the full field list and where each one is
+// first auto-filled from.
 
 import {
   Document, Page, Text, View, StyleSheet, Image,
@@ -52,6 +27,7 @@ import {
   HEENT_OPTIONS,
   PE_SYSTEMS,
 } from "./ConsultationForm";
+import { emptyMedicalAbstractForm } from "./medicalAbstractHelpers";
 
 const ABSTRACT_SIZE = [595.28, 780];
 
@@ -262,37 +238,21 @@ function computeDuration(dateAdmitted, dateDischarged) {
   return days > 0 ? `${days} day${days === 1 ? "" : "s"}` : "";
 }
 
-export default function MedicalAbstractPDF({
-  patient = {}, doctorEntry = {}, erEntry = {}, triage = null, ancillaries = [],
-}) {
+export default function MedicalAbstractPDF({ form: formProp = {} }) {
+  const form = { ...emptyMedicalAbstractForm(), ...formProp };
+
   const generatedOn = new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
-  const fullName = [patient.lastName, patient.firstName, patient.middleName].filter(Boolean).join(", ");
-  const isFemale = (patient.sex || "").toLowerCase() === "female";
-  const age = ageInYears(patient.dateOfBirth);
+  const fullName = [form.lastName, form.firstName, form.middleName].filter(Boolean).join(", ");
+  const isFemale = (form.sex || "").toLowerCase() === "female";
+  const age = ageInYears(form.dateOfBirth);
 
-  const signs = doctorEntry.admissionSigns || [];
-  const pastMedicalHistory = (erEntry.pastMedicalHistory || [])
-    .map((item) => item.text)
-    .filter(Boolean)
-    .join("; ");
-  const referred = doctorEntry.referredFromOtherHCI;
-  const courseInWard = (doctorEntry.courseInWardEntries || []).filter((e) => e.date || e.orderAction);
-  const erMedicineItems = (doctorEntry.erMedicineItems || []).filter(
-    (i) => i.genericName || i.quantityDosageRoute || i.totalCost
-  );
-  const takeHomeItems = (doctorEntry.prescriptionItems || []).filter(
-    (i) => i.medicineName || i.instructions
-  );
-  const ancillaryRows = (ancillaries || []).filter((a) => a.testName);
+  const signs = form.admissionSigns || [];
+  const referred = form.referredFromOtherHCI;
+  const courseInWard = (form.courseInWardEntries || []).filter((e) => e.date || e.orderAction);
+  const takeHomeItems = (form.takeHomeMedicines || []).filter((i) => i.medicineName || i.instructions);
 
-  const icd10OrRvs = [doctorEntry.caseRateCode1, doctorEntry.caseRateCode2].filter(Boolean).join(" / ");
-  const duration = computeDuration(doctorEntry.dateAdmitted, doctorEntry.dateDischarged);
-
-  const vitals = triage
-    ? `BP: ${dash(triage.systolic && triage.diastolic ? `${triage.systolic}/${triage.diastolic}` : "")}   ` +
-      `HR: ${dash(triage.heartRate)}   RR: ${dash(triage.respiratoryRate)}   Temp: ${dash(triage.temperature)}   ` +
-      `Wt: ${dash(triage.weight)}   Ht: ${dash(triage.height)}`
-    : null;
+  const duration = computeDuration(form.dateAdmitted, form.dateDischarged);
+  const vitals = form.vitalSigns || null;
 
   return (
     <Document title={`Medical Abstract - ${fullName || "Patient"}`} author="E. ZARATE HOSPITAL">
@@ -313,48 +273,44 @@ export default function MedicalAbstractPDF({
 
         <View style={s.mrnRow}>
           <Text style={s.mrnLabel}>Medical Record No.:</Text>
-          <Text style={s.mrnValue}>{dash(patient.hospitalNo)}</Text>
+          <Text style={s.mrnValue}>{dash(form.hospitalNo)}</Text>
         </View>
 
         <Text style={s.title}>Medical Abstract</Text>
 
         <FieldLine label="Name" value={fullName} />
         <View style={s.fieldRow}>
-          <FieldLine label="Age / Sex" value={age !== null ? `${age} / ${dash(patient.sex)}` : dash(patient.sex)} width={140} />
+          <FieldLine label="Age / Sex" value={age !== null ? `${age} / ${dash(form.sex)}` : dash(form.sex)} width={140} />
           <View style={{ width: 10 }} />
-          <FieldLine label="DOB" value={formatDate(patient.dateOfBirth)} width={140} />
+          <FieldLine label="DOB" value={formatDate(form.dateOfBirth)} width={140} />
         </View>
-        <FieldLine label="Address" value={patient.address} />
+        <FieldLine label="Address" value={form.address} />
         <View style={s.fieldRow}>
-          <FieldLine label="Admitting Physician" value={doctorEntry.attendingPrintedName} />
+          <FieldLine label="Admitting Physician" value={form.attendingPrintedName} />
           <View style={{ width: 10 }} />
-          {/* No dedicated "admitting nurse" field exists yet in the
-              Consultation Form's data model — left blank rather than
-              guessing which nurse this was, same reasoning as the file
-              banner above. */}
-          <FieldLine label="Admitting Nurse" value={null} />
+          <FieldLine label="Admitting Nurse" value={form.admittingNurse} />
         </View>
         <FieldLine
           label="Date/Time Admitted"
           value={
-            doctorEntry.dateAdmitted
-              ? `${formatDate(doctorEntry.dateAdmitted)}${doctorEntry.timeAdmitted ? `  ${formatTime(doctorEntry.timeAdmitted)}` : ""}`
+            form.dateAdmitted
+              ? `${formatDate(form.dateAdmitted)}${form.timeAdmitted ? `  ${formatTime(form.timeAdmitted)}` : ""}`
               : ""
           }
         />
 
-        <RuledBlock label="Chief Complaint" value={doctorEntry.chiefComplaint} lines={1} />
-        <RuledBlock label="Admitting Impression" value={doctorEntry.admittingDiagnosis} lines={1} />
-        <RuledBlock label="Brief History of Present Illness" value={doctorEntry.historyOfPresentIllness} lines={4} />
-        <RuledBlock label="Pertinent Past Medical History" value={pastMedicalHistory} lines={2} />
+        <RuledBlock label="Chief Complaint" value={form.chiefComplaint} lines={1} />
+        <RuledBlock label="Admitting Impression" value={form.admittingDiagnosis} lines={1} />
+        <RuledBlock label="Brief History of Present Illness" value={form.historyOfPresentIllness} lines={4} />
+        <RuledBlock label="Pertinent Past Medical History" value={form.pastMedicalHistory} lines={2} />
         <View style={s.blockWrap}>
           <Text style={s.blockLabel}>OB/GYN History:</Text>
           <View style={s.ruledBox}>
             <Text style={s.ruledLineText}>
               {isFemale
-                ? `G ${dash(erEntry.noOfPregnancies)}   P ${dash(erEntry.noOfDeliveries)}   ` +
-                  `(${dash(erEntry.fullTerm)} - ${dash(erEntry.premature)} - ${dash(erEntry.noOfAbortions)})   ` +
-                  `LMP: ${dash(erEntry.lastMenstrualPeriod)}`
+                ? `G ${dash(form.noOfPregnancies)}   P ${dash(form.noOfDeliveries)}   ` +
+                  `(${dash(form.fullTerm)} - ${dash(form.premature)} - ${dash(form.noOfAbortions)})   ` +
+                  `LMP: ${dash(form.lastMenstrualPeriod)}`
                 : "N/A"}
             </Text>
           </View>
@@ -367,11 +323,11 @@ export default function MedicalAbstractPDF({
           ))}
           <Check
             checked={signs.includes("Pain")}
-            label={`Pain${doctorEntry.admissionSignsPainSite ? ` (${doctorEntry.admissionSignsPainSite})` : ""}`}
+            label={`Pain${form.admissionSignsPainSite ? ` (${form.admissionSignsPainSite})` : ""}`}
           />
           <Check
             checked={signs.includes("Others")}
-            label={`Others${doctorEntry.admissionSignsOthers ? `: ${doctorEntry.admissionSignsOthers}` : ""}`}
+            label={`Others${form.admissionSignsOthers ? `: ${form.admissionSignsOthers}` : ""}`}
           />
         </View>
 
@@ -382,7 +338,7 @@ export default function MedicalAbstractPDF({
           <Check checked={referred === "NO"} label="No" width={2} />
           <Check checked={referred === "YES"} label="Yes" width={2} />
         </View>
-        <FieldLine label="Name of originating HCI" value={doctorEntry.referringHCIName} />
+        <FieldLine label="Name of originating HCI" value={form.referringHCIName} />
 
         <Bar title="Physical Examination on Admission (Pertinent Findings per System)" />
 
@@ -392,10 +348,10 @@ export default function MedicalAbstractPDF({
             {GENERAL_SURVEY_OPTIONS.map((opt) => (
               <Check
                 key={opt}
-                checked={(doctorEntry.peGeneralSurvey || []).includes(opt)}
+                checked={(form.peGeneralSurvey || []).includes(opt)}
                 label={
-                  opt === "Altered sensorium" && doctorEntry.peGeneralSurveyAlteredSensoriumSpecify
-                    ? `${opt}: ${doctorEntry.peGeneralSurveyAlteredSensoriumSpecify}`
+                  opt === "Altered sensorium" && form.peGeneralSurveyAlteredSensoriumSpecify
+                    ? `${opt}: ${form.peGeneralSurveyAlteredSensoriumSpecify}`
                     : opt
                 }
               />
@@ -412,9 +368,9 @@ export default function MedicalAbstractPDF({
           <Text style={s.peSystemLabel}>SHEENT</Text>
           <View style={s.checkGrid}>
             {HEENT_OPTIONS.map((opt) => (
-              <Check key={opt} checked={(doctorEntry.peHeent || []).includes(opt)} label={opt} />
+              <Check key={opt} checked={(form.peHeent || []).includes(opt)} label={opt} />
             ))}
-            {doctorEntry.peHeentOthers ? <Check checked label={`Others: ${doctorEntry.peHeentOthers}`} width={2} /> : null}
+            {form.peHeentOthers ? <Check checked label={`Others: ${form.peHeentOthers}`} width={2} /> : null}
           </View>
         </View>
 
@@ -423,16 +379,16 @@ export default function MedicalAbstractPDF({
             <Text style={s.peSystemLabel}>{system.label.toUpperCase()}</Text>
             <View style={s.checkGrid}>
               {system.options.map((opt) => (
-                <Check key={opt} checked={(doctorEntry[system.key] || []).includes(opt)} label={opt} />
+                <Check key={opt} checked={(form[system.key] || []).includes(opt)} label={opt} />
               ))}
-              {doctorEntry[system.othersKey] ? (
-                <Check checked label={`Others: ${doctorEntry[system.othersKey]}`} width={2} />
+              {form[system.othersKey] ? (
+                <Check checked label={`Others: ${form[system.othersKey]}`} width={2} />
               ) : null}
             </View>
           </View>
         ))}
 
-        <RuledBlock label="Surgical Procedures (RVS CODE)" value={doctorEntry.surgicalProcedureRvsCode} lines={1} />
+        <RuledBlock label="Surgical Procedures (RVS CODE)" value={form.surgicalProcedureRvsCode} lines={1} />
 
         <View style={s.footer} fixed>
           <Text>E. ZARATE HOSPITAL  |  Medical Abstract</Text>
@@ -443,28 +399,8 @@ export default function MedicalAbstractPDF({
 
       {/* ── PAGE 2 ── */}
       <Page size={ABSTRACT_SIZE} style={s.page}>
-        <RuledBlock
-          label="Ancillaries Done"
-          value={
-            ancillaryRows.length
-              ? ancillaryRows
-                  .map((a) => `${a.testName}${a.datePerformed ? ` (${formatDate(a.datePerformed)})` : ""}`)
-                  .join("; ")
-              : ""
-          }
-          lines={2}
-        />
-        <RuledBlock
-          label="Medication / Treatment Done"
-          value={
-            erMedicineItems.length
-              ? erMedicineItems
-                  .map((i) => [i.genericName, i.quantityDosageRoute].filter(Boolean).join(" — "))
-                  .join("; ")
-              : ""
-          }
-          lines={3}
-        />
+        <RuledBlock label="Ancillaries Done" value={form.ancillariesDone} lines={2} />
+        <RuledBlock label="Medication / Treatment Done" value={form.medicationTreatmentDone} lines={3} />
 
         <Text style={s.blockLabel}>Course in the Ward:</Text>
         <View style={s.table}>
@@ -488,16 +424,16 @@ export default function MedicalAbstractPDF({
         </View>
 
         <View style={s.fieldRow}>
-          <FieldLine label="Final Diagnosis" value={doctorEntry.dischargeDiagnosis} />
+          <FieldLine label="Final Diagnosis" value={form.dischargeDiagnosis} />
           <View style={{ width: 10 }} />
-          <FieldLine label="ICD 10 Code / RVS" value={icd10OrRvs} width={140} />
+          <FieldLine label="ICD 10 Code / RVS" value={form.icd10OrRvsCode} width={140} />
         </View>
         <View style={s.fieldRow}>
           <FieldLine
             label="Date/Time of Discharge"
             value={
-              doctorEntry.dateDischarged
-                ? `${formatDate(doctorEntry.dateDischarged)}${doctorEntry.timeDischarged ? `  ${formatTime(doctorEntry.timeDischarged)}` : ""}`
+              form.dateDischarged
+                ? `${formatDate(form.dateDischarged)}${form.timeDischarged ? `  ${formatTime(form.timeDischarged)}` : ""}`
                 : "Still Admitted"
             }
           />
@@ -509,12 +445,12 @@ export default function MedicalAbstractPDF({
         <View style={s.outcomeRow}>
           {["Improved", "HAMA", "Expired", "Absconded", "Transferred"].map((opt) => (
             <View key={opt} style={s.outcomeItem}>
-              <View style={[s.checkBox, doctorEntry.outcomeOfTreatment === opt ? s.checkBoxChecked : null]} />
+              <View style={[s.checkBox, form.outcomeOfTreatment === opt ? s.checkBoxChecked : null]} />
               <Text style={s.checkLabel}>{opt.toUpperCase()}</Text>
             </View>
           ))}
         </View>
-        <FieldLine label="Disposition" value={doctorEntry.disposition} />
+        <FieldLine label="Disposition" value={form.disposition} />
 
         <RuledBlock
           label="Take Home Medicines"
@@ -545,14 +481,14 @@ export default function MedicalAbstractPDF({
           <View style={s.sigCol}>
             <View style={s.sigLine} />
             <Text style={s.sigName}>
-              {dash(doctorEntry.attendingPrintedName)}
-              {doctorEntry.attendingPrintedName ? ", M.D." : ""}
+              {dash(form.attendingPrintedName)}
+              {form.attendingPrintedName ? ", M.D." : ""}
             </Text>
             <Text style={s.sigLabel}>Signature over Printed Name of Attending Physician</Text>
           </View>
           <View style={{ width: 110 }}>
             <View style={s.sigLine} />
-            <Text style={s.sigName}>{formatDate(doctorEntry.attendingCertifiedDate) || " "}</Text>
+            <Text style={s.sigName}>{formatDate(form.attendingCertifiedDate) || " "}</Text>
             <Text style={s.sigLabel}>Date Signed</Text>
           </View>
         </View>

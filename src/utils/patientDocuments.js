@@ -16,6 +16,7 @@ export const DOC_TYPES = {
   DISCHARGE: "discharge",
   KONSULTA: "konsulta",
   MEDCERT: "medcert",
+  MEDABSTRACT: "medabstract",
 };
 
 // Loads a single document for a patient, or null if it hasn't been saved
@@ -39,7 +40,7 @@ export async function loadPatientDocument(hospitalNo, docType) {
 // the Patient Profile's initial load and by Encounter Files, which both
 // need every document at once rather than one at a time.
 export async function loadAllPatientDocuments(hospitalNo) {
-  const empty = { emr: null, discharge: null, konsulta: null, medcert: null };
+  const empty = { emr: null, discharge: null, konsulta: null, medcert: null, medabstract: null };
   if (!hospitalNo) return empty;
 
   const { data, error } = await supabase
@@ -89,6 +90,7 @@ export const loadEmr = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES
 export const loadDischarge = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.DISCHARGE);
 export const loadKonsultaReferral = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.KONSULTA);
 export const loadMedicalCertificate = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.MEDCERT);
+export const loadMedicalAbstract = (hospitalNo) => loadPatientDocument(hospitalNo, DOC_TYPES.MEDABSTRACT);
 
 export const saveEmr = (hospitalNo, formData, userId) =>
   savePatientDocument(hospitalNo, DOC_TYPES.EMR, formData, userId);
@@ -98,3 +100,5 @@ export const saveKonsultaReferral = (hospitalNo, formData, userId) =>
   savePatientDocument(hospitalNo, DOC_TYPES.KONSULTA, formData, userId);
 export const saveMedicalCertificate = (hospitalNo, formData, userId) =>
   savePatientDocument(hospitalNo, DOC_TYPES.MEDCERT, formData, userId);
+export const saveMedicalAbstract = (hospitalNo, formData, userId) =>
+  savePatientDocument(hospitalNo, DOC_TYPES.MEDABSTRACT, formData, userId);

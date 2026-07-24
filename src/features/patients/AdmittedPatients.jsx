@@ -5,10 +5,7 @@ import {
   Search, RefreshCw, BedDouble, ChevronRight, ChevronLeft, FilterX,
   FileText, ClipboardList, LogOut, Loader2,
 } from "lucide-react";
-import {
-  loadAdmittedPatients, dischargeAdmittedPatient, resolveMedicalAbstractSources,
-} from "../../utils/admittedPatients";
-import MedicalAbstractPDF from "../../pages/patient/MedicalAbstractPDF";
+import { loadAdmittedPatients, dischargeAdmittedPatient } from "../../utils/admittedPatients";
 import AdmissionDischargeRecordPDF from "../../pages/patient/AdmissionDischargeRecordPDF";
 
 const PAGE_SIZE = 10;
@@ -118,23 +115,14 @@ export default function AdmittedPatients() {
   const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
 
-  async function handleCreateMedicalAbstract(e, record) {
+  function handleOpenMedicalAbstract(e, record) {
     e.stopPropagation();
-    const key = `${record.consultationId}:abstract`;
-    setBusyKey(key);
-    try {
-      const sources = await resolveMedicalAbstractSources(record);
-      await downloadPdf(
-        MedicalAbstractPDF,
-        sources,
-        `${record.fullName || record.hospitalNo} - Medical Abstract.pdf`
-      );
-    } catch (err) {
-      console.error("Medical Abstract generation failed:", err);
-      window.alert("Couldn't generate the Medical Abstract. Please try again.");
-    } finally {
-      setBusyKey(null);
-    }
+    // `record` is passed along as router state purely as a shortcut (so
+    // the page doesn't have to re-look-up which encounter this admission
+    // belongs to on first open) — the page re-fetches the patient and any
+    // already-saved abstract on its own regardless, so a direct link or a
+    // refresh still works fine without it.
+    navigate(`/admitted-patients/${record.hospitalNo}/medical-abstract`, { state: { record } });
   }
 
   async function handleCreateAdmissionDischargeRecord(e, record) {
@@ -284,7 +272,6 @@ export default function AdmittedPatients() {
                 </thead>
                 <tbody>
                   {paged.map((r) => {
-                    const isBusyAbstract = busyKey === `${r.consultationId}:abstract`;
                     const isBusyRecord = busyKey === `${r.consultationId}:record`;
                     const isBusyDischarge = busyKey === `${r.consultationId}:discharge`;
                     const rowBusy = Boolean(busyKey && busyKey.startsWith(`${r.consultationId}:`));
@@ -309,9 +296,8 @@ export default function AdmittedPatients() {
                               title="Medical Abstract"
                               icon={FileText}
                               colorClass="bg-indigo-500"
-                              loading={isBusyAbstract}
                               disabled={rowBusy}
-                              onClick={(e) => handleCreateMedicalAbstract(e, r)}
+                              onClick={(e) => handleOpenMedicalAbstract(e, r)}
                             />
                             <ActionButton
                               title="Admission and Discharge Record"
