@@ -65,6 +65,10 @@ function rowToEntry(row) {
   entry.encounterId = row.encounter_id || null;
   entry.authorRole = row.author_role;
   entry.createdAt = row.created_at;
+  // Falls back to created_at for any row saved before the updated_at
+  // column existed. See the root-cause note on loadConsultationHistory's
+  // ordering below for why this column exists at all.
+  entry.updatedAt = row.updated_at || row.created_at;
   return entry;
 }
 
@@ -93,6 +97,19 @@ function formDataToRow({ patientUuid, encounterId, authorRole, authorId, formDat
 // to just its own kind, and with encounterId so a specific registration
 // can be matched back to the diagnosis recorded against it (see
 // loadDiagnosesByEncounter below).
+//
+// ORDERED BY updated_at, NOT created_at — this matters a lot here
+// specifically because saveConsultationEntry() UPDATES an existing row
+// (per encounter_id + author_role) on every re-save instead of always
+// inserting. created_at is set once at the row's first INSERT and never
+// changes again, so ordering by it means "most recent" silently drifts
+// away from "most recently EDITED" the moment more than one registration
+// or a second save exists — which is exactly what made a freshly-saved
+// Medicine Given at ER / Surgical Procedure not show up in the CF4
+// preview (CF4 picks its data from whichever doctor entry sorts first).
+// updated_at is bumped by a DB trigger on every UPDATE (see
+// consultations_set_updated_at in the schema), so this always reflects
+// the true last-touched time.
 export async function loadConsultationHistory(hospitalNo) {
   const patientUuid = await getPatientUuid(hospitalNo);
   if (!patientUuid) return [];
@@ -101,7 +118,7 @@ export async function loadConsultationHistory(hospitalNo) {
     .from("consultations")
     .select("*")
     .eq("patient_id", patientUuid)
-    .order("created_at", { ascending: false });
+    .order("updated_at", { ascending: false });
   if (error) {
     console.error("loadConsultationHistory failed:", error.message);
     return [];
@@ -348,7 +365,7 @@ export async function loadAllConsultations() {
   const { data, error } = await supabase
     .from("consultations")
     .select("*, patients ( hospital_no, first_name, last_name, date_of_birth )")
-    .order("created_at", { ascending: false });
+    .order("updated_at", { ascending: false });
   if (error) {
     console.error("loadAllConsultations failed:", error.message);
     return [];
@@ -381,9 +398,9 @@ export async function loadAllConsultations() {
 export async function loadDiagnosesByEncounter() {
   const { data, error } = await supabase
     .from("consultations")
-    .select("encounter_id, diagnosis, details, created_at")
+    .select("encounter_id, diagnosis, details, updated_at")
     .not("encounter_id", "is", null)
-    .order("created_at", { ascending: false });
+    .order("updated_at", { ascending: false });
   if (error) {
     console.error("loadDiagnosesByEncounter failed:", error.message);
     return {};
