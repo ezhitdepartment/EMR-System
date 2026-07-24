@@ -9,7 +9,7 @@
 //     nearly every CF4 field: Chief Complaint, Admitting/Discharge
 //     Diagnosis, Case Rate Codes, admission/discharge date & time,
 //     Referral, Pertinent Signs & Symptoms, Physical Examination on
-//     Admission, Course in the Ward, ED Management, Surgical Procedure/RVS
+//     Admission, Course in the Ward, Surgical Procedure/RVS
 //     Code, Outcome of Treatment, Drugs/Medicines, and the Certification
 //     signature block.
 //   - `erEntry` — the ER nurse's most recent consultation save (matched to
@@ -30,7 +30,7 @@
 //         OB-GYN), Signs & Symptoms, Referral.
 // Page 2: Physical Examination on Admission (General Survey, Vitals,
 //         HEENT, and every PE_SYSTEMS group — all of it, not split
-//         mid-section), Course in the Ward, ED Management, Surgical
+//         mid-section), Course in the Ward, Surgical
 //         Procedure/RVS Code, Drugs / Medicines, Outcome of Treatment,
 //         Certification.
 //
@@ -214,8 +214,11 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
   const obGyneNA = !isFemale;
   const referred = doctorEntry.referredFromOtherHCI;
   const courseInWard = (doctorEntry.courseInWardEntries || []).filter((e) => e.date || e.orderAction);
-  const prescriptionItems = (doctorEntry.prescriptionItems || []).filter(
-    (i) => i.medicineName || i.instructions
+  // CF4's "V. Drugs / Medicines" table is fed by Medicine Given at ER
+  // (erMedicineItems) — NOT the take-home Rx pad (prescriptionItems),
+  // which is a separate, distinct list captured elsewhere on the form.
+  const erMedicineItems = (doctorEntry.erMedicineItems || []).filter(
+    (i) => i.genericName || i.quantityDosageRoute || i.totalCost
   );
 
   const vitals = triage
@@ -387,7 +390,7 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
           </View>
         ))}
 
-        <Bar title="IV. Course in the Ward (Doctor's Order/Action)" />
+        <Bar title="IV. Course in the Ward (Doctor's Order/Action) / ED Management" />
         <View style={s.table}>
           <View style={s.tHeadRow}>
             <Text style={s.tCellHeadDate}>Date</Text>
@@ -408,11 +411,6 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
           )}
         </View>
 
-        <Text style={s.sectionLabel}>ED Management</Text>
-        <View style={[s.blkVal, { marginBottom: 3 }]}>
-          <Text>{dash(doctorEntry.edManagement)}</Text>
-        </View>
-
         <Text style={s.sectionLabel}>Surgical Procedure/RVS Code</Text>
         <View style={[s.blkVal, { marginBottom: 3 }]}>
           <Text>
@@ -425,23 +423,21 @@ export default function CF4PDF({ patient = {}, doctorEntry = {}, erEntry = {}, t
         <View style={s.table}>
           <View style={s.tHeadRow}>
             <Text style={s.tCellHead3}>Generic Name</Text>
-            <Text style={s.tCellHead3}>Milligram</Text>
-            <Text style={s.tCellHead3Last}>Quantity / Dosage / Route</Text>
+            <Text style={s.tCellHead3}>Quantity / Dosage / Route</Text>
+            <Text style={s.tCellHead3Last}>Total Cost</Text>
           </View>
-          {prescriptionItems.length === 0 ? (
+          {erMedicineItems.length === 0 ? (
             <View style={s.tRowLast}>
               <Text style={[s.tCell3, { color: C.light }]}>—</Text>
               <Text style={s.tCell3}> </Text>
               <Text style={s.tCell3Last}> </Text>
             </View>
           ) : (
-            prescriptionItems.map((item, i) => (
-              <View key={item.id || i} style={i === prescriptionItems.length - 1 ? s.tRowLast : s.tRow}>
-                <Text style={s.tCell3}>{dash(item.medicineName)}</Text>
-                <Text style={s.tCell3}>{dash(item.milligram)}</Text>
-                <Text style={s.tCell3Last}>
-                  {[item.quantity, item.instructions].filter(Boolean).join(" — ") || "—"}
-                </Text>
+            erMedicineItems.map((item, i) => (
+              <View key={item.id || i} style={i === erMedicineItems.length - 1 ? s.tRowLast : s.tRow}>
+                <Text style={s.tCell3}>{dash(item.genericName)}</Text>
+                <Text style={s.tCell3}>{dash(item.quantityDosageRoute)}</Text>
+                <Text style={s.tCell3Last}>{dash(item.totalCost)}</Text>
               </View>
             ))
           )}

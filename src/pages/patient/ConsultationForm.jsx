@@ -470,6 +470,9 @@ const DOCTOR_SECTIONS = new Set([
   // orders/actions taken during the patient's stay, so it belongs on the
   // doctor's half of the form, not the nurse's.
   "courseInWard",
+  // Medicine Given at ER — sits right after Course in the Ward, same
+  // doctor-authored section (see erMedicineItems below).
+  "erMedicine",
 ]);
 
 export const initialConsultationForm = {
@@ -659,12 +662,22 @@ export const initialConsultationForm = {
 
   // PhilHealth CF4 — Course in the Ward (Doctor's Order/Action, a running
   // dated log), captured by the Doctor role (see DOCTOR_SECTIONS below).
+  // ED Management used to be its own separate free-text box; the two are
+  // the same concept, so they're merged into this one running log now —
+  // there's no separate edManagement field anymore. Every other
+  // form/PDF that used to read ED Management (Konsulta/Yakap Referral's
+  // "Management at ED", the CF4 PDF, etc.) reads this same
+  // courseInWardEntries data instead — see formatCourseInWardText /
+  // formatManagementAtEdText in utils/consultations.js.
   courseInWardEntries: [],
 
-  // ED Management — free-text notes, distinct from Surgical Procedure/RVS
-  // Code below. Sits between Course in the Ward and Surgical Procedure/RVS
-  // Code in both the form and the CF4 PDF (see DOCTOR_SECTIONS below).
-  edManagement: "",
+  // PhilHealth CF4 — Medicine Given at ER, right after Course in the
+  // Ward. Same "Generic Name / Quantity-Dosage-Route / Total Cost" table
+  // CF4's own "V. Drugs / Medicines" section asks for — distinct from
+  // prescriptionItems above (the take-home Rx pad the Medicine
+  // Prescriptions module also reads from). This is what actually feeds
+  // CF4's Drugs/Medicines table now; prescriptionItems no longer does.
+  erMedicineItems: [],
 
   // Surgical Procedure/RVS Code — now captured by the Doctor role, in the
   // spot the Medication field used to occupy (see DOCTOR_SECTIONS below).
@@ -1089,7 +1102,6 @@ function DoctorConsultationReferencePanel({ patient, form }) {
     .join(" ");
   const hasDoctorRecord =
     form.diagnosis ||
-    form.edManagement ||
     form.surgicalProcedureRvsCode ||
     form.surgicalProcedureNotes ||
     form.disposition ||
@@ -1157,16 +1169,6 @@ function DoctorConsultationReferencePanel({ patient, form }) {
           </div>
         )}
         {form.diagnosis && <p className="whitespace-pre-wrap">{form.diagnosis}</p>}
-      </RefCard>
-
-      {/* ED Management — free-text notes, distinct from the RVS-coded
-          Surgical Procedure card below it. */}
-      <RefCard
-        title="ED Management"
-        icon={Pill}
-        empty={!form.edManagement ? "No ED management recorded yet." : null}
-      >
-        {form.edManagement && <p className="whitespace-pre-wrap">{form.edManagement}</p>}
       </RefCard>
 
       {/* Surgical Procedure/RVS Code (was labeled "ED Management") */}
@@ -1356,12 +1358,12 @@ export default function ConsultationForm({
     );
   }
 
-  // ED Management — stacks RVS codes/descriptions instead of replacing
-  // whatever's already there, so picking 5 codes in a row builds up all 5
-  // rather than each pick overwriting the last one. Uses the functional
-  // setForm updater (not the `set` helper, which closes over the `form`
-  // from render time) so a doctor clicking through several results in
-  // quick succession can't lose one to a stale-closure race.
+  // Surgical Procedure/RVS Code — stacks RVS codes/descriptions instead of
+  // replacing whatever's already there, so picking 5 codes in a row builds
+  // up all 5 rather than each pick overwriting the last one. Uses the
+  // functional setForm updater (not the `set` helper, which closes over
+  // the `form` from render time) so a doctor clicking through several
+  // results in quick succession can't lose one to a stale-closure race.
   // surgicalProcedureRvsCode grows as a comma-separated list of codes;
   // surgicalProcedureNotes grows as one sentence per code, each ending in
   // its own period — "put a dot after the description of every RVS code".
@@ -1401,6 +1403,31 @@ export default function ConsultationForm({
     set(
       "courseInWardEntries",
       form.courseInWardEntries.filter((entry) => entry.id !== id)
+    );
+  }
+
+  // Medicine Given at ER — sits right after Course in the Ward. Same
+  // add/update/remove shape as prescriptionItems, just with CF4's own
+  // "Drugs / Medicines" columns (Generic Name / Quantity-Dosage-Route /
+  // Total Cost) instead of the take-home Rx pad's fields.
+  function addErMedicineItem() {
+    set("erMedicineItems", [
+      ...form.erMedicineItems,
+      { id: nextId(), genericName: "", quantityDosageRoute: "", totalCost: "" },
+    ]);
+  }
+
+  function updateErMedicineItem(id, patch) {
+    set(
+      "erMedicineItems",
+      form.erMedicineItems.map((item) => (item.id === id ? { ...item, ...patch } : item))
+    );
+  }
+
+  function removeErMedicineItem(id) {
+    set(
+      "erMedicineItems",
+      form.erMedicineItems.filter((item) => item.id !== id)
     );
   }
 
@@ -2330,12 +2357,19 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── PHILHEALTH CF4: COURSE IN THE WARD (Doctor only) ── */}
-        {/* Moved here, right after Diagnosis — comes before ED Management
-            and Surgical Procedure/RVS Code now. */}
+        {/* ── PHILHEALTH CF4: COURSE IN THE WARD / ED MANAGEMENT (Doctor only) ── */}
+        {/* Course in the Ward and ED Management are the same running
+            dated log of the doctor's orders/actions during the visit —
+            merged into one section (one table, one set of entries)
+            instead of a separate free-text ED Management box. Every other
+            form/PDF that used to read "ED Management" now reads this same
+            courseInWardEntries data (see formatCourseInWardText /
+            formatManagementAtEdText in utils/consultations.js). Moved
+            here, right after Diagnosis — comes before Medicine Given at
+            ER and Surgical Procedure/RVS Code. */}
         {canEdit("courseInWard") && (
         <div>
-          <SectionHeader title="Course in the Ward" />
+          <SectionHeader title="Course in the Ward (Doctor's Order/Action) / ED Management" />
           <div className="border border-slate-200 rounded-lg p-4 bg-white">
             <p className="text-sm font-bold text-slate-800 mb-3">Doctor's Order/Action</p>
             <div className="flex flex-col gap-3">
@@ -2383,32 +2417,89 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* ── ED MANAGEMENT (doctor) ── */}
-        {/* Plain free-text notes now — the RVS code picker/fields that used
-            to live here moved down into Surgical Procedure/RVS Code below. */}
-        {canEdit("surgicalProcedure") && (
+        {/* ── MEDICINE GIVEN AT ER (doctor) ── */}
+        {/* Right after Course in the Ward. Same "fill up" pattern as
+            Medicine Prescription further down, but different content —
+            this is CF4's own "V. Drugs / Medicines" table (Generic Name /
+            Quantity-Dosage-Route / Total Cost), not a take-home Rx. See
+            CF4PDF.jsx, which now reads erMedicineItems here instead of
+            prescriptionItems for that section. */}
+        {canEdit("erMedicine") && (
         <div>
-          <SectionHeader title="ED Management" />
+          <SectionHeader title="Medicine Given at ER" />
           <div className="border border-slate-200 rounded-lg p-4 bg-white">
-            <Field label="ED Management Notes">
-              <textarea
-                name="edManagement"
-                value={form.edManagement}
-                onChange={handle}
-                rows={5}
-                placeholder="ED management notes"
-                className={textareaClass}
-              />
-            </Field>
+            <p className="text-sm font-bold text-slate-800 mb-3">Drugs / Medicines</p>
+            <div className="flex flex-col gap-3">
+              {form.erMedicineItems.map((item) => (
+                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_140px_32px] gap-3 items-start">
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Generic Name
+                    </p>
+                    <input
+                      type="text"
+                      list="medicine-catalog-options"
+                      value={item.genericName}
+                      onChange={(e) => updateErMedicineItem(item.id, { genericName: e.target.value })}
+                      placeholder="Type or select a medicine"
+                      className={`${inputClass} w-full`}
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Quantity/Dosage/Route
+                    </p>
+                    <input
+                      type="text"
+                      value={item.quantityDosageRoute}
+                      onChange={(e) => updateErMedicineItem(item.id, { quantityDosageRoute: e.target.value })}
+                      placeholder="e.g. 1 amp IV"
+                      className={`${inputClass} w-full`}
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Total Cost
+                    </p>
+                    <input
+                      type="text"
+                      value={item.totalCost}
+                      onChange={(e) => updateErMedicineItem(item.id, { totalCost: e.target.value })}
+                      placeholder="e.g. 150.00"
+                      className={`${inputClass} w-full`}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeErMedicineItem(item.id)}
+                    className="mt-6 inline-flex items-center justify-center w-8 h-8 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addErMedicineItem}
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-teal-700 hover:text-teal-800"
+            >
+              <Plus size={14} />
+              Add medicine
+            </button>
           </div>
         </div>
         )}
 
         {/* ── SURGICAL PROCEDURE / RVS CODE (doctor) ── */}
-        {/* Was labeled "ED Management" — renamed to Surgical Procedure/RVS
-            Code, now that ED Management above is its own plain-text
-            section. RvsAutocomplete is a search-and-select picker, same
-            idea as the ICD-10 picker in the Diagnosis section above:
+        {/* Was labeled "ED Management" historically — this is the RVS-coded
+            field, distinct from the old free-text ED Management notes
+            field (removed). RvsAutocomplete is a search-and-select picker,
+            same idea as the ICD-10 picker in the Diagnosis section above:
             search by code, description, or section, then click a result.
             Picking one STACKS onto both fields below instead of replacing
             them — surgicalProcedureRvsCode grows as "10060, 11040, ..."
@@ -2860,8 +2951,9 @@ export default function ConsultationForm({
         </div>
         )}
 
-        {/* Course in the Ward moved to right after Diagnosis, ahead of ED
-            Management / Surgical Procedure — see that block above. */}
+        {/* Course in the Ward (now merged with ED Management) moved to
+            right after Diagnosis, ahead of Medicine Given at ER /
+            Surgical Procedure — see that block above. */}
 
         {/* ── CONSENT ── */}
         {canEdit("consentSignoff") && (

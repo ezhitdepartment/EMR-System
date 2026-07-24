@@ -657,10 +657,10 @@ export default function DoctorConsultationPDF({ patient = {}, form = {}, triage 
           </View>
         )}
 
-        {/* Course in the Ward */}
+        {/* Course in the Ward / ED Management */}
         {form.courseInWardEntries?.length > 0 && (
           <>
-            <Bar2>Course in the Ward — Doctor's Order/Action</Bar2>
+            <Bar2>Course in the Ward (Doctor's Order/Action) / ED Management</Bar2>
             {form.courseInWardEntries.map((entry, i) => (
               <View key={entry.id || i} style={s.row2}>
                 <Text style={[s.ll2, { width: 70 }]}>{entry.date || "—"}</Text>
