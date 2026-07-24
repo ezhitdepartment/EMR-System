@@ -247,33 +247,64 @@ function sortOrderedDiagnostics(consultation) {
   return { ancillaries, xrayTests, otherTests };
 }
 
-function buildDischargeSeed(patient, emr, consultation, encounters, shared = {}) {
-  const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
-    .filter(Boolean)
-    .join(", ");
-  const age = calculateAge(patient.dateOfBirth);
-
-  const matchedEncounter = matchEncounterForConsultation(consultation, encounters);
-
+// The doctor- and nurse-authored fields the ER Discharge Instruction Form
+// shares with the Consultation Form — computed straight from the doctor's/
+// nurse's latest saved entry, same treatment deriveMedCertFieldsFromEntries
+// (below) already gets, and for the same reason: a couple of these
+// (Ancillaries Done, the take-home medication rows) aren't single plain
+// fields SHARED_FIELD_MAP/fillBlanksFromShared could point at.
+//
+//   Field                | Comes from                                    | Authored by
+//   dateTimeAttended      | the matched registration's own appointment   |
+//                         | date/time, falling back to the EMR's date of |
+//                         | visit                                        |
+//   nurseOnDuty           | consultation.nurseOnDuty ("Visit" admin      | Nurse
+//                         | metadata on the OPD Consultation Record),    |
+//                         | falling back to the EMR                      |
+//   chiefComplaints       | consultation.chiefComplaint, then emr        | Nurse/Doctor
+//   ancillaries/xray/     | consultation.diagnosticsSelected — same      | Doctor
+//   others                | sortOrderedDiagnostics() helper the Medical  |
+//                         | Certificate seed uses                        |
+//   finalDiagnosis        | consultation's Diagnosis + any ICD-10 codes  | Doctor
+//                         | picked (formatDiagnosisText)                 |
+//   treatmentGiven         | consultation.medicationOrders                | Doctor
+//   disposition           | consultation.disposition, then emr           | Doctor
+//   medications           | consultation.prescriptionItems (the Medicine | Doctor
+//                         | Prescription section), one row each          |
+//   followUpExamination   | consultation.followUpExamination (the paper  | Nurse/Doctor
+//                         | form's own post-Disposition field), then emr |
+//   erPhysician           | consultation.attendingPrintedName (CF4       | Doctor
+//                         | Certification's printed name), falling back  |
+//                         | to the matched registration's assigned       |
+//                         | doctor, then the EMR                         |
+//
+// Exported so PatientProfile.jsx's handleSaveConsultation() can push a
+// fresh value into an ALREADY-SAVED ER Discharge form the instant a nurse
+// or doctor saves the Consultation Form — not just the first time this
+// modal happens to be opened (same precedent as
+// deriveMedCertFieldsFromEntries / deriveKonsultaFieldsFromDoctorEntry).
+export function deriveDischargeFieldsFromEntries(consultation, emr, matchedEncounter) {
   const { ancillaries, xrayTests, otherTests } = sortOrderedDiagnostics(consultation);
 
+  // NOTE: prescriptionItems' actual line-item shape is { medicineName,
+  // quantity, instructions, milligram } (see ConsultationForm.jsx's
+  // addPrescriptionItem) — not { medicine, dosage }. Reading the wrong
+  // keys here silently filtered every row out, which is why Take Home
+  // Medications never showed up even when a doctor had prescribed
+  // something.
   const medications = Array.isArray(consultation?.prescriptionItems)
     ? consultation.prescriptionItems
-        .filter((item) => item?.medicine)
-        .map((item) => ({ medicine: item.medicine || "", dosage: item.instructions || "", time: "" }))
+        .filter((item) => item?.medicineName?.trim())
+        .map((item) => ({
+          medicine: item.medicineName || "",
+          dosage: [item.milligram, item.instructions].filter(Boolean).join(" — "),
+          time: "",
+        }))
     : [];
 
   const attendedAt = matchedEncounter?.dateCreated ? new Date(matchedEncounter.dateCreated) : null;
 
-  const seed = {
-    hospitalNo: emr?.hospitalRecordNo || patient.hospitalNo || "",
-    patientName: [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
-      .filter(Boolean)
-      .join(" "),
-    address: fullAddress,
-    age: age !== null ? String(age) : "",
-    sex: patient.sex || "",
-    dob: patient.dateOfBirth || "",
+  return {
     dateTimeAttended: attendedAt
       ? `${attendedAt.toLocaleDateString("en-PH")} ${attendedAt.toLocaleTimeString("en-PH", {
           hour: "2-digit",
@@ -282,7 +313,7 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
       : emr?.dateOfVisit
       ? `${emr.dateOfVisit}${emr.timeOfVisit ? " " + emr.timeOfVisit : ""}`
       : "",
-    nurseOnDuty: emr?.nurseOnDuty || "",
+    nurseOnDuty: consultation?.nurseOnDuty || emr?.nurseOnDuty || "",
     chiefComplaints: consultation?.chiefComplaint || emr?.chiefComplaints || "",
     ancillaries,
     xray: xrayTests.length > 0,
@@ -293,8 +324,29 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
     treatmentGiven: consultation?.medicationOrders || "",
     disposition: consultation?.disposition || emr?.disposition || "",
     medications,
-    followUpExamination: emr?.followUpExamination || "",
-    erPhysician: matchedEncounter?.doctor || emr?.physician || "",
+    followUpExamination: consultation?.followUpExamination || emr?.followUpExamination || "",
+    erPhysician: consultation?.attendingPrintedName || matchedEncounter?.doctor || emr?.physician || "",
+  };
+}
+
+function buildDischargeSeed(patient, emr, consultation, encounters, shared = {}) {
+  const fullAddress = [patient.address, patient.barangay, patient.city, patient.province]
+    .filter(Boolean)
+    .join(", ");
+  const age = calculateAge(patient.dateOfBirth);
+
+  const matchedEncounter = matchEncounterForConsultation(consultation, encounters);
+
+  const seed = {
+    hospitalNo: emr?.hospitalRecordNo || patient.hospitalNo || "",
+    patientName: [patient.firstName, patient.middleName, patient.lastName, patient.suffix]
+      .filter(Boolean)
+      .join(" "),
+    address: fullAddress,
+    age: age !== null ? String(age) : "",
+    sex: patient.sex || "",
+    dob: patient.dateOfBirth || "",
+    ...deriveDischargeFieldsFromEntries(consultation, emr, matchedEncounter),
   };
   return fillBlanksFromShared(seed, "discharge", shared).patched;
 }
@@ -1362,6 +1414,69 @@ export default function PatientProfile() {
           user?.id ?? null
         );
         setMedicalCertificate(updatedCertificate);
+      }
+    }
+
+    // Same live push into an already-saved ER Discharge Instruction Form —
+    // see deriveDischargeFieldsFromEntries above. Nurse on Duty, Chief
+    // Complaint/s, and Follow-up Examination can come from either role's
+    // save; Ancillaries Done, Final Diagnosis, Treatment/Medication Given,
+    // Take Home Medications, and E.R. Physician on Duty only ever have a
+    // real value once a doctor has saved. Every field (plain text,
+    // checkboxes, and the medication rows) only fills in what's still
+    // blank on the saved form — a value staff already typed directly onto
+    // the Discharge form is never overwritten, same rule every other
+    // shared field in this app follows.
+    if (discharge) {
+      const matchedEncounterForDischarge = consultationEncounter || matchEncounterForConsultation(entry, encounters);
+      const derived = deriveDischargeFieldsFromEntries(entry, emr, matchedEncounterForDischarge);
+      const patch = {};
+
+      for (const key of [
+        "dateTimeAttended",
+        "nurseOnDuty",
+        "chiefComplaints",
+        "finalDiagnosis",
+        "treatmentGiven",
+        "disposition",
+        "followUpExamination",
+        "erPhysician",
+        "xrayNote",
+        "othersNote",
+      ]) {
+        const current = discharge[key];
+        const value = derived[key];
+        if ((!current || !String(current).trim()) && value) patch[key] = value;
+      }
+
+      if (derived.xray && !discharge.xray) patch.xray = true;
+      if (derived.others && !discharge.others) patch.others = true;
+
+      if (Object.values(derived.ancillaries || {}).some(Boolean)) {
+        const mergedAncillaries = { ...discharge.ancillaries };
+        let ancillariesChanged = false;
+        for (const [key, value] of Object.entries(derived.ancillaries)) {
+          if (value && !mergedAncillaries[key]) {
+            mergedAncillaries[key] = true;
+            ancillariesChanged = true;
+          }
+        }
+        if (ancillariesChanged) patch.ancillaries = mergedAncillaries;
+      }
+
+      // Take Home Medications is a list of rows, not a single blank/filled
+      // field — only replace it if nothing has been typed into any row yet,
+      // so a nurse/doctor's manual edits here are never clobbered by a
+      // later re-save of the Consultation Form's Rx section.
+      const hasExistingMedRows =
+        Array.isArray(discharge.medications) && discharge.medications.some((row) => row?.medicine?.trim());
+      if (!hasExistingMedRows && derived.medications.length > 0) {
+        patch.medications = derived.medications;
+      }
+
+      if (Object.keys(patch).length > 0) {
+        const updatedDischarge = await saveDischarge(hospitalNo, { ...discharge, ...patch }, user?.id ?? null);
+        setDischarge(updatedDischarge);
       }
     }
 
