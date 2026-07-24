@@ -52,9 +52,9 @@ export const STAFF_ROLES = [
 // literally labeled "Lab Orders".
 export const ROLE_FEATURE_ACCESS = {
   admin: "all",
-  er_nurse: ["registration", "patients", "labOrders", "xrayOrders", "reports", "masterlist", "archive"],
-  opd_nurse: ["registration", "patients", "labOrders", "xrayOrders", "reports", "masterlist", "archive"],
-  doctor: ["registration", "patients", "medicinePrescriptions", "reports", "masterlist", "archive"],
+  er_nurse: ["registration", "patients", "admittedPatients", "labOrders", "xrayOrders", "reports", "masterlist", "archive"],
+  opd_nurse: ["registration", "patients", "admittedPatients", "labOrders", "xrayOrders", "reports", "masterlist", "archive"],
+  doctor: ["registration", "patients", "admittedPatients", "medicinePrescriptions", "reports", "masterlist", "archive"],
   med_tech: ["patients", "labOrders", "reports", "masterlist", "archive"],
   xray_tech: ["patients", "xrayOrders", "reports", "masterlist", "archive"],
   // NOTE: Cashier can view Lab Orders and Medicine Prescriptions, but this

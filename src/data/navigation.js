@@ -12,6 +12,7 @@ export const navGroups = [
       { label: "Dashboard", path: "/admin", icon: "LayoutDashboard", feature: "adminDashboard" },
       { label: "Registration", path: "/encounters", icon: "Stethoscope", feature: "registration" },
       { label: "Patients", path: "/patients", icon: "Users", feature: "patients" },
+      { label: "Admitted Patients", path: "/admitted-patients", icon: "BedDouble", feature: "admittedPatients" },
       { label: "Lab Orders", path: "/lab-orders", icon: "FlaskConical", feature: "labOrders" },
       { label: "X-Ray Orders", path: "/xray-orders", icon: "Activity", feature: "xrayOrders" },
       {
