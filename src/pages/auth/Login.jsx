@@ -1,200 +1,244 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { User, Lock, Eye, EyeOff, Users, ChevronDown } from "lucide-react";
-import logoImg from "../../assets/logo.jpg";
-import hospitalBg from "../../assets/hospital-bg.avif";
-import { ROLE_OPTIONS, STAFF_ROLES } from "../../data/roles";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { STAFF_ROLES, hasFeatureAccess } from "../data/roles";
+import Login from "../pages/auth/Login";
+import Dashboard from "../pages/admin/Dashboard";
+import DashboardLayout from "../components/layout/DashboardLayout";
+import PatientProfile from "../pages/patient/PatientProfile";
+import Encounters from "../features/encounters/Encounters";
+import CreateEncounterPage from "../features/encounters/CreateEncounterPage";
+import TriagePage from "../features/encounters/TriagePage";
+import EncounterFilesPage from "../features/encounters/EncounterFilesPage";
+import Patients from "../features/patients/Patients";
+import AdmittedPatients from "../features/patients/AdmittedPatients";
+import MedicalAbstractPage from "../pages/patient/MedicalAbstractPage";
+import AdmissionDischargeRecordPage from "../pages/patient/AdmissionDischargeRecordPage";
+import LabOrders from "../features/lab-orders/LabOrders";
+import XRayOrders from "../features/lab-orders/XRayOrders";
+import ViewLabOrderPage from "../features/lab-orders/ViewLabOrderPage";
+import LabQueuePage from "../features/lab-orders/LabQueuePage";
+import MedicinePrescriptions from "../features/medicine-prescriptions/MedicinePrescriptions";
+import AddMedicinePrescriptionPage from "../features/medicine-prescriptions/AddMedicinePrescriptionPage";
+import Reports from "../features/reports/Reports";
+import Archive from "../features/archive/Archive";
+import Masterlist from "../features/phc/Masterlist";
+import YakapTracker from "../features/phc/YakapTracker";
+import Users from "../features/admin/Users";
+import Roles from "../features/admin/Roles";
+import UserProfilePage from "../features/admin/UserProfilePage";
+import UserAuditLogPage from "../features/admin/UserAuditLogPage";
+import Medicines from "../features/admin/Medicines";
+import AuditLogs from "../features/admin/AuditLogs";
+import Settings from "../features/admin/Settings";
 
-export default function Login() {
-  const [role, setRole] = useState(ROLE_OPTIONS[0].value);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const { login, user } = useAuth();
-  const navigate = useNavigate();
+export default function AppRoutes() {
+  const { user, loading } = useAuth();
 
-  // Redirect already logged-in users
-  useEffect(() => {
-    if (user) {
-      if (user.role === "admin") {
-        navigate("/admin", { replace: true });
-      } else if (STAFF_ROLES.includes(user.role)) {
-        navigate("/patients", { replace: true });
-      }
-    }
-  }, [user, navigate]);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
-
-    const result = await login(username, password, role);
-    setSubmitting(false);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-
-    // Redirect based on role
-    if (result.role === "admin") {
-      navigate("/admin");
-    } else if (STAFF_ROLES.includes(result.role)) {
-      navigate("/patients");
-    }
+  // Still checking for an existing Supabase session (page refresh, first
+  // load) — don't make any redirect decisions yet, or a logged-in user
+  // briefly gets bounced to /login every time they refresh the page.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-400">Loading…</p>
+      </div>
+    );
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-900 flex items-center justify-center px-4 pt-28 pb-10 md:py-10">
-      {/* Hospital background photo */}
-      <img
-        src={hospitalBg}
-        alt=""
-        aria-hidden="true"
-        className="absolute inset-0 w-full h-full object-cover"
+    <Routes>
+      {/* Login page - always accessible */}
+      <Route path="/" element={<Login />} />
+
+      {/* Patient Profile - standalone, no dashboard chrome. The only way
+          back is the "Back to Patients" button inside the page itself. */}
+      <Route
+        path="/patients/:hospitalNo"
+        element={
+          STAFF_ROLES.includes(user?.role) || user?.role === "admin" ? (
+            <PatientProfile />
+          ) : (
+            <Navigate to="/" replace />
+          )
+        }
       />
-      {/* Brand-blue wash over the photo for legibility */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-950/75 via-blue-900/45 to-slate-900/60" />
-      <div className="absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-blue-500/30 blur-3xl" />
 
-      {/* Branding, top-left */}
-      <div className="absolute top-6 left-6 md:top-10 md:left-10 flex items-center gap-3 z-10">
-        <img
-          src={logoImg}
-          alt="E. Zarate Hospital seal"
-          className="w-12 h-12 md:w-14 md:h-14 rounded-full ring-4 ring-white/80 shadow-lg object-cover bg-white"
-        />
-        <div className="leading-tight">
-          <p className="text-white font-extrabold text-lg md:text-2xl tracking-tight drop-shadow-sm">
-            E.ZARATE
-          </p>
-          <p className="text-teal-300 font-semibold text-[10px] md:text-xs tracking-[0.3em]">
-            HOSPITAL
-          </p>
-        </div>
-      </div>
+      {/* Staff Dashboard - protected. Admin gets it too, plus its own
+          "/admin" landing page (Dashboard) inside this same layout below. */}
+      {(STAFF_ROLES.includes(user?.role) || user?.role === "admin") && (
+        <Route element={<DashboardLayout />}>
+          {/* "/reports" is the one feature every role in ROLE_FEATURE_ACCESS
+              has, so it's the safe fallback wherever a role hits a route
+              its dashboard doesn't include. */}
+          <Route index element={<Navigate to="/reports" replace />} />
 
-      {/* Login card */}
-      <div className="relative z-10 w-full max-w-md md:mr-6 lg:mr-16">
-        <div className="rounded-tl-[3rem] rounded-br-[3rem] rounded-tr-2xl rounded-bl-2xl bg-white/90 backdrop-blur-xl shadow-2xl border border-white/60 px-6 py-8 md:px-9 md:py-10">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mb-3">
-              <Users size={26} className="text-blue-600" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
-            <p className="text-sm text-slate-500 mt-1">Login to your account</p>
-          </div>
+          <Route
+            path="/admin"
+            element={hasFeatureAccess(user?.role, "adminDashboard") ? <Dashboard /> : <Navigate to="/reports" replace />}
+          />
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Role selector — replaces the old Staff/Admin toggle now that
-                there are more than two roles in play. */}
-            <div className="relative">
-              <Users
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              />
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                aria-label="Role"
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 py-3 text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {ROLE_OPTIONS.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={16}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              />
-            </div>
+          <Route
+            path="/encounters"
+            element={hasFeatureAccess(user?.role, "registration") ? <Encounters /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/encounters/create"
+            element={
+              hasFeatureAccess(user?.role, "registration") ? (
+                <CreateEncounterPage />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
+          <Route
+            path="/encounters/:encounterId/triage"
+            element={
+              hasFeatureAccess(user?.role, "registration") ? <TriagePage /> : <Navigate to="/reports" replace />
+            }
+          />
+          <Route
+            path="/encounters/:encounterId/files"
+            element={
+              hasFeatureAccess(user?.role, "registration") ? (
+                <EncounterFilesPage />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
 
-            {/* Username or Email */}
-            <div className="relative">
-              <User
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              />
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username or Email"
-                autoComplete="username"
-                required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+          <Route
+            path="/patients"
+            element={hasFeatureAccess(user?.role, "patients") ? <Patients /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/admitted-patients"
+            element={
+              hasFeatureAccess(user?.role, "admittedPatients") ? (
+                <AdmittedPatients />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
+          <Route
+            path="/admitted-patients/:hospitalNo/medical-abstract"
+            element={
+              hasFeatureAccess(user?.role, "admittedPatients") ? (
+                <MedicalAbstractPage />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
+          <Route
+            path="/admitted-patients/:hospitalNo/admission-discharge-record"
+            element={
+              hasFeatureAccess(user?.role, "admittedPatients") ? (
+                <AdmissionDischargeRecordPage />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
 
-            {/* Password */}
-            <div className="relative">
-              <Lock
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              />
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                autoComplete="current-password"
-                required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
+          <Route
+            path="/lab-orders"
+            element={hasFeatureAccess(user?.role, "labOrders") ? <LabOrders /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/xray-orders"
+            element={hasFeatureAccess(user?.role, "xrayOrders") ? <XRayOrders /> : <Navigate to="/reports" replace />}
+          />
+          {/* Queue and order-detail are shared between both tabs (an order
+              can carry both Laboratory and X-Ray tests at once), so these
+              two routes are reachable by anyone with EITHER feature —
+              med_tech (labOrders only), xray_tech (xrayOrders only), or a
+              role with both. */}
+          <Route
+            path="/lab-orders/queue"
+            element={
+              hasFeatureAccess(user?.role, "labOrders") || hasFeatureAccess(user?.role, "xrayOrders") ? (
+                <LabQueuePage />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
+          <Route
+            path="/lab-orders/:orderId"
+            element={
+              hasFeatureAccess(user?.role, "labOrders") || hasFeatureAccess(user?.role, "xrayOrders") ? (
+                <ViewLabOrderPage />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
 
-            <div className="flex items-center justify-between text-xs">
-              <label className="flex items-center gap-2 text-slate-500">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                Remember me
-              </label>
-              <a href="#" className="text-blue-600 hover:text-blue-700 font-medium">
-                Forgot password?
-              </a>
-            </div>
+          <Route
+            path="/medicine-prescriptions"
+            element={
+              hasFeatureAccess(user?.role, "medicinePrescriptions") ? (
+                <MedicinePrescriptions />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
+          <Route
+            path="/medicine-prescriptions/create"
+            element={
+              hasFeatureAccess(user?.role, "medicinePrescriptions") ? (
+                <AddMedicinePrescriptionPage />
+              ) : (
+                <Navigate to="/reports" replace />
+              )
+            }
+          />
 
-            {error && (
-              <p className="text-xs text-red-600" role="alert">
-                {error}
-              </p>
-            )}
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/archive" element={<Archive />} />
+          <Route path="/phc/masterlist" element={<Masterlist />} />
+          <Route
+            path="/phc/yakap-tracker"
+            element={hasFeatureAccess(user?.role, "yakapTracker") ? <YakapTracker /> : <Navigate to="/reports" replace />}
+          />
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl shadow-sm shadow-blue-600/30 transition-colors"
-            >
-              {submitting ? "Logging in…" : "Login"}
-            </button>
-          </form>
-        </div>
+          <Route
+            path="/admin/users"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <Users /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/admin/roles"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <Roles /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/admin/roles/:userId"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <UserProfilePage /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/admin/roles/:userId/audit-log"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <UserAuditLogPage /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/admin/medicines"
+            element={hasFeatureAccess(user?.role, "medicines") ? <Medicines /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/admin/audit-logs"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <AuditLogs /> : <Navigate to="/reports" replace />}
+          />
+          <Route
+            path="/admin/settings"
+            element={hasFeatureAccess(user?.role, "adminTools") ? <Settings /> : <Navigate to="/reports" replace />}
+          />
+        </Route>
+      )}
 
-        <p className="mt-4 text-center text-xs text-white/70 drop-shadow-sm">
-          For staff and administrator use only.
-        </p>
-      </div>
-    </div>
+      {/* Catch-all - redirect to login */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

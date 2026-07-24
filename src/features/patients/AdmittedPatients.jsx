@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { pdf } from "@react-pdf/renderer";
 import {
   Search, RefreshCw, BedDouble, ChevronRight, ChevronLeft, FilterX,
   FileText, ClipboardList, LogOut, Loader2,
 } from "lucide-react";
 import { loadAdmittedPatients, dischargeAdmittedPatient } from "../../utils/admittedPatients";
-import AdmissionDischargeRecordPDF from "../../pages/patient/AdmissionDischargeRecordPDF";
 
 const PAGE_SIZE = 10;
 
@@ -17,23 +15,6 @@ function formatDate(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
-}
-
-// Shared "generate this PDF component, then download it" helper — same
-// pattern PatientProfile.jsx uses for its own document downloads (Medical
-// Certificate, ER Discharge, etc.), just reused here since this page opens
-// them straight from the list instead of from inside the full Patient
-// Profile.
-async function downloadPdf(PdfComponent, props, filename) {
-  const blob = await pdf(<PdfComponent {...props} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 }
 
 // Same square, colored, icon-only row action button Encounters.jsx uses
@@ -125,22 +106,12 @@ export default function AdmittedPatients() {
     navigate(`/admitted-patients/${record.hospitalNo}/medical-abstract`, { state: { record } });
   }
 
-  async function handleCreateAdmissionDischargeRecord(e, record) {
+  // Same "real, saved, editable page instead of a straight-to-PDF button"
+  // upgrade Medical Abstract already got — see
+  // AdmissionDischargeRecordPage.jsx.
+  function handleOpenAdmissionDischargeRecord(e, record) {
     e.stopPropagation();
-    const key = `${record.consultationId}:record`;
-    setBusyKey(key);
-    try {
-      await downloadPdf(
-        AdmissionDischargeRecordPDF,
-        { form: record },
-        `${record.fullName || record.hospitalNo} - Admission and Discharge Record.pdf`
-      );
-    } catch (err) {
-      console.error("Admission and Discharge Record generation failed:", err);
-      window.alert("Couldn't generate the Admission and Discharge Record. Please try again.");
-    } finally {
-      setBusyKey(null);
-    }
+    navigate(`/admitted-patients/${record.hospitalNo}/admission-discharge-record`, { state: { record } });
   }
 
   async function handleDischarge(e, record) {
@@ -272,7 +243,6 @@ export default function AdmittedPatients() {
                 </thead>
                 <tbody>
                   {paged.map((r) => {
-                    const isBusyRecord = busyKey === `${r.consultationId}:record`;
                     const isBusyDischarge = busyKey === `${r.consultationId}:discharge`;
                     const rowBusy = Boolean(busyKey && busyKey.startsWith(`${r.consultationId}:`));
 
@@ -303,9 +273,8 @@ export default function AdmittedPatients() {
                               title="Admission and Discharge Record"
                               icon={ClipboardList}
                               colorClass="bg-sky-500"
-                              loading={isBusyRecord}
                               disabled={rowBusy}
-                              onClick={(e) => handleCreateAdmissionDischargeRecord(e, r)}
+                              onClick={(e) => handleOpenAdmissionDischargeRecord(e, r)}
                             />
                             <ActionButton
                               title="Mark as Discharged"
