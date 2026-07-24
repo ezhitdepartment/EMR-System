@@ -834,7 +834,11 @@ export default function CreateEncounterPage() {
             </button>
             <button
               type="button"
-              onClick={() => navigate(`/patients/${createdEncounter.hospitalNo}`, { state: { openConsultation: true } })}
+              onClick={() =>
+                navigate(`/patients/${createdEncounter.hospitalNo}`, {
+                  state: { openConsultation: true, consultationEncounterId: createdEncounter.id },
+                })
+              }
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-800 hover:opacity-90 text-white text-sm font-medium px-3 py-2.5 transition-opacity"
             >
               <PlayCircle size={15} />

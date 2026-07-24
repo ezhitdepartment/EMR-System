@@ -92,6 +92,7 @@ export default function PatientEncountersPanel({ hospitalNo, onOpenPatientFiles 
     navigate(`/patients/${encounter.hospitalNo}`, {
       state: {
         openConsultation: true,
+        consultationEncounterId: encounter.id,
         consultationReadOnly: encounter.status === STATUS.CANCELLED,
       },
     });
