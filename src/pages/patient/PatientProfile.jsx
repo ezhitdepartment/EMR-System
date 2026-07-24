@@ -1448,16 +1448,27 @@ export default function PatientProfile() {
     // they can't go through the generic shared-clinical-fields sync above
     // (see deriveKonsultaFieldsFromDoctorEntry in KonsultaReferralModal.jsx
     // and the "impression"/"diagnosis" mappings in sharedClinicalFields.js,
-    // which already cover the plain-field concepts). Only fills fields
-    // that are still blank on the saved referral — a value staff already
-    // typed directly into the referral is never overwritten, same rule
-    // every other shared field in this app follows. Only doctors author
-    // these CF4 sections (see DOCTOR_SECTIONS in ConsultationForm.jsx), so
-    // this only needs to run on a doctor's save.
+    // which already cover the plain-field concepts). These only fill
+    // fields that are still blank on the saved referral — a value staff
+    // already typed directly into the referral is never overwritten, same
+    // rule every other shared field in this app follows. Only doctors
+    // author these CF4 sections (see DOCTOR_SECTIONS in
+    // ConsultationForm.jsx), so this only needs to run on a doctor's save.
+    //
+    // Emergency Department Attending Physician is the one exception to
+    // "blank only": it's always kept in lockstep with whichever doctor is
+    // selected in the Consultation Form's own Attending Physician dropdown
+    // (attendingPrintedName), even if the referral already had a name in
+    // it — the referral should never point at a different/outdated doctor
+    // than the one who actually attended the patient this visit.
     if (user?.role === "doctor" && konsultaReferral) {
       const derived = deriveKonsultaFieldsFromDoctorEntry(entry, emr);
       const patch = {};
       for (const [key, value] of Object.entries(derived)) {
+        if (key === "attendingPhysician") {
+          if (value) patch[key] = value;
+          continue;
+        }
         if (!konsultaReferral[key]?.trim?.() && value) patch[key] = value;
       }
       if (Object.keys(patch).length > 0) {
@@ -1477,14 +1488,21 @@ export default function PatientProfile() {
     // ancillary exams, diagnosis, treatment, disposition, attending
     // physician, license/PTR, from the CF4 sections), since the matching
     // fields on the Medical Certificate are split between the two roles.
-    // Only fills fields that are still blank on the saved certificate — a
-    // value staff already typed directly onto the certificate is never
-    // overwritten, same rule every other shared field in this app follows.
+    //
+    // INTENTIONALLY OVERWRITES, doesn't just fill blanks: every time a
+    // nurse or doctor saves the Consultation Form, the Medical
+    // Certificate's matched fields are refreshed to whatever the
+    // Consultation Form now says, even if the certificate already had a
+    // (now-outdated) value there. Only the handful of fields
+    // deriveMedCertFieldsFromEntries actually derives are touched —
+    // anything staff typed directly onto the certificate that has no
+    // Consultation Form counterpart (Patient's Name, Age, Date, Address,
+    // etc.) is left completely alone.
     if (medicalCertificate) {
       const derived = deriveMedCertFieldsFromEntries(entry, emr, consultationEncounter);
       const patch = {};
       for (const [key, value] of Object.entries(derived)) {
-        if (!medicalCertificate[key]?.trim?.() && value) patch[key] = value;
+        if (value) patch[key] = value;
       }
       if (Object.keys(patch).length > 0) {
         const updatedCertificate = await saveMedicalCertificate(

@@ -2868,6 +2868,7 @@ export default function ConsultationForm({
                 <option>Discharged</option>
                 <option>Admitted</option>
                 <option>Transferred / Referred</option>
+                <option>REFERRED TO YAKAP</option>
                 <option>HAMA</option>
                 <option>Absconded</option>
                 <option>Expired</option>
@@ -2875,9 +2876,6 @@ export default function ConsultationForm({
             </Field>
             <Field label="Notes">
               <input name="dispositionNotes" value={form.dispositionNotes} onChange={handle} className={inputClass} />
-            </Field>
-            <Field label="Referred To">
-              <input name="referredTo" value={form.referredTo} onChange={handle} className={inputClass} />
             </Field>
             <Field label="Follow-up Examination">
               <input
@@ -2895,7 +2893,7 @@ export default function ConsultationForm({
               PhilHealth CF4 — Outcome of Treatment
             </p>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {["Discharged", "Improved", "HAMA", "Absconded", "Transferred", "Expired"].map((opt) => (
+              {["Discharged", "Improved", "HAMA", "Absconded", "Transferred", "Expired", "REFERRED TO YAKAP"].map((opt) => (
                 <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="radio"

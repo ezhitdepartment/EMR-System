@@ -36,6 +36,15 @@ export function deriveKonsultaFieldsFromDoctorEntry(doctorEntry, emr) {
     // checked finding (plus any "specify"/"Others" text) written out by
     // formatPhysicalExamText. Falls back to the EMR's "Objective Findings"
     // box only if the doctor hasn't examined the patient yet this visit.
+    // Emergency Department Attending Physician — the doctor role's own
+    // "Attending Physician" dropdown selection on the Consultation Form
+    // (attendingPrintedName, sourced from doctors_directory — see
+    // ConsultationForm.jsx) is the actual doctor who saw the patient THIS
+    // visit, so it takes precedence over whichever doctor was merely
+    // assigned to the encounter at registration time. Falls back to the
+    // encounter's assigned doctor, then the EMR's physician, only if the
+    // doctor hasn't saved a Consultation Form yet.
+    attendingPhysician: doctorEntry?.attendingPrintedName || "",
     physicalExamination: (doctorEntry && formatPhysicalExamText(doctorEntry)) || emr?.objectiveFindings || "",
     // Initial Impression, Diagnosis, and Physician's Impression are the
     // same clinical concept captured on three different forms — the
@@ -82,7 +91,6 @@ function buildAutoFilled(patient, emr, doctorEntry, nurseEntry, encounter) {
   return {
     referringHospitalName: "E. ZARATE HOSPITAL",
     referringHospitalAddress: "16 J. Aguilar Avenue, Talon I, Las Piñas City, Metro Manila, Philippines",
-    attendingPhysician: encounter?.doctor || emr?.physician || "",
     fullName,
     age: emr?.age || calcAge(patient?.dateOfBirth),
     sex: patient?.sex || emr?.gender || "",
@@ -90,6 +98,14 @@ function buildAutoFilled(patient, emr, doctorEntry, nurseEntry, encounter) {
     chiefComplaint: doctorEntry?.chiefComplaint || emr?.chiefComplaints || "",
     historyOfPresentIllness: doctorEntry?.historyOfPresentIllness || "",
     ...deriveKonsultaFieldsFromDoctorEntry(doctorEntry, emr),
+    // deriveKonsultaFieldsFromDoctorEntry only knows about doctorEntry/emr
+    // (it's also called from the live-sync path in PatientProfile.jsx,
+    // which has no `encounter` in hand) — so its attendingPhysician comes
+    // back "" whenever the doctor hasn't saved a Consultation Form yet.
+    // This re-applies the fuller fallback chain (encounter's assigned
+    // doctor, then EMR physician) ONLY for that first-time seeding case,
+    // without letting an empty spread value silently win.
+    attendingPhysician: doctorEntry?.attendingPrintedName || encounter?.doctor || emr?.physician || "",
     recommendations,
   };
 }
