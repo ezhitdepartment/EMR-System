@@ -6,9 +6,22 @@ import logoImg from "../../assets/logo.jpg";
 // Plain black-on-white, ruled-paper styling — deliberately matches the
 // pre-printed "MEDICAL CERTIFICATE" pad (see ErDischargePDF.jsx, which
 // uses the same approach for its own printed form) rather than the
-// teal/rounded look the rest of this app's PDFs use. Sized for A4 and
-// tuned to fit on exactly one page — nothing here is meant to spill onto
-// a second sheet.
+// teal/rounded look the rest of this app's PDFs use.
+//
+// Sized to the CONTENT, not to a full A4 sheet — same "custom page size"
+// approach DoctorConsultationPDF.jsx / NurseConsultationPDF.jsx already use
+// via their own LONG_SIZE constant, just shorter instead of longer. A
+// Medical Certificate's content (letterhead, patient info, the five ruled
+// clinical blocks, disposition, disclaimer, signature) only ever runs
+// ~650-680pt tall — rendering it on a full A4 canvas (841.89pt) left
+// ~160-190pt of dead white space between the signature and the footer.
+// Width is kept at A4's own width (595.28pt) since every field width in
+// this file was tuned against that measurement; only the height shrinks.
+// If a certificate's text content is ever unusually long, @react-pdf's
+// normal automatic pagination still kicks in and flows the overflow onto
+// a second page — this isn't a hard cap, just a much closer-fitting one.
+const CERT_SIZE = [595.28, 700];
+
 const C = {
   black: "#0f172a",
   mid: "#334155",
@@ -133,7 +146,7 @@ export default function MedicalCertificatePDF({ form }) {
 
   return (
     <Document title={`Medical Certificate - ${form.patientName || "Patient"}`} author="E. ZARATE HOSPITAL">
-      <Page size="A4" style={s.page}>
+      <Page size={CERT_SIZE} style={s.page}>
 
         {/* Letterhead — matches the printed pad's layout */}
         <View style={s.headerRow}>
