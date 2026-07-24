@@ -268,10 +268,17 @@ function sortOrderedDiagnostics(consultation) {
 //   finalDiagnosis        | consultation's Diagnosis + any ICD-10 codes  | Doctor
 //                         | picked (formatDiagnosisText)                 |
 //   treatmentGiven         | consultation.medicationOrders                | Doctor
+//   dateTimeDischarge      | consultation.dateDischarged + timeDischarged | Doctor
+//                         | (CF4 "Date/Time Discharged", Diagnosis        |
+//                         | section) — no EMR fallback exists for this    |
+//   conditionUponDischarge| consultation.outcomeOfTreatment (CF4         | Doctor
+//                         | "Outcome of Treatment" radio group, plus its |
+//                         | paired reason text for Absconded/Transferred/|
+//                         | Expired), Disposition section                |
 //   disposition           | consultation.disposition, then emr           | Doctor
 //   medications           | consultation.prescriptionItems (the Medicine | Doctor
 //                         | Prescription section), one row each          |
-//   followUpExamination   | consultation.followUpExamination (the paper  | Nurse/Doctor
+//   followUpExamination   | consultation.followUpExamination (the paper  | Doctor
 //                         | form's own post-Disposition field), then emr |
 //   erPhysician           | consultation.attendingPrintedName (CF4       | Doctor
 //                         | Certification's printed name), falling back  |
@@ -304,6 +311,41 @@ export function deriveDischargeFieldsFromEntries(consultation, emr, matchedEncou
 
   const attendedAt = matchedEncounter?.dateCreated ? new Date(matchedEncounter.dateCreated) : null;
 
+  // Date/Time of Discharge — comes from the CF4 "Date Discharged" / "Time
+  // Discharged" fields (form.dateDischarged / form.timeDischarged, in the
+  // Diagnosis section's PhilHealth CF4 block — doctor-authored). There's
+  // no equivalent field anywhere on the EMR to fall back to, so this stays
+  // blank until a doctor fills in at least the date.
+  let dateTimeDischarge = "";
+  if (consultation?.dateDischarged) {
+    const dischargedAt = new Date(`${consultation.dateDischarged}T${consultation.timeDischarged || "00:00"}`);
+    if (!isNaN(dischargedAt)) {
+      dateTimeDischarge = consultation.timeDischarged
+        ? `${dischargedAt.toLocaleDateString("en-PH")} ${dischargedAt.toLocaleTimeString("en-PH", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`
+        : dischargedAt.toLocaleDateString("en-PH");
+    }
+  }
+
+  // Condition Upon Discharge — comes from the CF4 "Outcome of Treatment"
+  // radio group (Discharged / Improved / HAMA / Absconded / Transferred /
+  // Expired), in the same Disposition section as `disposition` itself
+  // (doctor-authored). Its paired "Specify reason" text is appended for
+  // the three outcomes that require one, same as the printed form would
+  // read it (e.g. "Transferred — no ICU bed available").
+  const conditionUponDischarge = consultation?.outcomeOfTreatment
+    ? [
+        consultation.outcomeOfTreatment,
+        ["Absconded", "Transferred", "Expired"].includes(consultation.outcomeOfTreatment)
+          ? consultation.outcomeOfTreatmentReason
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" — ")
+    : "";
+
   return {
     dateTimeAttended: attendedAt
       ? `${attendedAt.toLocaleDateString("en-PH")} ${attendedAt.toLocaleTimeString("en-PH", {
@@ -322,6 +364,8 @@ export function deriveDischargeFieldsFromEntries(consultation, emr, matchedEncou
     othersNote: otherTests.join(", "),
     finalDiagnosis: consultation ? formatDiagnosisText(consultation) : "",
     treatmentGiven: consultation?.medicationOrders || "",
+    dateTimeDischarge,
+    conditionUponDischarge,
     disposition: consultation?.disposition || emr?.disposition || "",
     medications,
     followUpExamination: consultation?.followUpExamination || emr?.followUpExamination || "",
@@ -1438,6 +1482,8 @@ export default function PatientProfile() {
         "chiefComplaints",
         "finalDiagnosis",
         "treatmentGiven",
+        "dateTimeDischarge",
+        "conditionUponDischarge",
         "disposition",
         "followUpExamination",
         "erPhysician",
