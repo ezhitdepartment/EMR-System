@@ -72,7 +72,7 @@ import {
   fillBlanksFromShared,
 } from "./sharedClinicalFields";
 import { findPatientById, updatePatient, savePatientPhoto } from "../../utils/patients";
-import { loadConsultationHistory, saveConsultationEntry, formatDiagnosisText, formatEdManagementText, resolveConsultationInitialValues } from "../../utils/consultations";
+import { loadConsultationHistory, saveConsultationEntry, formatDiagnosisText, formatEdManagementText, formatPhysicalExamText, resolveConsultationInitialValues } from "../../utils/consultations";
 import {
   loadAllPatientDocuments,
   saveEmr,
@@ -408,6 +408,16 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
 //   inclusiveDatesOfTreatment     | the matched registration's own appointment   |
 //                                 | date, falling back to the EMR's date of visit|
 //   subjectiveComplaints          | consultation.chiefComplaint, then emr        | Nurse/Doctor
+//   pertinentPhysicalExamination-  | consultation's CF4 "Pertinent Physical      | Doctor
+//     Findings                    | Examination on Admission" checklist (General |
+//                                 | Survey, HEENT, Chest/Lungs, CVS, Abdomen,    |
+//                                 | GU/OB, Skin/Extremities, Neuro Exam),        |
+//                                 | flattened to narrative text via              |
+//                                 | formatPhysicalExamText() — same helper and   |
+//                                 | same source the Konsulta/Yakap Referral's    |
+//                                 | own Physical Examination field already uses  |
+//                                 | — falling back to the EMR's Objective        |
+//                                 | Findings                                     |
 //   ancillaryExaminationDone      | consultation.diagnosticsSelected — the same  | Doctor
 //                                 | tests/x-ray/others sorting the Discharge     |
 //                                 | form uses, flattened to text                 |
@@ -471,6 +481,7 @@ export function deriveMedCertFieldsFromEntries(consultation, emr, matchedEncount
     classification: emr?.classification || "",
     inclusiveDatesOfTreatment,
     subjectiveComplaints: consultation?.chiefComplaint || emr?.chiefComplaints || "",
+    pertinentPhysicalExaminationFindings: formatPhysicalExamText(consultation) || emr?.objectiveFindings || "",
     ancillaryExaminationDone,
     clinicalDiagnosis: consultation ? formatDiagnosisText(consultation) : "",
     medicinePrescription: formatPrescriptionItemsText(consultation),
