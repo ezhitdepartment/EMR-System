@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, RefreshCw, BedDouble, ChevronRight, ChevronLeft, FilterX } from "lucide-react";
-import { loadAdmittedPatients } from "../../utils/admittedPatients";
+import { pdf } from "@react-pdf/renderer";
+import {
+  Search, RefreshCw, BedDouble, ChevronRight, ChevronLeft, FilterX,
+  FileText, ClipboardList, LogOut, Loader2,
+} from "lucide-react";
+import {
+  loadAdmittedPatients, dischargeAdmittedPatient, resolveMedicalAbstractSources,
+} from "../../utils/admittedPatients";
+import MedicalAbstractPDF from "../../pages/patient/MedicalAbstractPDF";
+import AdmissionDischargeRecordPDF from "../../pages/patient/AdmissionDischargeRecordPDF";
 
 const PAGE_SIZE = 10;
 
@@ -14,6 +22,23 @@ function formatDate(value) {
   return d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
 }
 
+// Shared "generate this PDF component, then download it" helper — same
+// pattern PatientProfile.jsx uses for its own document downloads (Medical
+// Certificate, ER Discharge, etc.), just reused here since this page opens
+// them straight from the list instead of from inside the full Patient
+// Profile.
+async function downloadPdf(PdfComponent, props, filename) {
+  const blob = await pdf(<PdfComponent {...props} />).toBlob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function AdmittedPatients() {
   const navigate = useNavigate();
   const [records, setRecords] = useState([]);
@@ -21,6 +46,10 @@ export default function AdmittedPatients() {
   const [search, setSearch] = useState("");
   const [patientTypeFilter, setPatientTypeFilter] = useState("All");
   const [page, setPage] = useState(1);
+  // Tracks which row + which action is currently in flight (e.g.
+  // "CONS-123:discharge" or "CONS-123:abstract"), so only that row's
+  // button shows a spinner and the others stay clickable.
+  const [busyKey, setBusyKey] = useState(null);
 
   async function refresh() {
     setLoading(true);
@@ -70,6 +99,64 @@ export default function AdmittedPatients() {
   const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
 
+  async function handleCreateMedicalAbstract(e, record) {
+    e.stopPropagation();
+    const key = `${record.consultationId}:abstract`;
+    setBusyKey(key);
+    try {
+      const sources = await resolveMedicalAbstractSources(record);
+      await downloadPdf(
+        MedicalAbstractPDF,
+        sources,
+        `${record.fullName || record.hospitalNo} - Medical Abstract.pdf`
+      );
+    } catch (err) {
+      console.error("Medical Abstract generation failed:", err);
+      window.alert("Couldn't generate the Medical Abstract. Please try again.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function handleCreateAdmissionDischargeRecord(e, record) {
+    e.stopPropagation();
+    const key = `${record.consultationId}:record`;
+    setBusyKey(key);
+    try {
+      await downloadPdf(
+        AdmissionDischargeRecordPDF,
+        { form: record },
+        `${record.fullName || record.hospitalNo} - Admission and Discharge Record.pdf`
+      );
+    } catch (err) {
+      console.error("Admission and Discharge Record generation failed:", err);
+      window.alert("Couldn't generate the Admission and Discharge Record. Please try again.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function handleDischarge(e, record) {
+    e.stopPropagation();
+    const confirmed = window.confirm(
+      `Mark ${record.fullName || "this patient"} as Discharged? They will be removed from Admitted Patients.`
+    );
+    if (!confirmed) return;
+
+    const key = `${record.consultationId}:discharge`;
+    setBusyKey(key);
+    try {
+      const { error } = await dischargeAdmittedPatient(record.consultationId);
+      if (error) {
+        window.alert(`Couldn't mark this patient as Discharged: ${error}`);
+        return;
+      }
+      await refresh();
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   return (
     <div className="max-w-6xl">
       {/* Header */}
@@ -77,8 +164,8 @@ export default function AdmittedPatients() {
         <p className="text-xs font-semibold uppercase tracking-wide text-teal-700 mb-1">Main</p>
         <h1 className="text-2xl font-semibold text-slate-800">Admitted Patients</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Every patient whose most recent Consultation Form Disposition is "Admitted" — the list
-          updates itself the moment a doctor changes that to Discharged (or anything else).
+          One line per patient whose most recent Consultation Form Disposition is "Admitted" — the
+          list updates itself the moment a doctor changes that to Discharged (or anything else).
         </p>
       </div>
 
@@ -171,25 +258,67 @@ export default function AdmittedPatients() {
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Date Admitted</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Attending Physician</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Notes</th>
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paged.map((r) => (
-                    <tr
-                      key={r.consultationId}
-                      onClick={() => navigate(`/patients/${r.hospitalNo}`)}
-                      className="border-b border-slate-100 hover:bg-teal-50/60 cursor-pointer transition-colors"
-                    >
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.hospitalNo || "—"}</td>
-                      <td className="px-4 py-3 text-slate-800 whitespace-nowrap">{r.fullName || "—"}</td>
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.sex || "—"}</td>
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.patientType || "—"}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.admittingDiagnosis || "—"}</td>
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{formatDate(r.dateAdmitted)}</td>
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.attendingPhysician || "—"}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.dispositionNotes || "—"}</td>
-                    </tr>
-                  ))}
+                  {paged.map((r) => {
+                    const isBusyAbstract = busyKey === `${r.consultationId}:abstract`;
+                    const isBusyRecord = busyKey === `${r.consultationId}:record`;
+                    const isBusyDischarge = busyKey === `${r.consultationId}:discharge`;
+                    const rowBusy = Boolean(busyKey && busyKey.startsWith(`${r.consultationId}:`));
+
+                    return (
+                      <tr
+                        key={r.hospitalNo || r.consultationId}
+                        onClick={() => navigate(`/patients/${r.hospitalNo}`)}
+                        className="border-b border-slate-100 hover:bg-teal-50/60 cursor-pointer transition-colors"
+                      >
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.hospitalNo || "—"}</td>
+                        <td className="px-4 py-3 text-slate-800 whitespace-nowrap">{r.fullName || "—"}</td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.sex || "—"}</td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.patientType || "—"}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.admittingDiagnosis || "—"}</td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{formatDate(r.dateAdmitted)}</td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.attendingPhysician || "—"}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.dispositionNotes || "—"}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              title="Create Medical Abstract"
+                              disabled={rowBusy}
+                              onClick={(e) => handleCreateMedicalAbstract(e, r)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {isBusyAbstract ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                              Medical Abstract
+                            </button>
+                            <button
+                              type="button"
+                              title="Admission and Discharge Record"
+                              disabled={rowBusy}
+                              onClick={(e) => handleCreateAdmissionDischargeRecord(e, r)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {isBusyRecord ? <Loader2 size={12} className="animate-spin" /> : <ClipboardList size={12} />}
+                              Admission &amp; Discharge Record
+                            </button>
+                            <button
+                              type="button"
+                              title="Mark as Discharged"
+                              disabled={rowBusy}
+                              onClick={(e) => handleDischarge(e, r)}
+                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {isBusyDischarge ? <Loader2 size={12} className="animate-spin" /> : <LogOut size={12} />}
+                              Discharged
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

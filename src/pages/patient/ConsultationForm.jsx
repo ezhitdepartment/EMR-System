@@ -110,6 +110,7 @@ export const SIGNS_AND_SYMPTOMS_OPTIONS = [
   "Seizures",
   "Skin rashes",
   "Skin bleeding/black tarry/bloody stool",
+  "Sore throat",
   "Sweating",
   "Urgency",
   "Vomiting",
@@ -121,8 +122,14 @@ export const SIGNS_AND_SYMPTOMS_OPTIONS = [
 // Survey and HEENT. Rendered as their own checklists (not part of
 // PE_SYSTEMS below) since General Survey's "Altered sensorium" pairs with
 // a dedicated specify field rather than the generic "Others" catch-all
-// every other system uses.
-export const GENERAL_SURVEY_OPTIONS = ["Awake and alert", "Altered sensorium"];
+// every other system uses. "In respiratory distress" / "Weak-looking"
+// confirmed against the hospital's physical Medical Abstract form.
+export const GENERAL_SURVEY_OPTIONS = [
+  "Awake and alert",
+  "Altered sensorium",
+  "In respiratory distress",
+  "Weak-looking",
+];
 
 export const HEENT_OPTIONS = [
   "Essentially normal",
