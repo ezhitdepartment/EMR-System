@@ -399,8 +399,9 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
 // with the Consultation Form — computed straight from the doctor's/
 // nurse's latest saved entry, not through SHARED_FIELD_MAP (see
 // sharedClinicalFields.js), since a couple of these (Ancillary
-// Examination Done, License No./PTR split into two printed-form lines)
-// aren't single plain fields a generic map entry could point at.
+// Examination Done, Medicine Prescription, License No./PTR split into two
+// printed-form lines) aren't single plain fields a generic map entry
+// could point at.
 //
 //   Field                         | Comes from                                   | Authored by
 //   occupation                    | consultation.occupation ("Personal Details") | Nurse
@@ -412,7 +413,12 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
 //                                 | form uses, flattened to text                 |
 //   clinicalDiagnosis             | consultation's Diagnosis + ICD-10 codes      | Doctor
 //                                 | (formatDiagnosisText)                        |
-//   treatmentDoneMedicationGiven  | consultation.medicationOrders                | Doctor
+//   medicinePrescription          | consultation.prescriptionItems (the Medicine | Doctor
+//                                 | Prescription section) — one medicine per     |
+//                                 | line, same source the ER Discharge form's    |
+//                                 | Take Home Medications table reads, just      |
+//                                 | flattened to text since this field is a      |
+//                                 | single ruled block rather than a table       |
 //   disposition                   | consultation.disposition, then emr           | Doctor
 //   attendingPhysician            | consultation.attendingPrintedName (CF4       | Doctor
 //                                 | Certification), falling back to the matched  |
@@ -428,6 +434,24 @@ function buildDischargeSeed(patient, emr, consultation, encounters, shared = {})
 // nurse or doctor saves the Consultation Form — not just the first time
 // this modal happens to be opened (same precedent as
 // deriveKonsultaFieldsFromDoctorEntry in KonsultaReferralModal.jsx).
+
+// Shared with deriveDischargeFieldsFromEntries's own medications array
+// above, just flattened into one readable line per medicine instead of
+// table rows — the Medical Certificate's Medicine Prescription field is a
+// single ruled text block, not a row-per-medicine table like the ER
+// Discharge form's Take Home Medications.
+function formatPrescriptionItemsText(consultation) {
+  if (!Array.isArray(consultation?.prescriptionItems)) return "";
+  return consultation.prescriptionItems
+    .filter((item) => item?.medicineName?.trim())
+    .map((item) => {
+      const strength = item.milligram ? ` ${item.milligram}` : "";
+      const sig = item.instructions ? ` — ${item.instructions}` : "";
+      return `${item.medicineName}${strength}${sig}`;
+    })
+    .join("; ");
+}
+
 export function deriveMedCertFieldsFromEntries(consultation, emr, matchedEncounter) {
   const { ancillaries, xrayTests, otherTests } = sortOrderedDiagnostics(consultation);
   const ancillaryNames = Object.keys(ancillaries)
@@ -449,7 +473,7 @@ export function deriveMedCertFieldsFromEntries(consultation, emr, matchedEncount
     subjectiveComplaints: consultation?.chiefComplaint || emr?.chiefComplaints || "",
     ancillaryExaminationDone,
     clinicalDiagnosis: consultation ? formatDiagnosisText(consultation) : "",
-    treatmentDoneMedicationGiven: consultation?.medicationOrders || "",
+    medicinePrescription: formatPrescriptionItemsText(consultation),
     disposition: consultation?.disposition || emr?.disposition || "",
     attendingPhysician: consultation?.attendingPrintedName || matchedEncounter?.doctor || emr?.physician || "",
     licNo: licenseNumber,

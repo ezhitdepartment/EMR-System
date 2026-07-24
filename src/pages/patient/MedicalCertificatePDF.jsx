@@ -45,7 +45,7 @@ const s = StyleSheet.create({
   },
 
   // Label: value lines
-  fieldRow: { flexDirection: "row", marginBottom: 9, alignItems: "flex-end" },
+  fieldRow: { flexDirection: "row", marginBottom: 6, alignItems: "flex-end" },
   fLabel: { fontSize: 8.5, fontFamily: "Times-Bold", marginRight: 4 },
   fValue: {
     flex: 1, fontSize: 9.5, borderBottomWidth: 0.75, borderBottomColor: C.line,
@@ -53,11 +53,11 @@ const s = StyleSheet.create({
   },
 
   // Ruled multi-line blocks for the descriptive/clinical fields
-  blockWrap: { marginBottom: 8 },
-  blockLabel: { fontSize: 8.5, fontFamily: "Times-Bold", marginBottom: 3 },
+  blockWrap: { marginBottom: 6 },
+  blockLabel: { fontSize: 8.5, fontFamily: "Times-Bold", marginBottom: 2 },
   ruledBox: { borderWidth: 0.5, borderColor: C.rule },
   ruledLineText: {
-    fontSize: 9, minHeight: 15, paddingHorizontal: 2, paddingTop: 2,
+    fontSize: 9, minHeight: 13, paddingHorizontal: 2, paddingTop: 2,
     borderBottomWidth: 0.5, borderBottomColor: C.rule,
   },
 
@@ -164,8 +164,11 @@ export default function MedicalCertificatePDF({ form }) {
           <View style={{ width: 10 }} />
           <FieldLine label="Classification" value={form.classification} width={160} />
         </View>
-        <FieldLine label="Address" value={form.address} />
-        <FieldLine label="Inclusive Dates of Treatment" value={form.inclusiveDatesOfTreatment} />
+        <View style={s.fieldRow}>
+          <FieldLine label="Address" value={form.address} />
+          <View style={{ width: 10 }} />
+          <FieldLine label="Inclusive Dates of Treatment" value={form.inclusiveDatesOfTreatment} width={190} />
+        </View>
 
         {/* Clinical details — ruled multi-line blocks, matching the pad's
             large write-in areas for each of these */}
@@ -173,7 +176,7 @@ export default function MedicalCertificatePDF({ form }) {
         <RuledBlock label="Pertinent Physical Examination Findings" value={form.pertinentPhysicalExaminationFindings} lines={3} />
         <RuledBlock label="Ancillary Examination Done" value={form.ancillaryExaminationDone} lines={2} />
         <RuledBlock label="Clinical Diagnosis" value={form.clinicalDiagnosis} lines={2} />
-        <RuledBlock label="Treatment Done / Medication Given" value={form.treatmentDoneMedicationGiven} lines={3} />
+        <RuledBlock label="Medicine Prescription" value={form.medicinePrescription} lines={3} />
 
         <FieldLine label="Disposition" value={form.disposition} />
 

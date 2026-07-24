@@ -14,7 +14,7 @@ export const emptyMedicalCertificateForm = {
   pertinentPhysicalExaminationFindings: "",
   ancillaryExaminationDone: "",
   clinicalDiagnosis: "",
-  treatmentDoneMedicationGiven: "",
+  medicinePrescription: "",
   disposition: "",
   attendingPhysician: "",
   licNo: "",
@@ -159,11 +159,11 @@ export default function MedicalCertificateForm({ initialValues, onSave, onClose 
                 className={textareaClass}
               />
             </Field>
-            <Field label="Treatment Done / Medication Given" full>
+            <Field label="Medicine Prescription" full>
               <textarea
                 rows={3}
-                value={form.treatmentDoneMedicationGiven}
-                onChange={(e) => set("treatmentDoneMedicationGiven", e.target.value)}
+                value={form.medicinePrescription}
+                onChange={(e) => set("medicinePrescription", e.target.value)}
                 className={textareaClass}
               />
             </Field>

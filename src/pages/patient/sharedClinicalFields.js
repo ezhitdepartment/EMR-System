@@ -12,7 +12,7 @@
 //   chiefComplaint| Chief Complaint                    | chiefComplaints        | chiefComplaint      | chiefComplaints      | chiefComplaint       | subjectiveComplaints
 //   physicalExam  | Physical Exam / Objective Findings | objectiveFindings      | — (read-only source — see note below) | — | physicalExamination | pertinentPhysicalExaminationFindings
 //   impression    | Initial / Physician's Impression / Diagnosis | physicianImpression | diagnosis    | —                    | initialImpression    | —
-//   management    | Management at ED / Treatment given | treatmentLeft + treatmentRight (read-only source — split per eye, so a combined value never writes back into it) | medicationOrders | treatmentGiven | managementAtED | treatmentDoneMedicationGiven
+//   management    | Management at ED / Treatment given | treatmentLeft + treatmentRight (read-only source — split per eye, so a combined value never writes back into it) | medicationOrders | treatmentGiven | managementAtED | — (see note below)
 //   diagnosis     | Final / Active / Clinical Diagnosis| —                      | activeDiagnoses     | finalDiagnosis       | finalDiagnosis       | clinicalDiagnosis
 //   disposition   | Disposition                        | disposition            | disposition         | disposition          | —                    | disposition
 //   followUp      | Follow-up / Recommendations        | followUpExamination    | —                   | followUpExamination  | recommendations      | —
@@ -48,6 +48,19 @@
 // KonsultaReferralModal.jsx's buildAutoFilled() — a live read of the
 // doctor's latest exam every time the referral is opened, rather than a
 // value that only syncs at save time.
+// NOTE on medcert's "management": the Medical Certificate's equivalent
+// field used to be treatmentDoneMedicationGiven, a free-text "treatment
+// given" box that pulled from the Consultation Form's Medication Orders —
+// same as every other form's "management" field still does. It's since
+// been replaced with medicinePrescription, which reads the Consultation
+// Form's structured Medicine Prescription section (prescriptionItems)
+// instead — the same real Rx data the ER Discharge form's Take Home
+// Medications table reads, just flattened to one line of text per
+// medicine. Because that's a list being formatted, not a single blank/
+// filled text value, it's computed directly in
+// deriveMedCertFieldsFromEntries (PatientProfile.jsx) rather than through
+// this generic map — same treatment the Discharge form's own `medications`
+// array already gets.
 export const SHARED_FIELD_MAP = {
   emr: {
     chiefComplaint: "chiefComplaints",
@@ -81,7 +94,6 @@ export const SHARED_FIELD_MAP = {
   medcert: {
     chiefComplaint: "subjectiveComplaints",
     physicalExam: "pertinentPhysicalExaminationFindings",
-    management: "treatmentDoneMedicationGiven",
     diagnosis: "clinicalDiagnosis",
     disposition: "disposition",
   },
