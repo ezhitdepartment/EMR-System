@@ -39,6 +39,25 @@ async function downloadPdf(PdfComponent, props, filename) {
   URL.revokeObjectURL(url);
 }
 
+// Same square, colored, icon-only row action button Encounters.jsx uses
+// for Triage/Start Consultation/Reassign/Cancel — kept identical here so
+// Admitted Patients' row actions read as the same control, not a
+// look-alike. `loading` swaps the icon for a spinner itself, so call
+// sites don't each need their own busy-icon ternary.
+function ActionButton({ title, icon: Icon, colorClass, onClick, disabled, loading }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40 ${colorClass}`}
+    >
+      {loading ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
+    </button>
+  );
+}
+
 export default function AdmittedPatients() {
   const navigate = useNavigate();
   const [records, setRecords] = useState([]);
@@ -258,7 +277,9 @@ export default function AdmittedPatients() {
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Date Admitted</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Attending Physician</th>
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Notes</th>
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">Action</th>
+                    <th className="sticky right-0 bg-slate-50 px-4 py-3 font-semibold whitespace-nowrap text-center">
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -282,38 +303,32 @@ export default function AdmittedPatients() {
                         <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{formatDate(r.dateAdmitted)}</td>
                         <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.attendingPhysician || "—"}</td>
                         <td className="px-4 py-3 text-slate-600">{r.dispositionNotes || "—"}</td>
-                        <td className="px-4 py-3">
+                        <td className="sticky right-0 bg-white px-4 py-3 align-top whitespace-nowrap shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.15)]">
                           <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              title="Create Medical Abstract"
+                            <ActionButton
+                              title="Medical Abstract"
+                              icon={FileText}
+                              colorClass="bg-indigo-500"
+                              loading={isBusyAbstract}
                               disabled={rowBusy}
                               onClick={(e) => handleCreateMedicalAbstract(e, r)}
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {isBusyAbstract ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
-                              Medical Abstract
-                            </button>
-                            <button
-                              type="button"
+                            />
+                            <ActionButton
                               title="Admission and Discharge Record"
+                              icon={ClipboardList}
+                              colorClass="bg-sky-500"
+                              loading={isBusyRecord}
                               disabled={rowBusy}
                               onClick={(e) => handleCreateAdmissionDischargeRecord(e, r)}
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {isBusyRecord ? <Loader2 size={12} className="animate-spin" /> : <ClipboardList size={12} />}
-                              Admission &amp; Discharge Record
-                            </button>
-                            <button
-                              type="button"
+                            />
+                            <ActionButton
                               title="Mark as Discharged"
+                              icon={LogOut}
+                              colorClass="bg-red-500"
+                              loading={isBusyDischarge}
                               disabled={rowBusy}
                               onClick={(e) => handleDischarge(e, r)}
-                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {isBusyDischarge ? <Loader2 size={12} className="animate-spin" /> : <LogOut size={12} />}
-                              Discharged
-                            </button>
+                            />
                           </div>
                         </td>
                       </tr>
